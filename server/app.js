@@ -1,5 +1,6 @@
 import express from 'express'
 import { handler } from './server.js'
+import { getRedis } from './redis.js'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -20,7 +21,8 @@ app.use((req, res, next) => {
   next()
 })
 
-handler(app)
+const redis = process.env.REDIS_URL ? await getRedis() : null
+handler(app, { redis })
 
 app.listen(PORT, () => {
   console.log(`Spades Online server listening on port ${PORT}`)

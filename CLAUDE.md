@@ -56,18 +56,15 @@ Spades Online is a real-time multiplayer card game (web + mobile) built with a N
 
 ## Game Engine Rules (Critical)
 
-The game engine is the most sensitive part of the codebase. Before modifying anything in `server/game/`, understand:
+`docs/spades_prd.md` Section 5 is the sole source of truth for all game rules. Do not infer, guess, or simplify rules — read the PRD before implementing anything in `server/game/`.
 
-- **All game state lives on the server.** Clients receive only what they are allowed to see — a player never receives another player's hand until cards are played.
-- **Partnership bidding:** the second bidder sets the team's combined total, overriding the first bidder's number. Nil and Blind Nil bids are individual and always stand regardless of the partner's team bid.
-- **Blind Nil eligibility:** only available when the player's team is at least 100 points behind. Only one player per team may bid Blind Nil per hand. Requires a 2-card exchange (Blind Nil player sends 2 cards to partner first, then partner sends 2 back).
-- **Bags:** overtricks count +1 each; every 10 bags deducts 100 points from the team's score. Tricks taken by a nil bidder count toward their partner's bid and become bags if they cause the partner to exceed it.
-- **First trick:** Spades may not be played on the first trick even if a player is void in the led suit.
-- **Spades breaking:** Spades cannot be led until a Spade has been played on a non-Spade lead (after the first trick).
-- **Win condition:** first team to 250 points wins. If both reach 250 in the same round, the higher score wins.
-- **Turn order:** bidding and play begin with the player to the dealer's left, proceeding clockwise.
+The following are coding-specific gotchas that are easy to misimplement even when the rules are understood correctly:
 
-When in doubt about a rule, refer to `docs/spades_prd.md` Section 5.
+- **Card visibility is a security boundary.** Never send a player's hand to any other client — only broadcast cards at the moment they are played.
+- **Partnership bidding:** the first bidder's number is advisory only. The second bidder's combined team total overrides it. The exception — Nil and Blind Nil — are individual bids that always stand. It is easy to accidentally treat the first bidder's number as the team bid.
+- **Blind Nil card exchange direction:** the Blind Nil player sends first, then the partner sends back. The order matters and must be enforced server-side.
+- **Bag deduction:** runs at the end of each hand — verify it cannot double-deduct if a hand is resumed or replayed.
+- **Nil bidder tricks:** tricks won by a nil bidder count toward the partner's bid and become bags if they push the partner over. This is a separate code path from normal bag accumulation and easy to miss.
 
 ## Real-Time & Anti-Cheat
 
@@ -125,23 +122,6 @@ When in doubt about a rule, refer to `docs/spades_prd.md` Section 5.
 - Blind Nil card exchange must complete before play begins and must be validated server-side (correct count, correct direction).
 - CORS headers are set manually on every request — do not remove them.
 
-## Open Questions (Unresolved — Do Not Implement Until Decided)
+## Scope & Open Questions
 
-These items from the PRD are not yet scoped. Do not build them without an explicit decision being recorded:
-
-- **OQ-1:** Premium pricing model (subscription vs. one-time bundles vs. both)
-- **OQ-2:** Individual bidding mode alongside partnership bidding
-- **OQ-3:** Fixed vs. configurable score target for ranked games
-- **OQ-4:** Shared vs. separate MMR for Solo Queue and Duo Queue
-- **OQ-5:** Spectator chat-only mode vs. observe-only
-
-## Out of Scope for v1.0
-
-Do not implement the following unless the milestone explicitly changes:
-
-- Bots / AI opponents (v1.1)
-- Spectating (v1.1)
-- Ranked play and MMR (v1.2)
-- Premium cosmetics and billing (v1.3)
-- Ruleset customization (v1.3)
-- Game variants: Cutthroat, Suicide, Whiz, Mirrors (v2.0)
+`docs/spades_prd.md` Sections 7 and 9 are the source of truth for unresolved decisions and out-of-scope features. Do not implement anything listed there without an explicit decision being recorded in the PRD first.

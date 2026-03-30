@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Version** | 1.1 — MVP Scope Revision |
+| **Version** | 1.2 — Rules Clarifications |
 | **Date** | March 2026 |
 | **Status** | For Review |
 | **Product** | Spades Online (Mobile & Web) |
@@ -42,7 +42,7 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
   - **Table name** (optional, displayed in the public lobby browser)
   - **Visibility:** Public (visible in lobby browser) or Private (invite-only, accessible only via link or direct invite)
   - **Password protection:** Optional password that players must enter before being seated
-  - **Spectating:** allow or disallow spectators (spectating feature deferred to v1.1 — this setting is present but non-functional in v1.0)
+  - **Spectating:** allow or disallow spectators (spectating is deferred to v1.1 — this setting is present in v1.0 but non-functional and labelled "Coming Soon")
 - The host may transfer host privileges to any seated player at any time.
 - The host may kick a player from the table.
 
@@ -57,10 +57,12 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
 
 - The host may invite players via:
   - **Friends list** — sends an in-app notification to the invited player
-  - **Shareable link** — copies a join URL to the clipboard
+  - **Shareable join link** — copies a join URL to the clipboard; bypasses the password prompt on arrival
+  - **Shareable spectator link** — copies a spectator-only URL to the clipboard; recipients can observe the table without occupying a seat (spectating is deferred to v1.1 — this link option is present in v1.0 but labelled "Coming Soon")
   - **Username search** — search by username and invite directly
 - Invited players receive a notification with a one-click Join button.
 - Players may decline an invitation; the host is notified.
+- Joining a password-protected table via the lobby browser requires entering the password before being seated. Joining via a shareable link (join or spectator) or a direct in-app invite bypasses the password prompt — the link is copied privately to the clipboard and the host's act of inviting is sufficient trust in the direct invite case.
 
 #### 2.1.4 Seating & Teams
 
@@ -88,7 +90,7 @@ Each player has a public profile displaying: username, avatar, career win/loss r
 ### 3.3 In-Game Chat
 
 - A chat panel is available during casual games (host may disable for their table).
-- All chat is subject to automated profanity filtering. Persistent abuse can be reported and results in a chat mute.
+- All chat is subject to automated profanity filtering. Players may report abuse; moderation policy and mute mechanics are to be decided (see OQ-6).
 
 ---
 
@@ -131,14 +133,17 @@ v1.0 ships with a single standard ruleset. Rule customization is deferred to v1.
 | Rule | Detail |
 |---|---|
 | **Target Score** | 250 points. First team to reach 250 wins. If both teams reach 250 in the same round, the team with the higher score wins. |
-| **Bags** | Standard bag rules apply. Overtricks (bags) count +1 each. Every 10 bags accumulated deducts 100 points from that team's score. Tricks taken by a nil bidder count toward their partner's bid and are bags if they cause the partner to exceed it. If both players on a team bid nil or blind nil, the team bid is 0, so every trick either player takes is a bag. |
+| **Loss by Negative Score** | A team whose score reaches -250 or lower loses immediately, unless both teams are at -250 or lower simultaneously, in which case the team with the higher score wins. |
+| **Dealer** | North deals the first hand. The dealer button rotates clockwise each hand. |
+| **Bags** | Standard bag rules apply. Overtricks (bags) count +1 each. Every 10 bags accumulated deducts 100 points from that team's score. Tricks taken by a nil bidder count toward their partner's bid and are bags if they cause the partner to exceed it. If both players on a team bid Nil or Blind Nil, every trick either player takes is a bag and breaks that individual's Nil. |
 | **First Trick** | A Spade may not be played on the first trick of a hand, even if a player has no cards of the led suit. |
 | **Spades Breaking** | Spades are broken by the first Spade played (after the first trick). Once broken, Spades may be led. |
 | **Nil** | +50 if successful, -50 if failed. Available to any player at any time. |
 | **Blind Nil Eligibility** | A player may bid Blind Nil only if their team is at least 100 points behind the opposing team. |
 | **Blind Nil Score** | +100 if successful, -100 if failed. |
 | **Blind Nil Limit** | Only one player per team may bid Blind Nil in a given hand. |
-| **Blind Nil Card Exchange** | The Blind Nil player looks at their hand, then passes 2 cards face-down to their partner. The partner reviews their hand (including the received cards), then passes 2 cards back to the Blind Nil player. |
+| **Blind Nil Card Exchange** | The card exchange occurs after all four players have bid but before the opening lead. The Blind Nil player passes 2 cards face-down to their partner; the partner then passes 2 cards back. |
+| **Team Bid of Zero** | A combined team bid of 0 is legal and is not treated as a Nil bid. Every trick the team takes is a bag. |
 
 ### 5.2 Bidding Rules (Partnership Bidding)
 
@@ -188,6 +193,7 @@ The bidding sequence follows a partnership model designed to allow informed team
 | OQ-3 | Should ranked games use a fixed 250-point target or be configurable? Decision needed before v1.2 (ranked play). |
 | OQ-4 | Should Solo Queue and Duo Queue share one MMR or have separate ratings? Decision needed before v1.2 (ranked play). |
 | OQ-5 | Should spectating in casual games support a chat-only mode for spectators, or strictly observe-only? Decision needed before v1.1 (spectating). |
+| OQ-6 | Chat moderation: what constitutes persistent abuse, who reviews reports, and how are mutes applied and lifted? Automated profanity filtering ships in v1.0; human moderation policy and tooling to be decided before launch. |
 
 ---
 
@@ -305,4 +311,4 @@ Variants may introduce separate casual lobbies.
 
 ---
 
-*End of Document — Spades Online PRD v1.1*
+*End of Document — Spades Online PRD v1.2*

@@ -27,11 +27,13 @@ Spades Online is a real-time multiplayer card game (web + mobile) built with a N
 
 ## How Claude Should Work
 
+- Before starting any task, check `docs/TASKS.md` for the current task list and pick up an incomplete item
 - Create a new branch per task, branched from `dev`, using a `claude/` prefix and descriptive name e.g. `claude/feat/blind-nil-exchange`, `claude/fix/bag-deduction`
 - Always open PRs targeting `dev`, never `main`
 - Never commit directly to `main`, `dev`, or `qa`
 - Keep PRs small and focused — one feature or fix per PR
 - Write a clear PR description explaining what changed and why
+- Mark the corresponding task complete in `docs/TASKS.md` in the same PR as the code change
 
 ## Code Style
 
@@ -124,4 +126,4 @@ The following are coding-specific gotchas that are easy to misimplement even whe
 
 ## Scope & Open Questions
 
-`docs/spades_prd.md` Sections 7 and 9 are the source of truth for unresolved decisions and out-of-scope features. Do not implement anything listed there without an explicit decision being recorded in the PRD first.
+`docs/TASKS.md` is the actionable task list for v1.0. `docs/spades_prd.md` Sections 7 and 9 are the source of truth for unresolved decisions and out-of-scope features. Do not implement anything listed in the open questions or post-launch sections without an explicit decision being recorded in the PRD first.

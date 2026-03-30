@@ -5,6 +5,30 @@
 
 ---
 
+## Dependency Order
+
+Complete P0 tasks in this order. Tasks within the same group are independent and can be parallelised.
+
+**Group 1 — Foundation (no dependencies)**
+- Authentication & Accounts (all tasks)
+- Core Gameplay (all tasks)
+
+**Group 2 — Requires Group 1**
+- Lobby & Table Management — requires auth (players must be authenticated to create/join tables)
+- Spectating — requires the arrive-then-sit flow from Lobby & Table Management
+
+**Group 3 — Requires Group 2**
+- Social Features — friends list table links require lobby and presence to be functional
+- Performance & Infrastructure — load and latency targets can only be validated once game loop and lobby are complete
+
+**Group 4 — Requires Group 3**
+- UI & Customization — can be layered on top of a working game
+
+**No dependencies (can be done at any time)**
+- Open Questions — these are decisions, not implementation tasks
+
+---
+
 ## Authentication & Accounts
 
 - [ ] `P0` Implement email/password registration with required email verification

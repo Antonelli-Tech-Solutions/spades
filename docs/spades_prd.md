@@ -46,7 +46,7 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
     - *Private* — not listed anywhere; only reachable via a join link, spectator link, or direct in-app invite
   - **Join policy:** controls who may sit down among those who can already see the table. Cannot be less restrictive than visibility; available options are filtered accordingly:
     - *Open* — anyone who can see the table may sit (available for Public tables only)
-    - *Friends-Only* — only the host's friends may sit directly (available for Public and Friends-Only tables)
+    - *Friends-Only* — only the host's friends may sit directly; players with a join link or direct in-app invite may also sit (available for Public and Friends-Only tables)
     - *Invite-Only* — players may only sit via a join link or direct in-app invite (available for all visibility levels). Private tables are always Invite-Only; the join policy control is hidden when Private is selected.
   - **Spectating:** allow or disallow spectators (deferred to v1.1 — this setting is present in v1.0 but non-functional and labelled "Coming Soon")
 - The host may transfer host privileges to any seated player at any time.

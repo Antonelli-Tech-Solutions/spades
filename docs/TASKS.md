@@ -35,7 +35,7 @@ Complete P0 tasks in this order. Tasks within the same group are independent and
 - [ ] `P0` Implement login and session management
 - [ ] `P0` Apply rate limiting on all authentication endpoints
 - [ ] `P1` Add optional 2FA via authenticator app
-- [ ] `P1` Build player profile page (username, avatar, career win/loss record, recent 20 games, cosmetics)
+- [x] `P1` Build player profile page (username, avatar, career win/loss record, recent 20 games, cosmetics)
 
 ---
 

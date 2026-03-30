@@ -32,6 +32,7 @@ export REDIS_URL="redis://localhost:6379"
 
 # Run database migrations
 psql $DATABASE_URL -f db/migrations/001_create_players.sql
+psql $DATABASE_URL -f db/migrations/002_create_profile_and_games.sql
 
 # Start the server (default port 3000)
 npm start
@@ -68,6 +69,43 @@ Unit tests run without any external services. Integration tests require `DATABAS
 ## API Routes
 
 All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes use headers `x-session-id`, `x-player-id`, `x-table-id` where applicable.
+
+### Player Profiles
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/profile/:playerId` | Get a player's public profile (username, avatar, career stats, recent games, cosmetics). |
+
+#### `GET /api/profile/:playerId`
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Profile found. Body: `{ playerId, username, avatar, cosmetics, career, recentGames }` |
+| `400` | `playerId` is not a valid UUID |
+| `404` | Player not found |
+
+**Response body**
+```json
+{
+  "playerId": "uuid",
+  "username": "alice",
+  "avatar": { "icon": 3 },
+  "cosmetics": { "feltColor": "green", "cardBack": "standard-red" },
+  "career": { "wins": 10, "losses": 5 },
+  "recentGames": [
+    {
+      "gameId": "uuid",
+      "playedAt": "2026-03-01T12:00:00Z",
+      "won": true,
+      "scoreNs": 260,
+      "scoreEw": 150,
+      "seat": "north"
+    }
+  ]
+}
+```
 
 ### Authentication
 
@@ -110,14 +148,18 @@ server/
   auth/
     registration.js — Registration and email-verification logic
     email.js        — Verification email builder and sender
+  social/
+    profile.js      — Player profile data access
 db/
   migrations/
     001_create_players.sql
+    002_create_profile_and_games.sql
 test/
   unit/
     auth/           — Pure logic tests (no DB required)
   integration/
     auth/           — API route tests (requires DATABASE_URL)
+    social/         — Profile API route tests (requires DATABASE_URL)
 docs/
   spades_prd.md   — Product requirements (source of truth for all rules)
   TASKS.md        — Task checklist

@@ -27,7 +27,7 @@ Spades Online is a real-time multiplayer card game (web + mobile) built with a N
 
 ## How Claude Should Work
 
-- Create a new branch per task, branched from `dev`, using a descriptive name e.g. `feat/blind-nil-exchange`, `fix/bag-deduction`
+- Create a new branch per task, branched from `dev`, using a `claude/` prefix and descriptive name e.g. `claude/feat/blind-nil-exchange`, `claude/fix/bag-deduction`
 - Always open PRs targeting `dev`, never `main`
 - Never commit directly to `main`, `dev`, or `qa`
 - Keep PRs small and focused — one feature or fix per PR

@@ -5,6 +5,7 @@ import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession } from './auth/session.js'
 import { getDb } from './db.js'
 import { getRedis } from './redis.js'
+import { createRateLimiter } from './middleware/rateLimiter.js'
 
 function sendJSON(res, statusCode, data) {
   res.status(statusCode).json(data)
@@ -14,13 +15,17 @@ function sendJSON(res, statusCode, data) {
  * Register all API route handlers on the given Express app.
  *
  * @param {import('express').Application} app
- * @param {{ mailer?: (email: string, token: string) => Promise<void> }} [opts]
+ * @param {{ mailer?: (email: string, token: string) => Promise<void>, redis?: object, rateLimitConfig?: { max?: number, windowSecs?: number } }} [opts]
  */
-export function handler(app, { mailer } = {}) {
+export function handler(app, { mailer, redis, rateLimitConfig } = {}) {
   const emailer = mailer ?? defaultMailer
+  const authRateLimiter = createRateLimiter(redis ?? null, {
+    keyPrefix: 'auth',
+    ...rateLimitConfig,
+  })
 
   // POST /api/auth/register
-  app.post('/api/auth/register', async (req, res) => {
+  app.post('/api/auth/register', authRateLimiter, async (req, res) => {
     const { email, username, password } = req.body ?? {}
     try {
       const db = getDb()
@@ -56,7 +61,7 @@ export function handler(app, { mailer } = {}) {
   })
 
   // GET /api/auth/verify-email?token=<uuid>
-  app.get('/api/auth/verify-email', async (req, res) => {
+  app.get('/api/auth/verify-email', authRateLimiter, async (req, res) => {
     const { token } = req.query
     try {
       const db = getDb()
@@ -72,7 +77,7 @@ export function handler(app, { mailer } = {}) {
   })
 
   // POST /api/auth/login
-  app.post('/api/auth/login', async (req, res) => {
+  app.post('/api/auth/login', authRateLimiter, async (req, res) => {
     const { email, password } = req.body ?? {}
     try {
       const db = getDb()

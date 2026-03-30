@@ -48,7 +48,7 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
     - *Open* — anyone who can see the table may sit (available for Public tables only)
     - *Friends-Only* — only the host's friends may sit directly; players with a join link or direct in-app invite may also sit (available for Public and Friends-Only tables)
     - *Invite-Only* — players may only sit via a join link or direct in-app invite (available for all visibility levels). Private tables are always Invite-Only; the join policy control is hidden when Private is selected.
-  - **Spectating:** allow or disallow spectators (deferred to v1.1 — this setting is present in v1.0 but non-functional and labelled "Coming Soon")
+  - **Spectating:** allow or disallow spectators. Spectators are observe-only in v1.0 — they cannot interact with or influence the game. Spectator chat settings are deferred to v1.1.
 - The host may transfer host privileges to any seated player at any time.
 - The host may kick a player from the table.
 
@@ -64,7 +64,7 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
 - The host may invite players via:
   - **Friends list** — sends an in-app notification to the invited player; grants visibility access and seating rights, bypassing join policy
   - **Shareable join link** — copies a join URL to the clipboard; grants visibility access and seating rights, bypassing join policy
-  - **Shareable spectator link** — copies a spectator-only URL to the clipboard; grants visibility access and spectating only, bypassing visibility restrictions but not seating rights (deferred to v1.1 — labelled "Coming Soon" in v1.0)
+  - **Shareable spectator link** — copies a spectator-only URL to the clipboard; grants visibility access and spectating only, bypassing visibility restrictions but not seating rights
   - **Username search** — search by username and invite directly; grants visibility access and seating rights, bypassing join policy
 - Invited players receive a notification with a one-click Join button.
 - Players may decline an invitation; the host is notified.
@@ -201,7 +201,7 @@ The bidding sequence follows a partnership model designed to allow informed team
 | OQ-2 | Should the partnership bidding system be the only available mode, or should individual bidding also be supported as a configurable option? Decision needed before v1.3 (rule customization). |
 | OQ-3 | Should ranked games use a fixed 250-point target or be configurable? Decision needed before v1.2 (ranked play). |
 | OQ-4 | Should Solo Queue and Duo Queue share one MMR or have separate ratings? Decision needed before v1.2 (ranked play). |
-| OQ-5 | Should spectating in casual games support a chat-only mode for spectators, or strictly observe-only? Decision needed before v1.1 (spectating). |
+| OQ-5 | ~~Should spectating in casual games support a chat-only mode for spectators, or strictly observe-only?~~ **Resolved:** v1.0 ships with observe-only spectating. Spectator chat settings are deferred to v1.1. |
 | OQ-6 | Chat moderation: what constitutes persistent abuse, who reviews reports, and how are mutes applied and lifted? Automated profanity filtering ships in v1.0; human moderation policy and tooling to be decided before launch. |
 
 ---
@@ -227,7 +227,17 @@ The bidding sequence follows a partnership model designed to allow informed team
 
 The following features are out of scope for v1.0 and are planned for subsequent releases in priority order. Items within each phase are listed in descending priority.
 
-### v1.1 — Bot & Spectating
+### v1.1 — Spectator Chat & Bots
+
+#### Spectator Chat Settings
+
+Hosts may configure chat access for spectators at their table. Options:
+
+- *No spectator chat* — spectators observe silently with no chat access.
+- *Separate spectator chat* — spectators have their own chat channel visible only to other spectators; seated players do not see it.
+- *Shared chat* — spectators and seated players share a single chat panel.
+
+Default to be decided before v1.1 ships.
 
 #### Standard Bot + Disconnect Fill
 
@@ -237,10 +247,6 @@ A rule-based AI opponent that plays legal, competent Spades. Serves two purposes
 - **Disconnect fill** — when a player disconnects and does not reconnect by the start of the next hand, a bot takes their seat for that hand. The player may rejoin at the start of any subsequent hand.
 
 Table host may configure: bot fill on disconnect only, always allow bots, or no bots.
-
-#### Spectating (Casual Games)
-
-Spectators may observe any public table the host permits. They occupy a separate observer rail and cannot influence the game. In-game chat access for spectators to be decided (see OQ-5).
 
 ---
 

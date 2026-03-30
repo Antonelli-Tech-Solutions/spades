@@ -1,0 +1,19 @@
+{
+  "name": "spades-online",
+  "version": "1.0.0",
+  "description": "Real-time multiplayer Spades card game — server",
+  "type": "module",
+  "main": "server/app.js",
+  "scripts": {
+    "start": "node server/app.js",
+    "test": "node --test 'test/**/*.test.js'"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "nodemailer": "^6.9.7",
+    "pg": "^8.11.3",
+    "redis": "^4.6.10",
+    "uuid": "^9.0.1"
+  }
+}

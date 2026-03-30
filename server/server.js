@@ -1,5 +1,6 @@
 import { registerPlayer, verifyEmailToken } from './auth/registration.js'
 import { sendVerificationEmail as defaultMailer } from './auth/email.js'
+import { getPlayerProfile, isValidUuid } from './social/profile.js'
 import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession } from './auth/session.js'
 import { getDb } from './db.js'
@@ -33,6 +34,23 @@ export function handler(app, { mailer } = {}) {
       if (err.code === 'DUPLICATE_EMAIL') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'DUPLICATE_USERNAME') return sendJSON(res, 409, { error: err.message })
       console.error('Registration error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // GET /api/profile/:playerId
+  app.get('/api/profile/:playerId', async (req, res) => {
+    const { playerId } = req.params
+    if (!isValidUuid(playerId)) {
+      return sendJSON(res, 400, { error: 'invalid playerId format' })
+    }
+    try {
+      const db = getDb()
+      const profile = await getPlayerProfile(db, playerId)
+      sendJSON(res, 200, profile)
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Profile fetch error:', { playerId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

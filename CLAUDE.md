@@ -24,11 +24,10 @@ Spades Online is a real-time multiplayer card game (web + mobile) built with a N
 - `main` — production, deployment target, do not touch
 - `dev` — primary integration branch
 - `qa` — pre-prod validation
-- `claude` — your working branch, always branch from and PR back to `dev`
 
 ## How Claude Should Work
 
-- Always work on the `claude` branch
+- Create a new branch per task, branched from `dev`, using a descriptive name e.g. `feat/blind-nil-exchange`, `fix/bag-deduction`
 - Always open PRs targeting `dev`, never `main`
 - Never commit directly to `main`, `dev`, or `qa`
 - Keep PRs small and focused — one feature or fix per PR
@@ -125,7 +124,6 @@ When in doubt about a rule, refer to `docs/spades_prd.md` Section 5.
 - Partnership bidding override (second bidder sets team total) is easy to get wrong — the first bidder's number is advisory only, except when they bid Nil or Blind Nil.
 - Blind Nil card exchange must complete before play begins and must be validated server-side (correct count, correct direction).
 - CORS headers are set manually on every request — do not remove them.
-- The `claude` branch auto-deploys to its own environment — your changes will be live there for review.
 
 ## Open Questions (Unresolved — Do Not Implement Until Decided)
 

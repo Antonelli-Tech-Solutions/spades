@@ -40,16 +40,15 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
 - Any authenticated player may create a table at any time.
 - On creation, the host configures the following options:
   - **Table name** (optional, displayed in the public lobby browser)
-  - **Visibility:** controls who can see the table exists
+  - **Visibility:** controls who can see, arrive at, and spectate the table
     - *Public* — listed in the lobby browser for all players
     - *Friends-Only* — visible to the host's friends via the friends list; not listed in the lobby browser
-    - *Private* — not listed anywhere; only reachable via a join link or direct in-app invite
-  - **Join policy:** controls who may sit down without an explicit invite. Join policy cannot be less restrictive than visibility; available options are filtered accordingly:
-    - *Open* — anyone may join (available for Public tables only)
-    - *Friends-Only* — only the host's friends may join directly (available for Public and Friends-Only tables)
-    - *Invite-Only* — players may only join via a shareable join link or a direct in-app invite (available for all visibility levels)
-    - Private tables are always Invite-Only; the join policy control is hidden when Private is selected.
-  - **Spectating:** allow or disallow spectators (spectating is deferred to v1.1 — this setting is present in v1.0 but non-functional and labelled "Coming Soon")
+    - *Private* — not listed anywhere; only reachable via a join link, spectator link, or direct in-app invite
+  - **Join policy:** controls who may sit down among those who can already see the table. Cannot be less restrictive than visibility; available options are filtered accordingly:
+    - *Open* — anyone who can see the table may sit (available for Public tables only)
+    - *Friends-Only* — only the host's friends may sit directly (available for Public and Friends-Only tables)
+    - *Invite-Only* — players may only sit via a join link or direct in-app invite (available for all visibility levels). Private tables are always Invite-Only; the join policy control is hidden when Private is selected.
+  - **Spectating:** allow or disallow spectators (deferred to v1.1 — this setting is present in v1.0 but non-functional and labelled "Coming Soon")
 - The host may transfer host privileges to any seated player at any time.
 - The host may kick a player from the table.
 
@@ -58,17 +57,18 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
 - A browsable list of all Public tables is accessible from the main menu.
 - Each entry displays: table name, host name, current seat occupancy (e.g., 3/4), ruleset (Standard), and join policy (Open, Friends-Only, or Invite-Only).
 - Filtering options: by seats available, by name search.
-- Players may click any Open table to join directly. Friends-Only tables show a Join button for friends of the host; others see the table but cannot join without a link or direct invite. Invite-Only tables are visible in the browser but show no Join button — a link or direct invite is required.
+- Players may arrive at any Public table to spectate (subject to the host's spectating setting) or sit, subject to join policy. Open tables show a Join button for all players. Friends-Only tables show a Join button only for friends of the host. Invite-Only tables show no Join button — a join link or direct invite is required to sit.
 
 #### 2.1.3 Invitations
 
 - The host may invite players via:
-  - **Friends list** — sends an in-app notification to the invited player
-  - **Shareable join link** — copies a join URL to the clipboard; grants entry regardless of join policy
-  - **Shareable spectator link** — copies a spectator-only URL to the clipboard; recipients can observe without occupying a seat (deferred to v1.1 — labelled "Coming Soon" in v1.0)
-  - **Username search** — search by username and invite directly
+  - **Friends list** — sends an in-app notification to the invited player; grants visibility access and seating rights, bypassing join policy
+  - **Shareable join link** — copies a join URL to the clipboard; grants visibility access and seating rights, bypassing join policy
+  - **Shareable spectator link** — copies a spectator-only URL to the clipboard; grants visibility access and spectating only, bypassing visibility restrictions but not seating rights (deferred to v1.1 — labelled "Coming Soon" in v1.0)
+  - **Username search** — search by username and invite directly; grants visibility access and seating rights, bypassing join policy
 - Invited players receive a notification with a one-click Join button.
 - Players may decline an invitation; the host is notified.
+- Any player who can see a table — whether via the lobby browser, friends list, join link, or spectator link — may spectate it, subject to the host's spectating setting.
 
 #### 2.1.4 Seating & Teams
 
@@ -87,7 +87,7 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
   - If the player has permission to see the table (i.e. it is Public, or Friends-Only and they are a friend of the host), the table name is shown alongside their status.
   - If the player does not have permission to see the table, their status shows as "Playing at a private table" with no further detail.
   - If a friend is in a lobby but not yet in a game, their status shows as "In lobby".
-- Players may join a friend's table directly from the friends list, subject to that table's join policy — Friends-Only and Open tables show a Join button; Invite-Only tables do not.
+- Players may go to a friend's table directly from the friends list. Arriving at a table puts the player in an observer state; sitting down is a separate step governed by join policy. Friends of the host may sit directly at Friends-Only and Open tables; Invite-Only tables require a join link or direct invite to sit.
 - Players may invite friends to a casual table from the friends list.
 - Players may remove or block a friend at any time. Blocked players cannot send friend requests or game invitations.
 - Friend request notifications are delivered in-app and (if enabled) via push notification.
@@ -141,8 +141,8 @@ v1.0 ships with a single standard ruleset. Rule customization is deferred to v1.
 
 | Rule | Detail |
 |---|---|
-| **Target Score** | 250 points. First team to reach 250 wins. If both teams reach 250 in the same round, the team with the higher score wins. |
-| **Loss by Negative Score** | A team whose score reaches -250 or lower loses immediately, unless both teams are at -250 or lower simultaneously, in which case the team with the higher score wins. |
+| **Target Score** | 250 points. First team to reach 250 wins. If both teams reach 250 in the same round, the team with the higher score wins. If both teams are tied on exactly the same score, an additional hand is played; this repeats until the tie is broken. |
+| **Loss by Negative Score** | A team whose score reaches -250 or lower loses immediately, unless both teams are at -250 or lower simultaneously, in which case the team with the higher score wins. If both teams are tied on exactly the same score, an additional hand is played; this repeats until the tie is broken. |
 | **Dealer** | North deals the first hand. The dealer button rotates clockwise each hand. |
 | **Bags** | Standard bag rules apply. Overtricks (bags) count +1 each. Every 10 bags accumulated deducts 100 points from that team's score. Tricks taken by a nil bidder count toward their partner's bid and are bags if they cause the partner to exceed it. If both players on a team bid Nil or Blind Nil, every trick either player takes is a bag and breaks that individual's Nil. |
 | **First Trick** | A Spade may not be played on the first trick of a hand, even if a player has no cards of the led suit. |

@@ -1,4 +1,5 @@
 import express from 'express'
+import { createClient } from 'redis'
 import { handler } from './server.js'
 
 const app = express()
@@ -20,7 +21,15 @@ app.use((req, res, next) => {
   next()
 })
 
-handler(app)
+let redisClient = null
+if (process.env.REDIS_URL) {
+  redisClient = createClient({ url: process.env.REDIS_URL })
+  redisClient.on('error', (err) => console.error('Redis client error:', err))
+  await redisClient.connect()
+  console.log('Redis connected')
+}
+
+handler(app, { redis: redisClient })
 
 app.listen(PORT, () => {
   console.log(`Spades Online server listening on port ${PORT}`)

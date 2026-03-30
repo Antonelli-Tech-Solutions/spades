@@ -1,0 +1,83 @@
+graph TB
+    subgraph Clients["Client Layer"]
+        WEB["Web App<br/>Chrome 100+ / Firefox 100+<br/>Safari 15+ / Edge 100+"]
+        IOS["iOS App<br/>iOS 15+"]
+        AND["Android App<br/>Android 10+"]
+    end
+
+    subgraph Gateway["API Gateway & Auth"]
+        GW["API Gateway<br/>Rate Limiting · TLS"]
+        AUTH["Auth Service<br/>Email/Password · 2FA<br/>Email Verification"]
+        SESSION["Session Manager<br/>JWT / Token Store"]
+    end
+
+    subgraph Core["Core Services"]
+        LOBBY["Lobby Service<br/>Table Browser<br/>Public · Private · Password"]
+        MATCH["Game Service<br/>Game Loop · Trick Engine<br/>Bid Validation · Scoring<br/>Bag Tracking · Win Detection"]
+        SOCIAL["Social Service<br/>Friends · Invites · Block<br/>Notifications"]
+        CHAT["Chat Service<br/>Profanity Filter<br/>Abuse Reporting"]
+        PROFILE["Profile Service<br/>Stats · History<br/>Cosmetics · Avatars"]
+    end
+
+    subgraph Realtime["Real-Time Layer"]
+        WS["WebSocket Server<br/>p95 latency < 200ms"]
+        ANTICHEAT["Anti-Cheat Engine<br/>Server-side State Validation<br/>Legal Move Enforcement<br/>Card Visibility Control"]
+    end
+
+    subgraph Data["Data Layer"]
+        GAMEDB[("Game DB<br/>Game State<br/>Hand History<br/>Scores")]
+        USERDB[("User DB<br/>Accounts · Profiles<br/>Friends · Blocks")]
+        CACHE[("Cache<br/>Lobby State<br/>Active Sessions<br/>Presence")]
+    end
+
+    subgraph Infra["Infrastructure"]
+        PUSH["Push Notification<br/>Service<br/>iOS · Android · Web"]
+        CDN["CDN<br/>Static Assets"]
+        MON["Monitoring<br/>99.5% SLA · Crash < 0.5%<br/>Session Rating"]
+    end
+
+    WEB & IOS & AND -->|HTTPS| GW
+    WEB & IOS & AND <-->|WSS| WS
+
+    GW --> AUTH
+    AUTH --> SESSION
+
+    GW --> LOBBY
+    GW --> MATCH
+    GW --> SOCIAL
+    GW --> CHAT
+    GW --> PROFILE
+
+    WS --> ANTICHEAT
+    ANTICHEAT --> MATCH
+
+    MATCH --> GAMEDB
+    MATCH --> CACHE
+    LOBBY --> CACHE
+    LOBBY --> GAMEDB
+
+    SOCIAL --> USERDB
+    SOCIAL --> PUSH
+    PROFILE --> USERDB
+    CHAT --> GAMEDB
+
+    AUTH --> USERDB
+    SESSION --> CACHE
+
+    CDN --> WEB
+    MON -.->|observes| Core
+    MON -.->|observes| Realtime
+
+    classDef client fill:#E6F1FB,stroke:#378ADD,color:#0C447C
+    classDef gateway fill:#EEEDFE,stroke:#7F77DD,color:#3C3489
+    classDef service fill:#EAF3DE,stroke:#639922,color:#27500A
+    classDef realtime fill:#FCEBEB,stroke:#E24B4A,color:#791F1F
+    classDef data fill:#FAEEDA,stroke:#BA7517,color:#633806
+    classDef infra fill:#E1F5EE,stroke:#1D9E75,color:#085041
+
+    class WEB,IOS,AND client
+    class GW,AUTH,SESSION gateway
+    class LOBBY,MATCH,SOCIAL,CHAT,PROFILE service
+    class WS,ANTICHEAT realtime
+    class GAMEDB,USERDB,CACHE data
+    class PUSH,CDN,MON infra

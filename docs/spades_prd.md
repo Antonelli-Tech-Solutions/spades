@@ -40,29 +40,35 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
 - Any authenticated player may create a table at any time.
 - On creation, the host configures the following options:
   - **Table name** (optional, displayed in the public lobby browser)
-  - **Visibility:** Public (visible in lobby browser) or Private (invite-only, accessible only via link or direct invite)
-  - **Password protection:** Optional password that players must enter before being seated
+  - **Visibility:** controls who can see the table exists
+    - *Public* — listed in the lobby browser for all players
+    - *Friends-Only* — visible to the host's friends via the friends list; not listed in the lobby browser
+    - *Private* — not listed anywhere; only reachable via a join link or direct in-app invite
+  - **Join policy:** controls who may sit down without an explicit invite. Join policy cannot be less restrictive than visibility; available options are filtered accordingly:
+    - *Open* — anyone may join (available for Public tables only)
+    - *Friends-Only* — only the host's friends may join directly (available for Public and Friends-Only tables)
+    - *Invite-Only* — players may only join via a shareable join link or a direct in-app invite (available for all visibility levels)
+    - Private tables are always Invite-Only; the join policy control is hidden when Private is selected.
   - **Spectating:** allow or disallow spectators (spectating is deferred to v1.1 — this setting is present in v1.0 but non-functional and labelled "Coming Soon")
 - The host may transfer host privileges to any seated player at any time.
 - The host may kick a player from the table.
 
 #### 2.1.2 Public Lobby Browser
 
-- A browsable list of all public tables is accessible from the main menu.
-- Each entry displays: table name, host name, current seat occupancy (e.g., 3/4), ruleset (Standard), and whether a password is required.
+- A browsable list of all Public tables is accessible from the main menu.
+- Each entry displays: table name, host name, current seat occupancy (e.g., 3/4), ruleset (Standard), and join policy (Open, Friends-Only, or Invite-Only).
 - Filtering options: by seats available, by name search.
-- Players may click any open table to join.
+- Players may click any Open table to join directly. Friends-Only tables show a Join button for friends of the host; others see the table but cannot join without a link or direct invite. Invite-Only tables are visible in the browser but show no Join button — a link or direct invite is required.
 
 #### 2.1.3 Invitations
 
 - The host may invite players via:
   - **Friends list** — sends an in-app notification to the invited player
-  - **Shareable join link** — copies a join URL to the clipboard; bypasses the password prompt on arrival
-  - **Shareable spectator link** — copies a spectator-only URL to the clipboard; recipients can observe the table without occupying a seat (spectating is deferred to v1.1 — this link option is present in v1.0 but labelled "Coming Soon")
+  - **Shareable join link** — copies a join URL to the clipboard; grants entry regardless of join policy
+  - **Shareable spectator link** — copies a spectator-only URL to the clipboard; recipients can observe without occupying a seat (deferred to v1.1 — labelled "Coming Soon" in v1.0)
   - **Username search** — search by username and invite directly
 - Invited players receive a notification with a one-click Join button.
 - Players may decline an invitation; the host is notified.
-- Joining a password-protected table via the lobby browser requires entering the password before being seated. Joining via a shareable link (join or spectator) or a direct in-app invite bypasses the password prompt — the link is copied privately to the clipboard and the host's act of inviting is sufficient trust in the direct invite case.
 
 #### 2.1.4 Seating & Teams
 
@@ -77,8 +83,11 @@ Casual mode uses a lobby/table metaphor where players sit down and play without 
 ### 3.1 Friends List
 
 - Players may send, accept, or decline friend requests by searching for other players by username.
-- The friends list displays each friend's online/offline/in-game status.
-- Players may jump to a friend's public table directly from the friends list.
+- The friends list displays each friend's online/offline/in-game status. If a friend is at a table:
+  - If the player has permission to see the table (i.e. it is Public, or Friends-Only and they are a friend of the host), the table name is shown alongside their status.
+  - If the player does not have permission to see the table, their status shows as "Playing at a private table" with no further detail.
+  - If a friend is in a lobby but not yet in a game, their status shows as "In lobby".
+- Players may join a friend's table directly from the friends list, subject to that table's join policy — Friends-Only and Open tables show a Join button; Invite-Only tables do not.
 - Players may invite friends to a casual table from the friends list.
 - Players may remove or block a friend at any time. Blocked players cannot send friend requests or game invitations.
 - Friend request notifications are delivered in-app and (if enabled) via push notification.

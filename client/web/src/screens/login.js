@@ -39,6 +39,7 @@ export function renderLoginScreen(container) {
         <button type="submit" id="login-btn" class="btn-primary">Sign In</button>
       </form>
       <p class="auth-link">Don't have an account? <a href="#/register">Create one</a></p>
+      <p class="auth-link"><a href="#/forgot-password">Forgot your password?</a></p>
     </div>
   `
 

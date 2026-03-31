@@ -1,0 +1,162 @@
+import { v4 as uuidv4 } from 'uuid'
+
+const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
+
+/**
+ * @typedef {Object} TableState
+ * @property {string} tableId
+ * @property {string} hostPlayerId
+ * @property {{ north: string|null, east: string|null, south: string|null, west: string|null }} seats
+ * @property {'waiting'|'playing'} status
+ * @property {string|null} gameId
+ * @property {string} createdAt
+ */
+
+/**
+ * Create a new table in Redis and return its ID.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {{ hostPlayerId: string }} opts
+ * @returns {Promise<TableState>}
+ */
+export async function createTable(redis, { hostPlayerId }) {
+  const tableId = uuidv4()
+  const table = {
+    tableId,
+    hostPlayerId,
+    seats: { north: null, east: null, south: null, west: null },
+    status: 'waiting',
+    gameId: null,
+    createdAt: new Date().toISOString(),
+  }
+
+  const key = `table:${tableId}`
+  await redis.set(key, JSON.stringify(table), { EX: TABLE_TTL_SECONDS })
+
+  // Add to the lobby index
+  await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId, status: 'waiting' }))
+
+  console.log('Table created:', { tableId, hostPlayerId })
+  return table
+}
+
+/**
+ * Retrieve a table from Redis.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @returns {Promise<TableState|null>}
+ */
+export async function getTable(redis, tableId) {
+  const raw = await redis.get(`table:${tableId}`)
+  return raw ? JSON.parse(raw) : null
+}
+
+/**
+ * Persist an updated table state to Redis and reset its TTL.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {TableState} table
+ */
+export async function saveTable(redis, table) {
+  const key = `table:${table.tableId}`
+  await redis.set(key, JSON.stringify(table), { EX: TABLE_TTL_SECONDS })
+}
+
+/**
+ * Seat a player at an empty seat.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @param {'north'|'east'|'south'|'west'} seat
+ * @returns {Promise<TableState>}
+ * @throws {Error} If the table is not found, game already started, seat is taken, or player already seated
+ */
+export async function sitAtTable(redis, tableId, playerId, seat) {
+  const validSeats = ['north', 'east', 'south', 'west']
+  if (!validSeats.includes(seat)) {
+    throw Object.assign(new Error(`Invalid seat: ${seat}`), { code: 'INVALID_SEAT' })
+  }
+
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.status === 'playing') {
+    throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
+  }
+  if (table.seats[seat] !== null) {
+    throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+  }
+  // Check player isn't already seated
+  const alreadySeated = Object.values(table.seats).includes(playerId)
+  if (alreadySeated) {
+    throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
+  }
+
+  const updated = {
+    ...table,
+    seats: { ...table.seats, [seat]: playerId },
+  }
+  await saveTable(redis, updated)
+  console.log('Player seated:', { tableId, playerId, seat })
+  return updated
+}
+
+/**
+ * Return true if all 4 seats are occupied.
+ * @param {TableState} table
+ * @returns {boolean}
+ */
+export function isTableFull(table) {
+  return Object.values(table.seats).every((p) => p !== null)
+}
+
+/**
+ * Mark the table as in-game and record the gameId.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} gameId
+ * @returns {Promise<TableState>}
+ */
+export async function markTablePlaying(redis, tableId, gameId) {
+  const table = await getTable(redis, tableId)
+  if (!table) throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+
+  const updated = { ...table, status: 'playing', gameId }
+  await saveTable(redis, updated)
+
+  // Update lobby index
+  await redis.hSet('lobby:tables', tableId, JSON.stringify({
+    tableId,
+    hostPlayerId: table.hostPlayerId,
+    status: 'playing',
+  }))
+
+  return updated
+}
+
+/**
+ * Retrieve the current game state for a table from Redis.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @returns {Promise<object|null>}
+ */
+export async function getGameState(redis, tableId) {
+  const raw = await redis.get(`game:${tableId}`)
+  return raw ? JSON.parse(raw) : null
+}
+
+/**
+ * Persist game state to Redis.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {object} gameState
+ */
+export async function saveGameState(redis, tableId, gameState) {
+  await redis.set(`game:${tableId}`, JSON.stringify(gameState), { EX: TABLE_TTL_SECONDS })
+}

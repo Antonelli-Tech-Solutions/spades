@@ -179,8 +179,14 @@ describe('playCard', () => {
 
   it('throws if card not in hand', () => {
     let state = getToPlayingPhase()
+    // Use a card from north's hand — since all 52 cards are dealt to exactly one
+    // player, any card in north's hand is guaranteed not to be in east's hand.
+    // Hardcoding a specific card (e.g. 2♠) is unreliable because the shuffle is
+    // random and east holds the 2♠ ~25% of the time, causing this test to fail
+    // intermittently with "Illegal play" instead of "not in hand".
+    const cardNotInEastsHand = state.hands.north[0]
     assert.throws(
-      () => playCard(state, 'east', { suit: 'spades', rank: '2' }),
+      () => playCard(state, 'east', cardNotInEastsHand),
       /not in hand|invalid card/i,
     )
   })

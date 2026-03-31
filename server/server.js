@@ -77,13 +77,14 @@ export function handler(app, { mailer, redis, rateLimitConfig } = {}) {
     try {
       const db = getDb()
       await verifyEmailToken(db, token)
-      sendJSON(res, 200, { message: 'Email verified successfully. You may now log in.' })
+      return res.redirect('/#/verify-email-success')
     } catch (err) {
-      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
-      if (err.code === 'INVALID_TOKEN') return sendJSON(res, 400, { error: err.message })
-      if (err.code === 'EXPIRED_TOKEN') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'EXPIRED_TOKEN') return res.redirect('/#/verify-email-expired')
+      if (err.code === 'VALIDATION_ERROR' || err.code === 'INVALID_TOKEN') {
+        return res.redirect('/#/verify-email-error')
+      }
       console.error('Email verification error:', { error: err.message })
-      sendJSON(res, 500, { error: 'Internal server error' })
+      return res.redirect('/#/verify-email-error')
     }
   })
 

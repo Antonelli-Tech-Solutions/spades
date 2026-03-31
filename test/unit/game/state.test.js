@@ -239,3 +239,101 @@ describe('CLOCKWISE_SEATS', () => {
     assert.deepEqual(CLOCKWISE_SEATS, ['north', 'east', 'south', 'west'])
   })
 })
+
+describe('dealer rotation', () => {
+  const SEATS = ['north', 'east', 'south', 'west']
+
+  function nextSeatClockwise(seat) {
+    return SEATS[(SEATS.indexOf(seat) + 1) % 4]
+  }
+
+  /**
+   * Fast-forward one complete hand by:
+   * 1. Placing bids (all numeric, no nils — avoids blind nil exchange complexity)
+   * 2. Injecting a controlled last-trick state (12 tricks already done)
+   * 3. Playing the 4 cards of the final trick (lead player wins with Ace of clubs)
+   *
+   * Scores stay well within [-250, 250] across 4 successive hands so no game-over
+   * is triggered.
+   */
+  function completeOneHand(state) {
+    const dealer = state.dealerSeat
+    const lead = nextSeatClockwise(dealer)
+    const second = nextSeatClockwise(lead)
+    const third = nextSeatClockwise(second)
+
+    // Bidding order: lead, second, third, dealer
+    // Each team's second bidder sets the team total.
+    // These numbers keep NS/EW scores within safe range across all 4 rotations.
+    let s = bidAll(state, [
+      [lead, 3],
+      [second, 6],
+      [third, 6],
+      [dealer, 9],
+    ])
+
+    // Give each seat one unique club card; lead seat gets Ace (guaranteed trick win)
+    const lowRanks = { north: '2', east: '3', south: '4', west: '5' }
+    const hands = {}
+    for (const seat of SEATS) {
+      hands[seat] = [{ suit: 'clubs', rank: lowRanks[seat] }]
+    }
+    hands[lead] = [{ suit: 'clubs', rank: 'A' }]
+
+    s = {
+      ...s,
+      phase: 'playing',
+      hands,
+      completedTricks: Array.from({ length: 12 }, () => ({ winner: 'north', plays: [] })),
+      tricksWon: { north: 3, east: 3, south: 3, west: 3 },
+      currentPlayerSeat: lead,
+      leadSeat: lead,
+      isFirstTrick: false,
+      spadesbroken: true,
+      currentTrick: [],
+    }
+
+    // Play the last trick clockwise from the lead seat
+    const playOrder = [lead, second, third, dealer]
+    for (const seat of playOrder) {
+      s = playCard(s, seat, s.hands[seat][0])
+    }
+    return s
+  }
+
+  it('dealer rotates clockwise after each hand', () => {
+    let state = createGame('table-1', PLAYER_IDS)
+    const expectedDealers = ['north', 'east', 'south', 'west', 'north']
+
+    for (let hand = 0; hand < 4; hand++) {
+      assert.equal(
+        state.dealerSeat,
+        expectedDealers[hand],
+        `hand ${hand + 1}: expected dealer ${expectedDealers[hand]}`,
+      )
+      state = completeOneHand(state)
+    }
+
+    // After 4 hands the button wraps back to north
+    assert.equal(state.dealerSeat, expectedDealers[4], 'dealer wraps back to north after 4 hands')
+  })
+
+  it('first bidder is always to the left of the dealer', () => {
+    let state = createGame('table-1', PLAYER_IDS)
+
+    // Hand 1: north deals → east bids first
+    assert.equal(state.currentBidderSeat, 'east')
+    state = completeOneHand(state)
+
+    // Hand 2: east deals → south bids first
+    assert.equal(state.currentBidderSeat, 'south')
+    state = completeOneHand(state)
+
+    // Hand 3: south deals → west bids first
+    assert.equal(state.currentBidderSeat, 'west')
+    state = completeOneHand(state)
+
+    // Hand 4: west deals → north bids first
+    assert.equal(state.currentBidderSeat, 'north')
+  })
+})

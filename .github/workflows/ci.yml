@@ -1,29 +1,31 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
+  push:
+    branches: [dev, qa, main, 'claude/**']
   pull_request:
-    branches: [main, dev, qa]
+    branches: [dev, qa, main]
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
 
     services:
       redis:
-        image: redis:7
+        image: redis:7-alpine
         ports:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
-          --health-timeout 5s
+          --health-timeout 3s
           --health-retries 5
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -36,3 +38,4 @@ jobs:
         run: npm test
         env:
           REDIS_URL: redis://localhost:6379
+          NODE_ENV: test

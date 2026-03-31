@@ -41,7 +41,7 @@
 
 ### Web UI (minimal — enough to play)
 
-- [ ] `P0` Registration and login screens
+- [x] `P0` Registration and login screens
 - [ ] `P0` Create table screen: name only (no visibility/join policy yet)
 - [ ] `P0` Join table screen: list of open tables, click to join and choose a seat
 - [ ] `P0` Game screen: display hand, bid input, card play, current trick, scoreboard

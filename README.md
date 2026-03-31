@@ -113,6 +113,7 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 |---|---|---|
 | `POST` | `/api/auth/register` | Register with email, username, password. Sends a verification email. |
 | `GET` | `/api/auth/verify-email?token=<uuid>` | Verify email address using the token from the registration email. |
+| `POST` | `/api/auth/resend-verification` | Resend the verification email to an unverified account. Always returns 200 regardless of whether the email exists (prevents enumeration). |
 
 #### `POST /api/auth/register`
 
@@ -138,13 +139,29 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `200` | Email verified. Account is now active. |
 | `400` | Missing, invalid, expired, or already-used token |
 
+#### `POST /api/auth/resend-verification`
+
+**Body**
+```json
+{ "email": "alice@example.com" }
+```
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Request accepted. If the email is registered and unverified, a new link has been sent. |
+| `500` | Internal server error |
+
+> Note: A `200` is returned even when the email is not found or the account is already verified. This prevents account enumeration.
+
 ## Web UI
 
 The web client is served as static files from `client/web/` by the Express server. Open `http://localhost:3000` in a browser after starting the server.
 
 Current screens:
-- **Sign In** (`#/login`) — email + password login
-- **Create Account** (`#/register`) — registration with email, username, and password; shows a verification prompt on success
+- **Sign In** (`#/login`) — email + password login; shows a "Resend verification email" button when login fails with an unverified email error
+- **Create Account** (`#/register`) — registration with email, username, and password; shows a verification prompt on success with a "Resend verification email" button
 
 On successful login the session is stored in `sessionStorage` (`sessionId`, `playerId`, `username`) and the player is routed to `#/lobby` (lobby screen, coming in a later slice).
 

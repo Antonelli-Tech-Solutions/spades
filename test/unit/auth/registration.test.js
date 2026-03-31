@@ -6,6 +6,7 @@ import {
   generateVerificationToken,
   registerPlayer,
   verifyEmailToken,
+  resendVerificationEmail,
 } from '../../../server/auth/registration.js'
 
 describe('hashPassword', () => {
@@ -112,6 +113,65 @@ describe('registerPlayer — input validation', () => {
       async (email) => { capturedEmail = email },
     )
     assert.equal(capturedEmail, 'alice@example.com')
+  })
+})
+
+describe('resendVerificationEmail', () => {
+  it('succeeds silently when email is not found (prevents enumeration)', async () => {
+    const db = {
+      query: async (sql) => {
+        if (sql.includes('SELECT')) return { rows: [] }
+        return { rows: [] }
+      },
+    }
+    const emails = []
+    await resendVerificationEmail(db, 'ghost@example.com', async (email) => emails.push(email))
+    assert.equal(emails.length, 0)
+  })
+
+  it('succeeds silently when player is already verified (prevents enumeration)', async () => {
+    const db = {
+      query: async (sql) => {
+        if (sql.includes('SELECT')) return { rows: [{ id: 'player-1', is_verified: true }] }
+        return { rows: [] }
+      },
+    }
+    const emails = []
+    await resendVerificationEmail(db, 'alice@example.com', async (email) => emails.push(email))
+    assert.equal(emails.length, 0)
+  })
+
+  it('deletes old tokens and sends a new one for unverified player', async () => {
+    const queries = []
+    const db = {
+      query: async (sql, params) => {
+        queries.push({ sql, params })
+        if (sql.includes('SELECT')) return { rows: [{ id: 'player-1', is_verified: false }] }
+        return { rows: [] }
+      },
+    }
+    const emails = []
+    await resendVerificationEmail(db, 'alice@example.com', async (email) => emails.push(email))
+
+    const deleteQuery = queries.find((q) => q.sql.includes('DELETE'))
+    assert.ok(deleteQuery, 'should delete old tokens')
+    assert.equal(emails.length, 1)
+    assert.equal(emails[0], 'alice@example.com')
+  })
+
+  it('normalises email to lowercase before lookup', async () => {
+    const lookups = []
+    const db = {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT')) {
+          lookups.push(params[0])
+          return { rows: [] }
+        }
+        return { rows: [] }
+      },
+    }
+    await resendVerificationEmail(db, 'Alice@EXAMPLE.COM', async () => {})
+    assert.equal(lookups[0], 'alice@example.com')
   })
 })
 

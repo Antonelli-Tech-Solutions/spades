@@ -27,6 +27,29 @@ export async function registerUser({ email, username, password }, fetchFn = glob
 }
 
 /**
+ * Request a new verification email for an unverified account.
+ * Always returns successfully — the server does not reveal whether the email
+ * exists or is already verified.
+ * @param {{ email: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ message: string }>}
+ */
+export async function resendVerification({ email }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/auth/resend-verification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to resend verification email.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Log in with email and password.
  * @param {{ email: string, password: string }} data
  * @param {typeof fetch} [fetchFn]

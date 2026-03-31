@@ -1,5 +1,5 @@
 import { validateLoginForm } from '../validation.js'
-import { loginUser } from '../api.js'
+import { loginUser, resendVerification } from '../api.js'
 import { navigate } from '../router.js'
 
 /**
@@ -33,6 +33,9 @@ export function renderLoginScreen(container) {
           />
         </div>
         <div class="form-error" id="login-error" role="alert" aria-live="polite"></div>
+        <div id="login-resend-section" style="display:none;" class="auth-resend">
+          <button type="button" id="resend-btn" class="btn-secondary">Resend verification email</button>
+        </div>
         <button type="submit" id="login-btn" class="btn-primary">Sign In</button>
       </form>
       <p class="auth-link">Don't have an account? <a href="#/register">Create one</a></p>
@@ -42,10 +45,13 @@ export function renderLoginScreen(container) {
   const form = container.querySelector('#login-form')
   const errorEl = container.querySelector('#login-error')
   const btn = container.querySelector('#login-btn')
+  const resendSection = container.querySelector('#login-resend-section')
+  const resendBtn = container.querySelector('#resend-btn')
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     errorEl.textContent = ''
+    resendSection.style.display = 'none'
 
     const email = form.querySelector('#login-email').value.trim()
     const password = form.querySelector('#login-password').value
@@ -69,10 +75,27 @@ export function renderLoginScreen(container) {
     } catch (err) {
       let message = err.message
       if (err.status === 401) message = 'Invalid email or password.'
-      if (err.status === 403) message = 'Please verify your email address before signing in.'
+      if (err.status === 403) {
+        message = 'Please verify your email address before signing in.'
+        resendSection.style.display = 'block'
+      }
       errorEl.textContent = message
       btn.disabled = false
       btn.textContent = 'Sign In'
+    }
+  })
+
+  resendBtn.addEventListener('click', async () => {
+    const email = form.querySelector('#login-email').value.trim()
+    resendBtn.disabled = true
+    resendBtn.textContent = 'Sending\u2026'
+    errorEl.textContent = ''
+
+    try {
+      await resendVerification({ email })
+      resendSection.innerHTML = '<p class="auth-message">Verification email sent — check your inbox.</p>'
+    } catch (_err) {
+      resendSection.innerHTML = '<p class="auth-message">Could not send email. Please try again later.</p>'
     }
   })
 }

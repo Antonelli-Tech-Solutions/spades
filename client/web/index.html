@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spades Online</title>
+    <style>
+      *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background: #1a3a1a;
+        color: #e8e8e8;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #app {
+        width: 100%;
+        max-width: 420px;
+        padding: 1rem;
+      }
+
+      .auth-card {
+        background: #1e1e1e;
+        border: 1px solid #2e2e2e;
+        border-radius: 8px;
+        padding: 2rem;
+      }
+
+      .auth-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        color: #fff;
+      }
+
+      .form-group {
+        margin-bottom: 1rem;
+      }
+
+      label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+        color: #b0b0b0;
+      }
+
+      input[type="email"],
+      input[type="text"],
+      input[type="password"] {
+        width: 100%;
+        padding: 0.625rem 0.75rem;
+        background: #2a2a2a;
+        border: 1px solid #3a3a3a;
+        border-radius: 4px;
+        color: #e8e8e8;
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      input:focus {
+        border-color: #4caf50;
+      }
+
+      input::placeholder {
+        color: #555;
+      }
+
+      .form-error {
+        min-height: 1.25rem;
+        font-size: 0.875rem;
+        color: #e57373;
+        margin-bottom: 0.75rem;
+        margin-top: 0.25rem;
+      }
+
+      .btn-primary {
+        width: 100%;
+        padding: 0.75rem;
+        background: #2e7d32;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: #388e3c;
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .auth-link {
+        margin-top: 1.25rem;
+        font-size: 0.875rem;
+        color: #888;
+        text-align: center;
+      }
+
+      .auth-link a {
+        color: #66bb6a;
+        text-decoration: none;
+      }
+
+      .auth-link a:hover {
+        text-decoration: underline;
+      }
+
+      .auth-message {
+        color: #b0b0b0;
+        line-height: 1.6;
+        margin-bottom: 1rem;
+      }
+
+      .auth-message strong {
+        color: #e8e8e8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

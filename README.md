@@ -138,11 +138,32 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `200` | Email verified. Account is now active. |
 | `400` | Missing, invalid, expired, or already-used token |
 
+## Web UI
+
+The web client is served as static files from `client/web/` by the Express server. Open `http://localhost:3000` in a browser after starting the server.
+
+Current screens:
+- **Sign In** (`#/login`) — email + password login
+- **Create Account** (`#/register`) — registration with email, username, and password; shows a verification prompt on success
+
+On successful login the session is stored in `sessionStorage` (`sessionId`, `playerId`, `username`) and the player is routed to `#/lobby` (lobby screen, coming in a later slice).
+
 ## Project Structure
 
 ```
+client/
+  web/
+    index.html        — SPA entry point (served at /)
+    src/
+      main.js         — App entry; registers routes and starts the router
+      router.js       — Hash-based SPA router
+      validation.js   — Pure form-validation helpers (shared with unit tests)
+      api.js          — Fetch wrappers for auth API endpoints
+      screens/
+        login.js      — Sign-in screen
+        register.js   — Registration screen
 server/
-  app.js          — Express entry point
+  app.js          — Express entry point (also serves client/web as static)
   server.js       — All API route handlers
   db.js           — Shared PostgreSQL pool
   auth/
@@ -157,6 +178,7 @@ db/
 test/
   unit/
     auth/           — Pure logic tests (no DB required)
+    web/            — Web client unit tests (validation, API client)
   integration/
     auth/           — API route tests (requires DATABASE_URL)
     social/         — Profile API route tests (requires DATABASE_URL)

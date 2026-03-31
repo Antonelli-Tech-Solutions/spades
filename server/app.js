@@ -1,6 +1,10 @@
 import express from 'express'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 import { handler } from './server.js'
 import { getRedis } from './redis.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -23,6 +27,9 @@ app.use((req, res, next) => {
 
 const redis = process.env.REDIS_URL ? await getRedis() : null
 handler(app, { redis })
+
+// Serve the web client as static files
+app.use(express.static(join(__dirname, '..', 'client', 'web')))
 
 app.listen(PORT, () => {
   console.log(`Spades Online server listening on port ${PORT}`)

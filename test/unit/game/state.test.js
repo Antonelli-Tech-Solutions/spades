@@ -118,6 +118,47 @@ describe('placeBid', () => {
     assert.equal(state.phase, 'playing')
   })
 
+  it('second bidder number becomes the team bid — first bidder is advisory only', () => {
+    // North deals → bidding order: east, south, west, north
+    // EW: east bids first (advisory 4), west bids second (sets team total to 7)
+    // NS: south bids first (advisory 3), north bids second (sets team total to 5)
+    // PRD §5.2 example: "North bids 4. South bids 7. The team target is 7."
+    let state = createGame('table-1', PLAYER_IDS)
+    state = bidAll(state, [
+      ['east', 4],
+      ['south', 3],
+      ['west', 7],
+      ['north', 5],
+    ])
+    assert.equal(state.teamBids.ew, 7)
+    assert.equal(state.teamBids.ns, 5)
+  })
+
+  it('second bidder can set team total lower than first bidder advisory number', () => {
+    // PRD §5.2: "The team's combined bid may be lower than the first bidder's individual bid."
+    let state = createGame('table-1', PLAYER_IDS)
+    state = bidAll(state, [
+      ['east', 6],
+      ['south', 3],
+      ['west', 4],
+      ['north', 5],
+    ])
+    assert.equal(state.teamBids.ew, 4) // team bid is 4, not east's advisory 6
+  })
+
+  it('when first bidder bids nil, second bidder number is the team target and nil stands', () => {
+    // East bids nil (individual bid stands), west sets team total to 5
+    let state = createGame('table-1', PLAYER_IDS)
+    state = bidAll(state, [
+      ['east', 'nil'],
+      ['south', 3],
+      ['west', 5],
+      ['north', 5],
+    ])
+    assert.equal(state.bids.east, 'nil')
+    assert.equal(state.teamBids.ew, 5)
+  })
+
   it('transitions to blind_nil_exchange when a player bids blind nil', () => {
     // Make NS far behind so blind nil is eligible
     let state = createGame('table-1', PLAYER_IDS)

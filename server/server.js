@@ -2,10 +2,21 @@ import { registerPlayer, verifyEmailToken } from './auth/registration.js'
 import { sendVerificationEmail as defaultMailer } from './auth/email.js'
 import { getPlayerProfile, isValidUuid } from './social/profile.js'
 import { loginPlayer } from './auth/login.js'
-import { createSession, deleteSession } from './auth/session.js'
+import { createSession, deleteSession, validateAuthHeaders } from './auth/session.js'
 import { getDb } from './db.js'
 import { getRedis } from './redis.js'
 import { createRateLimiter } from './middleware/rateLimiter.js'
+import {
+  createTable,
+  getTable,
+  sitAtTable,
+  isTableFull,
+  markTablePlaying,
+  getGameState,
+  saveGameState,
+} from './lobby/table.js'
+import { createGame, placeBid, playCard, submitBlindNilExchange, getPlayerView } from './game/state.js'
+import { getSeatForPlayer } from './anticheat/validate.js'
 
 function sendJSON(res, statusCode, data) {
   res.status(statusCode).json(data)
@@ -107,6 +118,171 @@ export function handler(app, { mailer, redis, rateLimitConfig } = {}) {
       sendJSON(res, 200, { message: 'Logged out successfully.' })
     } catch (err) {
       console.error('Logout error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Table & Game Routes (all require authentication)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // POST /api/tables — create a new table
+  app.post('/api/tables', async (req, res) => {
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await createTable(redisClient, { hostPlayerId: session.playerId })
+      sendJSON(res, 201, { tableId: table.tableId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Create table error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/sit — sit at a seat
+  app.post('/api/tables/:tableId/sit', async (req, res) => {
+    const { tableId } = req.params
+    const { seat } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
+
+      // If table is now full, start the game
+      if (isTableFull(table)) {
+        const players = table.seats // { north, east, south, west } → playerIds
+        const gameState = createGame(tableId, players)
+        await saveGameState(redisClient, tableId, gameState)
+        await markTablePlaying(redisClient, tableId, gameState.gameId)
+        console.log('Game started:', { tableId, gameId: gameState.gameId })
+      }
+
+      sendJSON(res, 200, { tableId, seat })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'ALREADY_SEATED') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      console.error('Sit at table error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // GET /api/tables/:tableId/state — get game state (filtered for this player)
+  app.get('/api/tables/:tableId/state', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+
+      const seat = getSeatForPlayer(table.seats, session.playerId)
+      if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
+
+      const gameState = await getGameState(redisClient, tableId)
+      if (!gameState) return sendJSON(res, 200, { status: 'waiting', seats: table.seats })
+
+      sendJSON(res, 200, getPlayerView(gameState, seat))
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Get game state error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/bid — place a bid
+  app.post('/api/tables/:tableId/bid', async (req, res) => {
+    const { tableId } = req.params
+    const { bid } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+
+      const seat = getSeatForPlayer(table.seats, session.playerId)
+      if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
+
+      const gameState = await getGameState(redisClient, tableId)
+      if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
+
+      const newState = placeBid(gameState, seat, bid)
+      await saveGameState(redisClient, tableId, newState)
+      sendJSON(res, 200, getPlayerView(newState, seat))
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'INVALID_ACTION') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'NOT_YOUR_TURN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'INVALID_BID') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_ELIGIBLE') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'ALREADY_BID_BLIND_NIL') return sendJSON(res, 400, { error: err.message })
+      console.error('Bid error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/blind-nil-exchange — submit cards for blind nil exchange
+  app.post('/api/tables/:tableId/blind-nil-exchange', async (req, res) => {
+    const { tableId } = req.params
+    const { cards } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+
+      const seat = getSeatForPlayer(table.seats, session.playerId)
+      if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
+
+      const gameState = await getGameState(redisClient, tableId)
+      if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
+
+      const newState = submitBlindNilExchange(gameState, seat, cards)
+      await saveGameState(redisClient, tableId, newState)
+      sendJSON(res, 200, getPlayerView(newState, seat))
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'INVALID_ACTION') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'INVALID_EXCHANGE') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'CARD_NOT_IN_HAND') return sendJSON(res, 400, { error: err.message })
+      console.error('Blind nil exchange error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/play — play a card
+  app.post('/api/tables/:tableId/play', async (req, res) => {
+    const { tableId } = req.params
+    const { card } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+
+      const seat = getSeatForPlayer(table.seats, session.playerId)
+      if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
+
+      const gameState = await getGameState(redisClient, tableId)
+      if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
+
+      const newState = playCard(gameState, seat, card)
+      await saveGameState(redisClient, tableId, newState)
+      sendJSON(res, 200, getPlayerView(newState, seat))
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'INVALID_ACTION') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'NOT_YOUR_TURN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'CARD_NOT_IN_HAND') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'ILLEGAL_PLAY') return sendJSON(res, 400, { error: err.message })
+      console.error('Play card error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

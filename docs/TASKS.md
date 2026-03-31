@@ -22,22 +22,22 @@
 
 ### Backend
 
-- [ ] `P0` Implement full Spades game loop: deal, bid, play tricks, score, repeat
-- [ ] `P0` Implement dealer rotation: North deals first hand, button rotates clockwise each hand
-- [ ] `P0` Implement partnership bidding: first bidder bids individually, second bidder sets team total (first bidder's number is advisory only)
-- [ ] `P0` Implement Nil bid (+50 / -50)
-- [ ] `P0` Implement Blind Nil bid (+100 / -100): eligibility check (≥100 pts behind), one-per-team limit, card exchange after all bids but before opening lead
-- [ ] `P0` Implement team bid of 0: legal, not treated as Nil; every trick taken is a bag
-- [ ] `P0` Enforce no Spade lead on first trick rule
-- [ ] `P0` Implement Spades-breaking logic
-- [ ] `P0` Implement bag tracking: +1 per overtrick; -100 pts per 10 bags; nil bidder tricks count toward partner's bid and are bags if partner exceeds their bid; double-nil — every trick either player takes is a bag and breaks that individual's nil
-- [ ] `P0` Implement win condition: first to 250 pts wins; if both reach 250 in same round, higher score wins; exact tie plays another hand
-- [ ] `P0` Implement loss condition: -250 or lower is immediate loss; if both teams qualify, higher score wins; exact tie plays another hand
-- [ ] `P0` Server-side game state validation: legal move enforcement, no out-of-turn plays, no cards not in hand
-- [ ] `P0` Ensure no opponent card info is sent to client before it is played
-- [ ] `P0` Basic table creation: create a table, seat 4 players (North/South vs East/West), start game when full
-- [ ] `P0` Gate game start until all 4 human seats are filled
-- [ ] `P0` Always sort hand by suit and rank (not configurable)
+- [x] `P0` Implement full Spades game loop: deal, bid, play tricks, score, repeat
+- [x] `P0` Implement dealer rotation: North deals first hand, button rotates clockwise each hand
+- [x] `P0` Implement partnership bidding: first bidder bids individually, second bidder sets team total (first bidder's number is advisory only)
+- [x] `P0` Implement Nil bid (+50 / -50)
+- [x] `P0` Implement Blind Nil bid (+100 / -100): eligibility check (≥100 pts behind), one-per-team limit, card exchange after all bids but before opening lead
+- [x] `P0` Implement team bid of 0: legal, not treated as Nil; every trick taken is a bag
+- [x] `P0` Enforce no Spade lead on first trick rule
+- [x] `P0` Implement Spades-breaking logic
+- [x] `P0` Implement bag tracking: +1 per overtrick; -100 pts per 10 bags; nil bidder tricks count toward partner's bid and are bags if partner exceeds their bid; double-nil — every trick either player takes is a bag and breaks that individual's nil
+- [x] `P0` Implement win condition: first to 250 pts wins; if both reach 250 in same round, higher score wins; exact tie plays another hand
+- [x] `P0` Implement loss condition: -250 or lower is immediate loss; if both teams qualify, higher score wins; exact tie plays another hand
+- [x] `P0` Server-side game state validation: legal move enforcement, no out-of-turn plays, no cards not in hand
+- [x] `P0` Ensure no opponent card info is sent to client before it is played
+- [x] `P0` Basic table creation: create a table, seat 4 players (North/South vs East/West), start game when full
+- [x] `P0` Gate game start until all 4 human seats are filled
+- [x] `P0` Always sort hand by suit and rank (not configurable)
 
 ### Web UI (minimal — enough to play)
 

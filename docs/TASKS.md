@@ -2,69 +2,25 @@
 
 > Generated from `docs/spades_prd.md`. All decisions and acceptance criteria live in the PRD — consult it before implementing any task.
 > Priority: **P0** = critical for launch · **P1** = important · **P2** = nice to have · **OQ** = blocked on open question
+>
+> Tasks are organised as **vertical slices** — each slice delivers a complete, testable, end-to-end increment. Do not start a slice until all P0 tasks in the previous slice are complete and merged to `dev`.
 
 ---
 
-## Dependency Order
-
-Complete P0 tasks in this order. Tasks within the same group are independent and can be parallelised.
-
-**Group 1 — Foundation (no dependencies)**
-- Authentication & Accounts (all tasks)
-- Core Gameplay (all tasks)
-
-**Group 2 — Requires Group 1**
-- Lobby & Table Management — requires auth (players must be authenticated to create/join tables)
-- Spectating — requires the arrive-then-sit flow from Lobby & Table Management
-
-**Group 3 — Requires Group 2**
-- Social Features — friends list table links require lobby and presence to be functional
-- Performance & Infrastructure — load and latency targets can only be validated once game loop and lobby are complete
-
-**Group 4 — Requires Group 3**
-- UI & Customization — can be layered on top of a working game
-
-**No dependencies (can be done at any time)**
-- Open Questions — these are decisions, not implementation tasks
-
----
-
-## Authentication & Accounts
+## ✅ Completed
 
 - [x] `P0` Implement email/password registration with required email verification
 - [x] `P0` Implement login and session management
 - [x] `P0` Apply rate limiting on all authentication endpoints
-- [ ] `P1` Add optional 2FA via authenticator app
 - [x] `P1` Build player profile page (username, avatar, career win/loss record, recent 20 games, cosmetics)
 
 ---
 
-## Lobby & Table Management
+## Slice 1 — One Complete Playable Game
 
-- [ ] `P0` Build public lobby browser showing table name, host, seat count, ruleset, and join policy (Open / Friends-Only / Invite-Only)
-- [ ] `P0` Implement table creation with: name, visibility (Public / Friends-Only / Private), join policy (filtered by visibility), and spectating toggle
-- [ ] `P0` Enforce join policy constraint: join policy cannot be less restrictive than visibility; hide join policy control for Private tables
-- [ ] `P0` Implement host controls: seat assignment, kick player, transfer host
-- [ ] `P0` Build shareable join link: bypasses both visibility and join policy; grants seating rights
-- [ ] `P0` Build shareable spectator link: bypasses visibility only; grants observe access but not seating rights
-- [ ] `P0` Implement arrive-then-sit flow: arriving at a table puts player in observer state; sitting is a separate action governed by join policy
-- [ ] `P0` Gate game start until all 4 human seats are filled
-- [ ] `P0` Implement seating UI: North/South vs East/West fixed partnerships, manual or player-choice seating
-- [ ] `P1` Implement direct in-app invite via friends list and username search: bypasses visibility and join policy
-- [ ] `P1` Deliver in-app invite notifications with one-click join; notify host on decline
-- [ ] `P1` Add lobby filtering by seats available and table name search
+> Goal: two teams of two can create a table, sit down, play a full game of Spades to completion, and see the result — entirely through the web UI. This slice is the foundation everything else builds on. Do not move to Slice 2 until a complete game can be played end-to-end.
 
----
-
-## Spectating
-
-- [ ] `P0` Implement observe-only spectator state: spectators can see the game but cannot interact or influence play
-- [ ] `P0` Allow any player who can see a table (via lobby, friends list, join link, or spectator link) to spectate, subject to the host's spectating setting
-- [ ] `P1` Display spectators in a separate observer rail, distinct from seated players
-
----
-
-## Core Gameplay
+### Backend
 
 - [ ] `P0` Implement full Spades game loop: deal, bid, play tricks, score, repeat
 - [ ] `P0` Implement dealer rotation: North deals first hand, button rotates clockwise each hand
@@ -79,14 +35,52 @@ Complete P0 tasks in this order. Tasks within the same group are independent and
 - [ ] `P0` Implement loss condition: -250 or lower is immediate loss; if both teams qualify, higher score wins; exact tie plays another hand
 - [ ] `P0` Server-side game state validation: legal move enforcement, no out-of-turn plays, no cards not in hand
 - [ ] `P0` Ensure no opponent card info is sent to client before it is played
+- [ ] `P0` Basic table creation: create a table, seat 4 players (North/South vs East/West), start game when full
+- [ ] `P0` Gate game start until all 4 human seats are filled
+- [ ] `P0` Always sort hand by suit and rank (not configurable)
+
+### Web UI (minimal — enough to play)
+
+- [ ] `P0` Registration and login screens
+- [ ] `P0` Create table screen: name only (no visibility/join policy yet)
+- [ ] `P0` Join table screen: list of open tables, click to join and choose a seat
+- [ ] `P0` Game screen: display hand, bid input, card play, current trick, scoreboard
+- [ ] `P0` Build hand display in Spread (fan) and Hand Diagram modes
+- [ ] `P0` Game over screen: show final score and winner
+
+### Testing
+
+- [ ] `P0` End-to-end test: 4 players complete a full game from table creation to game over
 
 ---
 
-## Social Features
+## Slice 2 — Full Lobby & Access Control
+
+> Goal: the complete table discovery and access model from the PRD is in place — public/friends-only/private visibility, join policies, shareable links, spectating, and the arrive-then-sit flow.
+
+- [ ] `P0` Implement full table creation config: visibility (Public / Friends-Only / Private), join policy (filtered by visibility), spectating toggle
+- [ ] `P0` Enforce join policy constraint: join policy cannot be less restrictive than visibility; hide join policy control for Private tables
+- [ ] `P0` Build public lobby browser showing table name, host, seat count, ruleset, and join policy
+- [ ] `P0` Add lobby filtering by seats available and table name search
+- [ ] `P0` Implement arrive-then-sit flow: arriving at a table puts player in observer state; sitting is a separate action governed by join policy
+- [ ] `P0` Implement host controls: seat assignment, kick player, transfer host
+- [ ] `P0` Build shareable join link: bypasses both visibility and join policy; grants seating rights
+- [ ] `P0` Build shareable spectator link: bypasses visibility only; grants observe access but not seating rights
+- [ ] `P0` Implement observe-only spectator state: spectators can see the game but cannot interact or influence play
+- [ ] `P0` Allow any player who can see a table to spectate, subject to the host's spectating setting
+- [ ] `P1` Display spectators in a separate observer rail, distinct from seated players
+
+---
+
+## Slice 3 — Social Features
+
+> Goal: players can find and play with friends, see who is online, and communicate during games.
 
 - [ ] `P1` Build friends list: send, accept, decline requests by username search
 - [ ] `P1` Show online / offline / in-game status; display table name if player has visibility permission, "Playing at a private table" if not, "In lobby" if between games
 - [ ] `P1` Allow going to a friend's table from the friends list, subject to visibility and join policy
+- [ ] `P1` Implement direct in-app invite via friends list and username search: bypasses visibility and join policy
+- [ ] `P1` Deliver in-app invite notifications with one-click join; notify host on decline
 - [ ] `P1` Implement block: prevent friend requests and game invitations from blocked players
 - [ ] `P1` Deliver friend request notifications in-app and via push (if enabled)
 - [ ] `P1` Build in-game chat panel with profanity filter; allow host to disable
@@ -94,10 +88,11 @@ Complete P0 tasks in this order. Tasks within the same group are independent and
 
 ---
 
-## UI & Customization
+## Slice 4 — UI Polish & Customization
 
-- [ ] `P0` Always sort hand by suit and rank (not configurable)
-- [ ] `P1` Build hand display in Spread (fan) and Hand Diagram modes
+> Goal: the game looks and feels good; players can personalise their experience.
+
+- [ ] `P1` Add optional 2FA via authenticator app
 - [ ] `P1` Implement gameplay settings: confirm-play toggle, animation speed, previous trick viewer
 - [ ] `P2` Implement 4 table felt colors, 3 card back designs, 8 default avatar icons
 - [ ] `P2` Build audio settings: master/music/SFX volume sliders, per-sound toggles, music track selection
@@ -105,7 +100,9 @@ Complete P0 tasks in this order. Tasks within the same group are independent and
 
 ---
 
-## Performance & Infrastructure
+## Slice 5 — Scale, Harden & Mobile
+
+> Goal: the game meets its non-functional requirements and is available on mobile.
 
 - [ ] `P0` Achieve <200ms p95 turn action latency (card play → all clients updated)
 - [ ] `P0` Support 10,000+ concurrent game sessions at launch

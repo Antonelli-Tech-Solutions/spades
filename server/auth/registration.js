@@ -117,6 +117,45 @@ export async function verifyEmailToken(db, token) {
 }
 
 /**
+ * Resend the verification email for an unverified account.
+ *
+ * Silently succeeds when the email is not found or already verified to
+ * prevent account enumeration. Deletes any existing token and issues a
+ * fresh one before sending.
+ *
+ * @param {object} db - pg Pool (or compatible query interface)
+ * @param {string} email
+ * @param {(email: string, token: string) => Promise<void>} sendVerificationEmail
+ */
+export async function resendVerificationEmail(db, email, sendVerificationEmail) {
+  const normalizedEmail = email.toLowerCase().trim()
+
+  const result = await db.query(
+    `SELECT id, is_verified FROM players WHERE email = $1`,
+    [normalizedEmail],
+  )
+
+  if (result.rows.length === 0 || result.rows[0].is_verified) {
+    return
+  }
+
+  const playerId = result.rows[0].id
+
+  await db.query(`DELETE FROM email_verification_tokens WHERE player_id = $1`, [playerId])
+
+  const token = generateVerificationToken()
+  const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000)
+
+  await db.query(
+    `INSERT INTO email_verification_tokens (token, player_id, expires_at)
+     VALUES ($1, $2, $3)`,
+    [token, playerId, expiresAt],
+  )
+
+  await sendVerificationEmail(normalizedEmail, token)
+}
+
+/**
  * Check whether a player has verified their email.
  *
  * @param {object} db

@@ -1,5 +1,5 @@
 import { validateRegisterForm } from '../validation.js'
-import { registerUser } from '../api.js'
+import { registerUser, resendVerification } from '../api.js'
 
 /**
  * Render the registration screen into `container`.
@@ -71,16 +71,31 @@ export function renderRegisterScreen(container) {
 
     try {
       await registerUser({ email, username, password })
+      const safeEmail = escapeHtml(email)
       container.innerHTML = `
         <div class="auth-card">
           <h1 class="auth-title">Check your email</h1>
           <p class="auth-message">
-            We've sent a verification link to <strong>${escapeHtml(email)}</strong>.
+            We've sent a verification link to <strong>${safeEmail}</strong>.
             Click the link in that email to activate your account, then sign in.
+          </p>
+          <p class="auth-message" id="resend-status">
+            Didn't receive it?
+            <button type="button" id="resend-btn" class="btn-link">Resend verification email</button>
           </p>
           <p class="auth-link"><a href="#/login">Back to sign in</a></p>
         </div>
       `
+      container.querySelector('#resend-btn').addEventListener('click', async () => {
+        const resendStatus = container.querySelector('#resend-status')
+        resendStatus.textContent = 'Sending\u2026'
+        try {
+          await resendVerification({ email })
+          resendStatus.textContent = 'Verification email resent — check your inbox.'
+        } catch (_err) {
+          resendStatus.textContent = 'Could not send email. Please try again later.'
+        }
+      })
     } catch (err) {
       errorEl.textContent = err.message
       btn.disabled = false

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerUser, loginUser } from '../../../client/web/src/api.js'
+import { registerUser, loginUser, resendVerification } from '../../../client/web/src/api.js'
 
 /**
  * Build a minimal mock fetch that returns the given status and JSON body.
@@ -60,6 +60,26 @@ describe('registerUser', () => {
         ),
       (err) => {
         assert.ok(err.message)
+        return true
+      },
+    )
+  })
+})
+
+describe('resendVerification', () => {
+  it('resolves on 200', async () => {
+    const result = await resendVerification(
+      { email: 'a@b.com' },
+      mockFetch(200, { message: 'If this email is registered and unverified, a new link has been sent.' }),
+    )
+    assert.ok(result.message)
+  })
+
+  it('throws on network/server error', async () => {
+    await assert.rejects(
+      () => resendVerification({ email: 'a@b.com' }, mockFetch(500, { error: 'Internal server error' })),
+      (err) => {
+        assert.equal(err.status, 500)
         return true
       },
     )

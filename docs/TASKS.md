@@ -10,6 +10,7 @@
 ## ✅ Completed
 
 - [x] `P0` Implement email/password registration with required email verification
+- [x] `P0` Resend verification email flow: `POST /api/auth/resend-verification` + UI prompt on login 403 and registration success screen
 - [x] `P0` Implement login and session management
 - [x] `P0` Apply rate limiting on all authentication endpoints
 - [x] `P1` Build player profile page (username, avatar, career win/loss record, recent 20 games, cosmetics)

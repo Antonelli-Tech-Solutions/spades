@@ -131,6 +131,48 @@
       .auth-message strong {
         color: #e8e8e8;
       }
+
+      .btn-secondary {
+        width: 100%;
+        padding: 0.625rem;
+        background: transparent;
+        color: #66bb6a;
+        border: 1px solid #66bb6a;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+        margin-bottom: 0.75rem;
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: #66bb6a;
+        color: #1a1a1a;
+      }
+
+      .btn-secondary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .btn-link {
+        background: none;
+        border: none;
+        color: #66bb6a;
+        cursor: pointer;
+        font-size: inherit;
+        padding: 0;
+        text-decoration: underline;
+      }
+
+      .btn-link:hover {
+        color: #81c784;
+      }
+
+      .auth-resend {
+        margin-bottom: 0.75rem;
+      }
     </style>
   </head>
   <body>

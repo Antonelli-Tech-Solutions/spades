@@ -1,4 +1,4 @@
-import { registerPlayer, verifyEmailToken } from './auth/registration.js'
+import { registerPlayer, verifyEmailToken, resendVerificationEmail } from './auth/registration.js'
 import { sendVerificationEmail as defaultMailer } from './auth/email.js'
 import { getPlayerProfile, isValidUuid } from './social/profile.js'
 import { loginPlayer } from './auth/login.js'
@@ -83,6 +83,21 @@ export function handler(app, { mailer, redis, rateLimitConfig } = {}) {
       if (err.code === 'INVALID_TOKEN') return sendJSON(res, 400, { error: err.message })
       if (err.code === 'EXPIRED_TOKEN') return sendJSON(res, 400, { error: err.message })
       console.error('Email verification error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/auth/resend-verification
+  app.post('/api/auth/resend-verification', authRateLimiter, async (req, res) => {
+    const { email } = req.body ?? {}
+    try {
+      const db = getDb()
+      await resendVerificationEmail(db, email || '', emailer)
+      sendJSON(res, 200, {
+        message: 'If this email is registered and unverified, a new verification link has been sent.',
+      })
+    } catch (err) {
+      console.error('Resend verification error:', { error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

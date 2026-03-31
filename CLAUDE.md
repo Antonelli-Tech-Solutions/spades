@@ -56,6 +56,14 @@ Spades Online is a real-time multiplayer card game (web + mobile) built with a N
 - Table state expires after 3600 seconds (1 hour) of inactivity
 - WebSocket events follow the pattern `{ type: 'EVENT_NAME', payload: { ... } }`
 
+## Rate Limiting
+
+- **Every unauthenticated endpoint that accepts credentials or creates accounts must have rate limiting applied.** This means any route that does not require a valid `x-session-id` header and accepts user-supplied credentials (e.g. login, register, password reset, email verification).
+- Use `createRateLimiter(redisClient, opts)` from `server/middleware/rateLimiter.js` — apply it per-route in `server/server.js` before the route handler.
+- Authenticated routes (those that require a valid `x-session-id`) generally do not need rate limiting — the session acts as a barrier.
+- When adding a new unauthenticated route, explicitly decide and document whether it needs rate limiting. If in doubt, add it.
+- Configuration is via `AUTH_RATE_LIMIT_MAX` and `AUTH_RATE_LIMIT_WINDOW` env vars (defaults: 10 req / 15 min).
+
 ## Game Engine Rules (Critical)
 
 `docs/spades_prd.md` Section 5 is the sole source of truth for all game rules. Do not infer, guess, or simplify rules — read the PRD before implementing anything in `server/game/`.

@@ -303,4 +303,236 @@ describe('POST /api/tables/:tableId/bid', { skip }, () => {
     })
     assert.equal(res.status, 400)
   })
+
+  it('returns 400 when bidding blind nil without eligibility (team not 100+ behind)', async () => {
+    // Scores start at 0-0; NS is not 100+ behind
+    // players[1] is east — that's the current bidder
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[1].sessionId,
+        'x-player-id': players[1].playerId,
+      },
+      body: JSON.stringify({ bid: 'blind_nil' }),
+    })
+    assert.equal(res.status, 400)
+    const body = await res.json()
+    assert.ok(body.error, 'should return an error message')
+  })
+})
+
+describe('POST /api/tables/:tableId/blind-nil-exchange', { skip }, () => {
+  let server, db, redis
+  const players = []
+  let tableId
+
+  before(async () => {
+    db = getDb()
+    redis = await getRedis()
+    await ensurePlayersTable(db)
+    for (let i = 1; i <= 4; i++) {
+      await insertVerifiedPlayer(db, {
+        email: `bnilplayer${i}@gtest.spades.invalid`,
+        username: `gtest_bnil${i}`,
+        password: 'password123',
+      })
+    }
+    server = await startTestServer()
+    for (let i = 1; i <= 4; i++) {
+      const data = await loginPlayer(
+        server.baseUrl,
+        `bnilplayer${i}@gtest.spades.invalid`,
+        'password123',
+      )
+      players.push(data)
+    }
+
+    // Create table and seat all 4 players (north=players[0], east=players[1], south=players[2], west=players[3])
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    const body = await createRes.json()
+    tableId = body.tableId
+
+    const seats = ['north', 'east', 'south', 'west']
+    for (let i = 0; i < 4; i++) {
+      await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': players[i].sessionId,
+          'x-player-id': players[i].playerId,
+        },
+        body: JSON.stringify({ seat: seats[i] }),
+      })
+    }
+
+    // Manipulate game state so NS (players[0]=north, players[2]=south) is 100+ behind EW
+    const gameStateRaw = await redis.get(`game:${tableId}`)
+    const gameState = JSON.parse(gameStateRaw)
+    gameState.scores = { ns: 0, ew: 100 }
+    await redis.set(`game:${tableId}`, JSON.stringify(gameState), { EX: 3600 })
+  })
+
+  after(async () => {
+    await server.close()
+    await closeDb()
+    await closeRedis()
+  })
+
+  // Helper: bid all 4 players to reach blind_nil_exchange phase
+  // North deals → bidding order: east, south, west, north
+  // south (NS first bidder) bids blind_nil; scores were set to ns=0, ew=100 above
+  async function bidToBlindNilExchange() {
+    // east bids
+    await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[1].sessionId,
+        'x-player-id': players[1].playerId,
+      },
+      body: JSON.stringify({ bid: 3 }),
+    })
+    // south bids blind_nil (eligible: ns=0, ew=100 → 100 pts behind)
+    await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[2].sessionId,
+        'x-player-id': players[2].playerId,
+      },
+      body: JSON.stringify({ bid: 'blind_nil' }),
+    })
+    // west bids
+    await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[3].sessionId,
+        'x-player-id': players[3].playerId,
+      },
+      body: JSON.stringify({ bid: 3 }),
+    })
+    // north bids (NS second bidder — sets team total)
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[0].sessionId,
+        'x-player-id': players[0].playerId,
+      },
+      body: JSON.stringify({ bid: 5 }),
+    })
+    return res.json()
+  }
+
+  it('transitions to blind_nil_exchange phase after all bids when a player bids blind nil', async () => {
+    const state = await bidToBlindNilExchange()
+    assert.equal(state.phase, 'blind_nil_exchange')
+    assert.equal(state.bids.south, 'blind_nil')
+  })
+
+  it('blind nil player sends 2 cards to partner, then partner sends 2 back — phase becomes playing', async () => {
+    // Get south's hand (blind nil player)
+    const southStateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: { 'x-session-id': players[2].sessionId, 'x-player-id': players[2].playerId },
+    })
+    const southState = await southStateRes.json()
+    const southCards = southState.myHand.slice(0, 2)
+
+    // Step 1: south sends 2 cards to north
+    const step1Res = await fetch(`${server.baseUrl}/api/tables/${tableId}/blind-nil-exchange`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[2].sessionId,
+        'x-player-id': players[2].playerId,
+      },
+      body: JSON.stringify({ cards: southCards }),
+    })
+    assert.equal(step1Res.status, 200)
+
+    // Get north's hand (partner)
+    const northStateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    const northState = await northStateRes.json()
+    // North has 13 original cards; pick 2 to send back
+    const northCards = northState.myHand.slice(0, 2)
+
+    // Step 2: north sends 2 cards back to south
+    const step2Res = await fetch(`${server.baseUrl}/api/tables/${tableId}/blind-nil-exchange`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[0].sessionId,
+        'x-player-id': players[0].playerId,
+      },
+      body: JSON.stringify({ cards: northCards }),
+    })
+    assert.equal(step2Res.status, 200)
+    const finalState = await step2Res.json()
+    assert.equal(finalState.phase, 'playing', 'game should transition to playing after full exchange')
+  })
+
+  it('returns 400 when wrong player tries to submit exchange', async () => {
+    // After the exchange above, game is in 'playing'. We need a fresh game state in
+    // blind_nil_exchange phase for this test. Re-set the game state in Redis directly.
+    const gameStateRaw = await redis.get(`game:${tableId}`)
+    const gameState = JSON.parse(gameStateRaw)
+    // Simulate returning to blind_nil_exchange (south tries again)
+    const injectedState = {
+      ...gameState,
+      phase: 'blind_nil_exchange',
+      bids: { ...gameState.bids, south: 'blind_nil' },
+      blindNilExchange: {
+        pending: ['south'],
+        currentBlindNilSeat: 'south',
+        step: 'blind_to_partner',
+        cardsFromBlind: null,
+      },
+    }
+    await redis.set(`game:${tableId}`, JSON.stringify(injectedState), { EX: 3600 })
+
+    // north tries to send cards first (wrong — south must go first)
+    const northStateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    const northState = await northStateRes.json()
+    const northCards = northState.myHand.slice(0, 2)
+
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/blind-nil-exchange`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[0].sessionId,
+        'x-player-id': players[0].playerId,
+      },
+      body: JSON.stringify({ cards: northCards }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  it('returns 400 when submitting wrong number of cards (not 2)', async () => {
+    // Get south's current hand
+    const southStateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: { 'x-session-id': players[2].sessionId, 'x-player-id': players[2].playerId },
+    })
+    const southState = await southStateRes.json()
+    const oneCard = southState.myHand.slice(0, 1)
+
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/blind-nil-exchange`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[2].sessionId,
+        'x-player-id': players[2].playerId,
+      },
+      body: JSON.stringify({ cards: oneCard }),
+    })
+    assert.equal(res.status, 400)
+  })
 })

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   getBiddingOrder,
   isEligibleForBlindNil,
+  isSecondTeamBidder,
   teamHasBlindNil,
   isValidBidValue,
   getPartnerSeat,
@@ -131,6 +132,43 @@ describe('isValidBidValue', () => {
 
   it('rejects non-integer numbers', () => {
     assert.ok(!isValidBidValue(3.5))
+  })
+})
+
+describe('isSecondTeamBidder', () => {
+  it('west is second EW bidder when north deals', () => {
+    // North deals → order: east, south, west, north
+    // EW: east bids first, west bids second
+    const order = getBiddingOrder('north')
+    assert.ok(isSecondTeamBidder('west', order))
+  })
+
+  it('east is NOT second EW bidder when north deals', () => {
+    const order = getBiddingOrder('north')
+    assert.ok(!isSecondTeamBidder('east', order))
+  })
+
+  it('north is second NS bidder when north deals', () => {
+    // North deals → order: east, south, west, north
+    // NS: south bids first, north bids second
+    const order = getBiddingOrder('north')
+    assert.ok(isSecondTeamBidder('north', order))
+  })
+
+  it('south is NOT second NS bidder when north deals', () => {
+    const order = getBiddingOrder('north')
+    assert.ok(!isSecondTeamBidder('south', order))
+  })
+
+  it('first and second bidder roles rotate with dealer', () => {
+    // East deals → order: south, west, north, east
+    // NS: south bids first, north bids second
+    // EW: west bids first, east bids second
+    const order = getBiddingOrder('east')
+    assert.ok(!isSecondTeamBidder('south', order))
+    assert.ok(isSecondTeamBidder('north', order))
+    assert.ok(!isSecondTeamBidder('west', order))
+    assert.ok(isSecondTeamBidder('east', order))
   })
 })
 

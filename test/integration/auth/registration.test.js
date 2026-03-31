@@ -202,7 +202,7 @@ describe('GET /api/auth/verify-email', { skip }, () => {
     await closeDb()
   })
 
-  it('returns 200 and marks account verified with a valid token', async () => {
+  it('redirects to /#/verify-email-success and marks account verified with a valid token', async () => {
     // Register a player to get a real token
     server.sentEmails.length = 0
     await fetch(`${server.baseUrl}/api/auth/register`, {
@@ -216,8 +216,9 @@ describe('GET /api/auth/verify-email', { skip }, () => {
     })
     const { token } = server.sentEmails[0]
 
-    const res = await fetch(`${server.baseUrl}/api/auth/verify-email?token=${token}`)
-    assert.equal(res.status, 200)
+    const res = await fetch(`${server.baseUrl}/api/auth/verify-email?token=${token}`, { redirect: 'manual' })
+    assert.equal(res.status, 302)
+    assert.ok(res.headers.get('location').includes('/verify-email-success'))
 
     const result = await db.query(
       `SELECT is_verified FROM players WHERE email = $1`,
@@ -226,19 +227,22 @@ describe('GET /api/auth/verify-email', { skip }, () => {
     assert.equal(result.rows[0].is_verified, true)
   })
 
-  it('returns 400 for an invalid token', async () => {
+  it('redirects to /#/verify-email-error for an invalid token', async () => {
     const res = await fetch(
       `${server.baseUrl}/api/auth/verify-email?token=00000000-0000-4000-8000-000000000000`,
+      { redirect: 'manual' },
     )
-    assert.equal(res.status, 400)
+    assert.equal(res.status, 302)
+    assert.ok(res.headers.get('location').includes('/verify-email-error'))
   })
 
-  it('returns 400 when no token is provided', async () => {
-    const res = await fetch(`${server.baseUrl}/api/auth/verify-email`)
-    assert.equal(res.status, 400)
+  it('redirects to /#/verify-email-error when no token is provided', async () => {
+    const res = await fetch(`${server.baseUrl}/api/auth/verify-email`, { redirect: 'manual' })
+    assert.equal(res.status, 302)
+    assert.ok(res.headers.get('location').includes('/verify-email-error'))
   })
 
-  it('returns 400 when the same token is used twice (single use)', async () => {
+  it('redirects to /#/verify-email-error when the same token is used twice (single use)', async () => {
     server.sentEmails.length = 0
     await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',
@@ -251,8 +255,9 @@ describe('GET /api/auth/verify-email', { skip }, () => {
     })
     const { token } = server.sentEmails[0]
 
-    await fetch(`${server.baseUrl}/api/auth/verify-email?token=${token}`)
-    const res = await fetch(`${server.baseUrl}/api/auth/verify-email?token=${token}`)
-    assert.equal(res.status, 400)
+    await fetch(`${server.baseUrl}/api/auth/verify-email?token=${token}`, { redirect: 'manual' })
+    const res = await fetch(`${server.baseUrl}/api/auth/verify-email?token=${token}`, { redirect: 'manual' })
+    assert.equal(res.status, 302)
+    assert.ok(res.headers.get('location').includes('/verify-email-error'))
   })
 })

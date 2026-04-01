@@ -303,9 +303,11 @@ export function playCard(state, seat, card) {
   const newHand = hand.filter((c) => !cardEquals(c, card))
   const newTrick = [...state.currentTrick, { seat, card }]
 
-  // Track spades breaking
+  // Track spades breaking — PRD §5.1: "Spades are broken by the first Spade played
+  // (after the first trick)". A spade played on trick 1 (only legal when a player
+  // holds nothing but spades) does not break spades.
   let { spadesbroken } = state
-  if (card.suit === 'spades' && !spadesbroken) {
+  if (card.suit === 'spades' && !spadesbroken && !state.isFirstTrick) {
     spadesbroken = true
     console.log('Spades broken:', { tableId: state.tableId, seat, card })
   }

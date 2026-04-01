@@ -240,15 +240,14 @@ describe('playCard', () => {
     assert.ok(!state.hands.east.some((c) => c.suit === card.suit && c.rank === card.rank))
   })
 
-  it('spades are broken when first spade is played', () => {
+  it('spades are broken when first spade is played (after the first trick)', () => {
     let state = getToPlayingPhase()
     assert.equal(state.spadesbroken, false)
 
-    // Find a player who can legally play a spade (i.e., has no other option when following)
-    // Simpler: inject a known hand state for testing
-    // Force a situation where east has only spades
+    // Inject a known hand state on trick 2 (isFirstTrick: false) where east has only a spade
     state = {
       ...state,
+      isFirstTrick: false,
       hands: {
         ...state.hands,
         east: [{ suit: 'spades', rank: 'A' }],
@@ -256,6 +255,112 @@ describe('playCard', () => {
     }
     state = playCard(state, 'east', { suit: 'spades', rank: 'A' })
     assert.equal(state.spadesbroken, true)
+  })
+})
+
+describe('Spades-breaking', () => {
+  function getPlayingState() {
+    let state = createGame('table-1', PLAYER_IDS)
+    return bidAll(state, [
+      ['east', 3],
+      ['south', 4],
+      ['west', 3],
+      ['north', 7],
+    ])
+  }
+
+  it('playing a spade on the first trick does not break spades', () => {
+    // PRD §5.1: "Spades are broken by the first Spade played (after the first trick)"
+    let state = getPlayingState()
+    // East has only spades — legal to lead on trick 1 when player holds nothing else
+    state = {
+      ...state,
+      isFirstTrick: true,
+      currentTrick: [],
+      currentPlayerSeat: 'east',
+      hands: { ...state.hands, east: [{ suit: 'spades', rank: 'A' }] },
+    }
+    state = playCard(state, 'east', { suit: 'spades', rank: 'A' })
+    assert.equal(state.spadesbroken, false)
+  })
+
+  it('playing a spade as a discard (void in led suit) breaks spades', () => {
+    let state = getPlayingState()
+    // East has led clubs; south is void in clubs and must play their only card (a spade)
+    state = {
+      ...state,
+      isFirstTrick: false,
+      currentTrick: [{ seat: 'east', card: { suit: 'clubs', rank: '2' } }],
+      currentPlayerSeat: 'south',
+      hands: { ...state.hands, south: [{ suit: 'spades', rank: 'Q' }] },
+    }
+    state = playCard(state, 'south', { suit: 'spades', rank: 'Q' })
+    assert.equal(state.spadesbroken, true)
+  })
+
+  it('attempting to lead spades before they are broken is rejected', () => {
+    let state = getPlayingState()
+    state = {
+      ...state,
+      isFirstTrick: false,
+      spadesbroken: false,
+      currentTrick: [],
+      currentPlayerSeat: 'east',
+      hands: {
+        ...state.hands,
+        east: [{ suit: 'spades', rank: 'A' }, { suit: 'clubs', rank: '3' }],
+      },
+    }
+    assert.throws(
+      () => playCard(state, 'east', { suit: 'spades', rank: 'A' }),
+      /illegal play/i,
+    )
+  })
+
+  it('can lead spades once they are broken', () => {
+    let state = getPlayingState()
+    state = {
+      ...state,
+      isFirstTrick: false,
+      spadesbroken: true,
+      currentTrick: [],
+      currentPlayerSeat: 'east',
+      hands: {
+        ...state.hands,
+        east: [{ suit: 'spades', rank: 'A' }, { suit: 'clubs', rank: '3' }],
+      },
+    }
+    assert.doesNotThrow(() => playCard(state, 'east', { suit: 'spades', rank: 'A' }))
+  })
+
+  it('spadesbroken resets to false at the start of the next hand', () => {
+    let state = getPlayingState()
+    // Fast-forward to the final trick of a hand with spades already broken
+    state = {
+      ...state,
+      phase: 'playing',
+      hands: {
+        north: [{ suit: 'clubs', rank: '2' }],
+        east: [{ suit: 'clubs', rank: 'A' }],
+        south: [{ suit: 'clubs', rank: '4' }],
+        west: [{ suit: 'clubs', rank: '5' }],
+      },
+      completedTricks: Array.from({ length: 12 }, () => ({ winner: 'north', plays: [] })),
+      tricksWon: { north: 3, east: 3, south: 3, west: 3 },
+      currentPlayerSeat: 'east',
+      leadSeat: 'east',
+      isFirstTrick: false,
+      spadesbroken: true,
+      currentTrick: [],
+    }
+    // East leads and wins the final trick with the Ace of clubs
+    state = playCard(state, 'east', { suit: 'clubs', rank: 'A' })
+    state = playCard(state, 'south', { suit: 'clubs', rank: '4' })
+    state = playCard(state, 'west', { suit: 'clubs', rank: '5' })
+    state = playCard(state, 'north', { suit: 'clubs', rank: '2' })
+    // New hand starts in bidding phase with spadesbroken reset
+    assert.equal(state.phase, 'bidding')
+    assert.equal(state.spadesbroken, false)
   })
 })
 

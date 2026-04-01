@@ -162,3 +162,30 @@ export async function getGameState(redis, tableId) {
 export async function saveGameState(redis, tableId, gameState) {
   await redis.set(`game:${tableId}`, JSON.stringify(gameState), { EX: TABLE_TTL_SECONDS })
 }
+
+/**
+ * List all open (waiting) tables from the lobby index.
+ * Fetches full table state for each waiting entry to include seat info.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @returns {Promise<Array<{ tableId: string, name: string|null, hostPlayerId: string, seats: object, seatsAvailable: number }>>}
+ */
+export async function listTables(redis) {
+  const raw = await redis.hGetAll('lobby:tables')
+  const result = []
+  for (const json of Object.values(raw)) {
+    const entry = JSON.parse(json)
+    if (entry.status !== 'waiting') continue
+    const table = await getTable(redis, entry.tableId)
+    if (!table || table.status !== 'waiting') continue
+    const seatsAvailable = Object.values(table.seats).filter((p) => p === null).length
+    result.push({
+      tableId: table.tableId,
+      name: table.name,
+      hostPlayerId: table.hostPlayerId,
+      seats: table.seats,
+      seatsAvailable,
+    })
+  }
+  return result
+}

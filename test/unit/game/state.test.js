@@ -693,3 +693,99 @@ describe('dealer rotation', () => {
     assert.equal(state.currentBidderSeat, 'north')
   })
 })
+
+describe('game over — phase transition', () => {
+  /**
+   * Build a state one trick from hand completion with fixed bids.
+   * Bidding order: east, south, west, north
+   *   NS team total: 7 (north is second bidder)
+   *   EW team total: 6 (west is second bidder)
+   * East leads and wins the 13th trick with the Ace of clubs.
+   *
+   * @param {{ initialScores: {ns,ew}, tricksWon12: {north,east,south,west} }} opts
+   *   tricksWon12 must sum to 12 (tricks before the final one).
+   */
+  function buildNearEndState({ initialScores, tricksWon12 }) {
+    let state = createGame('table-1', PLAYER_IDS)
+    state = { ...state, scores: initialScores, bags: { ns: 0, ew: 0 } }
+    // Bidding order: east, south, west, north
+    state = placeBid(state, 'east', 2)   // EW advisory
+    state = placeBid(state, 'south', 4)  // NS advisory
+    state = placeBid(state, 'west', 6)   // EW second bidder → team total 6
+    state = placeBid(state, 'north', 7)  // NS second bidder → team total 7
+    const hands = {
+      north: [{ suit: 'clubs', rank: '2' }],
+      east:  [{ suit: 'clubs', rank: 'A' }],
+      south: [{ suit: 'clubs', rank: '4' }],
+      west:  [{ suit: 'clubs', rank: '5' }],
+    }
+    state = {
+      ...state,
+      phase: 'playing',
+      hands,
+      completedTricks: Array.from({ length: 12 }, () => ({ winner: 'north', plays: [] })),
+      tricksWon: tricksWon12,
+      currentPlayerSeat: 'east',
+      leadSeat: 'east',
+      isFirstTrick: false,
+      spadesbroken: true,
+      currentTrick: [],
+    }
+    for (const seat of ['east', 'south', 'west', 'north']) {
+      state = playCard(state, seat, state.hands[seat][0])
+    }
+    return state
+  }
+
+  it('transitions to game_over with winner=ns when NS score reaches 250', () => {
+    // After hand: NS=9 tricks (north:4+south:5) vs bid 7 → +70 → 200+70=270 ≥ 250
+    //             EW=4 tricks (east:3+west:1) vs bid 6 → -60 → 100-60=40
+    const state = buildNearEndState({
+      initialScores: { ns: 200, ew: 100 },
+      tricksWon12: { north: 4, east: 2, south: 5, west: 1 }, // sum=12
+    })
+    assert.equal(state.phase, 'game_over')
+    assert.equal(state.winner, 'ns')
+    assert.equal(state.gameOver, true)
+    assert.equal(state.scores.ns, 270)
+  })
+
+  it('starts next hand in bidding phase when neither team reaches a threshold', () => {
+    // After hand: NS=9 vs bid 7 → +70 → 0+70=70 (< 250); EW=4 vs bid 6 → -60 (> -250)
+    const state = buildNearEndState({
+      initialScores: { ns: 0, ew: 0 },
+      tricksWon12: { north: 4, east: 2, south: 5, west: 1 },
+    })
+    assert.equal(state.phase, 'bidding', 'should start the next hand')
+    assert.equal(state.winner, null)
+    assert.equal(state.gameOver, false)
+    assert.equal(state.handNumber, 2)
+  })
+
+  it('transitions to game_over with winner=ew when NS score drops to -250 or below', () => {
+    // After hand: NS=3 tricks (north:1+south:2) vs bid 7 → -70 → -200-70=-270 ≤ -250
+    //             EW=10 tricks (east:6+west:4) vs bid 6 → +60 + 4 bags → 100+60=160
+    const state = buildNearEndState({
+      initialScores: { ns: -200, ew: 100 },
+      tricksWon12: { north: 1, east: 5, south: 2, west: 4 }, // sum=12
+    })
+    assert.equal(state.phase, 'game_over')
+    assert.equal(state.winner, 'ew')
+    assert.equal(state.gameOver, true)
+    assert.equal(state.scores.ns, -270)
+  })
+
+  it('getPlayerView in game_over state exposes winner and scores but not all hands', () => {
+    const state = buildNearEndState({
+      initialScores: { ns: 200, ew: 100 },
+      tricksWon12: { north: 4, east: 2, south: 5, west: 1 },
+    })
+    const view = getPlayerView(state, 'north')
+    assert.equal(view.phase, 'game_over')
+    assert.equal(view.winner, 'ns')
+    assert.ok('scores' in view, 'view should include scores')
+    assert.ok('bags' in view, 'view should include bags')
+    assert.ok(!('hands' in view), 'view must not expose the full hands object')
+    assert.ok('myHand' in view, 'view must expose myHand for the requesting player')
+  })
+})

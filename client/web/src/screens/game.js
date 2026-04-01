@@ -5,6 +5,7 @@ import {
   submitBlindNilExchange as apiExchange,
 } from '../api.js'
 import { navigate } from '../router.js'
+import { handSpreadHtml, handDiagramHtml } from '../hand.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const RED_SUIT = new Set(['hearts', 'diamonds'])
@@ -44,13 +45,6 @@ function bidLabel(bid) {
   return String(bid)
 }
 
-function cardHtml(card, extraCls) {
-  const s = SUIT_SYMBOL[card.suit]
-  const red = RED_SUIT.has(card.suit) ? ' card-red' : ''
-  const cls = extraCls ? ` ${extraCls}` : ''
-  return `<span class="card${red}${cls}" data-suit="${esc(card.suit)}" data-rank="${esc(card.rank)}">${esc(card.rank)}${s}</span>`
-}
-
 function seatInfoHtml(state, seat, label) {
   const bid = state.bids[seat]
   const tricks = state.tricksWon[seat]
@@ -88,25 +82,6 @@ function trickHtml(state, rel) {
       </div>
       <div class="trick-row">${slot(rel.me)}</div>
     </div>`
-}
-
-function handSpreadHtml(hand, extraClsFn) {
-  return hand.map((card) => cardHtml(card, extraClsFn(card))).join('')
-}
-
-function handDiagramHtml(hand, extraClsFn) {
-  const bySuit = { spades: [], hearts: [], diamonds: [], clubs: [] }
-  for (const c of hand) bySuit[c.suit].push(c)
-
-  return Object.entries(bySuit)
-    .filter(([, cards]) => cards.length > 0)
-    .map(([suit, cards]) => {
-      const s = SUIT_SYMBOL[suit]
-      const red = RED_SUIT.has(suit) ? ' suit-red' : ''
-      const cardsHtml = cards.map((card) => cardHtml(card, `card-compact${extraClsFn(card) ? ' ' + extraClsFn(card) : ''}`)).join('')
-      return `<div class="diagram-row"><span class="diagram-suit${red}">${s}</span>${cardsHtml}</div>`
-    })
-    .join('')
 }
 
 /**

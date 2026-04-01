@@ -52,7 +52,7 @@
 
 ### Testing
 
-- [ ] `P0` End-to-end test: 4 players complete a full game from table creation to game over
+- [x] `P0` End-to-end test: 4 players complete a full game from table creation to game over
 
 ---
 

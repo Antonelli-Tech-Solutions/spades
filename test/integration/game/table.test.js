@@ -736,3 +736,127 @@ describe('POST /api/tables/:tableId/blind-nil-exchange', { skip }, () => {
     assert.equal(res.status, 400)
   })
 })
+
+describe('Card visibility: GET /api/tables/:tableId/state', { skip }, () => {
+  let server, db, redis
+  const players = []
+  let tableId
+
+  before(async () => {
+    db = getDb()
+    redis = await getRedis()
+    await ensurePlayersTable(db)
+    for (let i = 1; i <= 4; i++) {
+      await insertVerifiedPlayer(db, {
+        email: `visplayer${i}@gtest.spades.invalid`,
+        username: `gtest_vis${i}`,
+        password: 'password123',
+      })
+    }
+    server = await startTestServer()
+    for (let i = 1; i <= 4; i++) {
+      const data = await loginPlayer(
+        server.baseUrl,
+        `visplayer${i}@gtest.spades.invalid`,
+        'password123',
+      )
+      players.push(data)
+    }
+
+    // Create table and seat all 4 players
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    const body = await createRes.json()
+    tableId = body.tableId
+
+    const seats = ['north', 'east', 'south', 'west']
+    for (let i = 0; i < 4; i++) {
+      await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': players[i].sessionId,
+          'x-player-id': players[i].playerId,
+        },
+        body: JSON.stringify({ seat: seats[i] }),
+      })
+    }
+  })
+
+  after(async () => {
+    await server.close()
+    await closeDb()
+    await closeRedis()
+  })
+
+  it('state response never contains a hands key for any player', async () => {
+    for (const p of players) {
+      const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+        headers: { 'x-session-id': p.sessionId, 'x-player-id': p.playerId },
+      })
+      assert.equal(res.status, 200)
+      const body = await res.json()
+      assert.ok(!('hands' in body), 'response must not contain a hands key')
+    }
+  })
+
+  it('each player receives exactly 13 cards in myHand', async () => {
+    for (const p of players) {
+      const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+        headers: { 'x-session-id': p.sessionId, 'x-player-id': p.playerId },
+      })
+      const body = await res.json()
+      assert.ok(Array.isArray(body.myHand), 'myHand should be an array')
+      assert.equal(body.myHand.length, 13, `player should have 13 cards, got ${body.myHand.length}`)
+    }
+  })
+
+  it('each player receives a distinct myHand (no two players share any card)', async () => {
+    const hands = []
+    for (const p of players) {
+      const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+        headers: { 'x-session-id': p.sessionId, 'x-player-id': p.playerId },
+      })
+      const body = await res.json()
+      hands.push(body.myHand)
+    }
+
+    const cardKey = (c) => `${c.suit}:${c.rank}`
+    for (let i = 0; i < hands.length; i++) {
+      const keysI = new Set(hands[i].map(cardKey))
+      for (let j = i + 1; j < hands.length; j++) {
+        const keysJ = new Set(hands[j].map(cardKey))
+        for (const k of keysI) {
+          assert.ok(!keysJ.has(k), `player ${i} and player ${j} share card ${k}`)
+        }
+      }
+    }
+  })
+
+  it('state response after a bid still contains no hands key', async () => {
+    // players[1] is east — first to bid (north deals, east bids first)
+    const bidRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[1].sessionId,
+        'x-player-id': players[1].playerId,
+      },
+      body: JSON.stringify({ bid: 3 }),
+    })
+    assert.equal(bidRes.status, 200)
+    const bidBody = await bidRes.json()
+    assert.ok(!('hands' in bidBody), 'bid response must not contain a hands key')
+
+    // Also check GET /state for each player after the bid
+    for (const p of players) {
+      const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+        headers: { 'x-session-id': p.sessionId, 'x-player-id': p.playerId },
+      })
+      const body = await res.json()
+      assert.ok(!('hands' in body), 'state response after bid must not contain a hands key')
+    }
+  })
+})

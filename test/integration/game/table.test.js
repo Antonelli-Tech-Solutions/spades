@@ -893,3 +893,101 @@ describe('Card visibility: GET /api/tables/:tableId/state', { skip }, () => {
     }
   })
 })
+
+describe('GET /api/tables/:tableId/state — game_over phase', { skip }, () => {
+  let server, db, redis
+  const players = []
+  let tableId
+
+  before(async () => {
+    db = getDb()
+    redis = await getRedis()
+    await ensurePlayersTable(db)
+    for (let i = 1; i <= 4; i++) {
+      await insertVerifiedPlayer(db, {
+        email: `govplayer${i}@gtest.spades.invalid`,
+        username: `gtest_gov${i}`,
+        password: 'password123',
+      })
+    }
+    server = await startTestServer()
+    for (let i = 1; i <= 4; i++) {
+      const data = await loginPlayer(
+        server.baseUrl,
+        `govplayer${i}@gtest.spades.invalid`,
+        'password123',
+      )
+      players.push(data)
+    }
+
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    const body = await createRes.json()
+    tableId = body.tableId
+
+    const seats = ['north', 'east', 'south', 'west']
+    for (let i = 0; i < 4; i++) {
+      await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': players[i].sessionId,
+          'x-player-id': players[i].playerId,
+        },
+        body: JSON.stringify({ seat: seats[i] }),
+      })
+    }
+
+    // Inject a game_over state into Redis (NS wins with 270 pts)
+    const gameStateRaw = await redis.get(`game:${tableId}`)
+    const gameState = JSON.parse(gameStateRaw)
+    await redis.set(`game:${tableId}`, JSON.stringify({
+      ...gameState,
+      phase: 'game_over',
+      gameOver: true,
+      winner: 'ns',
+      scores: { ns: 270, ew: 40 },
+      bags: { ns: 2, ew: 0 },
+    }), { EX: 3600 })
+  })
+
+  after(async () => {
+    await server.close()
+    await closeDb()
+    await closeRedis()
+  })
+
+  it('returns phase=game_over with correct winner, scores, and bags', async () => {
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    assert.equal(res.status, 200)
+    const body = await res.json()
+    assert.equal(body.phase, 'game_over')
+    assert.equal(body.winner, 'ns')
+    assert.deepEqual(body.scores, { ns: 270, ew: 40 })
+    assert.deepEqual(body.bags, { ns: 2, ew: 0 })
+  })
+
+  it('game_over state response does not expose the hands key', async () => {
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    const body = await res.json()
+    assert.ok(!('hands' in body), 'response must not contain a hands key')
+  })
+
+  it('all four players see the same game_over result', async () => {
+    for (const player of players) {
+      const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+        headers: { 'x-session-id': player.sessionId, 'x-player-id': player.playerId },
+      })
+      assert.equal(res.status, 200)
+      const body = await res.json()
+      assert.equal(body.phase, 'game_over', `player ${player.playerId} should see game_over`)
+      assert.equal(body.winner, 'ns', `player ${player.playerId} should see winner=ns`)
+    }
+  })
+})

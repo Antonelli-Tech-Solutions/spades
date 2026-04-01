@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerUser, loginUser, resendVerification, forgotPassword, resetPassword } from '../../../client/web/src/api.js'
+import { registerUser, loginUser, resendVerification, forgotPassword, resetPassword, createTable } from '../../../client/web/src/api.js'
 
 /**
  * Build a minimal mock fetch that returns the given status and JSON body.
@@ -178,6 +178,52 @@ describe('loginUser', () => {
         ),
       (err) => {
         assert.equal(err.status, 400)
+        return true
+      },
+    )
+  })
+})
+
+describe('createTable', () => {
+  const auth = { sessionId: 'sess-1', playerId: 'player-1' }
+
+  it('resolves with tableId and name on 201', async () => {
+    const result = await createTable(
+      { name: 'Friday Night', ...auth },
+      mockFetch(201, { tableId: 'table-uuid', name: 'Friday Night' }),
+    )
+    assert.equal(result.tableId, 'table-uuid')
+    assert.equal(result.name, 'Friday Night')
+  })
+
+  it('resolves with null name when no name provided', async () => {
+    const result = await createTable(
+      { ...auth },
+      mockFetch(201, { tableId: 'table-uuid', name: null }),
+    )
+    assert.equal(result.tableId, 'table-uuid')
+    assert.equal(result.name, null)
+  })
+
+  it('throws with status 401 when unauthenticated', async () => {
+    await assert.rejects(
+      () => createTable({ ...auth }, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => {
+        assert.equal(err.status, 401)
+        return true
+      },
+    )
+  })
+
+  it('throws with status 400 when name is too long', async () => {
+    await assert.rejects(
+      () => createTable(
+        { name: 'x'.repeat(51), ...auth },
+        mockFetch(400, { error: 'Table name must be 50 characters or fewer.' }),
+      ),
+      (err) => {
+        assert.equal(err.status, 400)
+        assert.match(err.message, /50 characters/)
         return true
       },
     )

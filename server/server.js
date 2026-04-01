@@ -177,11 +177,18 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
   // POST /api/tables — create a new table
   app.post('/api/tables', async (req, res) => {
+    const { name } = req.body ?? {}
+    if (name !== undefined && name !== null) {
+      if (typeof name !== 'string') return sendJSON(res, 400, { error: 'Table name must be a string.' })
+      const trimmed = name.trim()
+      if (trimmed.length > 50) return sendJSON(res, 400, { error: 'Table name must be 50 characters or fewer.' })
+    }
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
-      const table = await createTable(redisClient, { hostPlayerId: session.playerId })
-      sendJSON(res, 201, { tableId: table.tableId })
+      const resolvedName = (typeof name === 'string' && name.trim()) ? name.trim() : null
+      const table = await createTable(redisClient, { hostPlayerId: session.playerId, name: resolvedName })
+      sendJSON(res, 201, { tableId: table.tableId, name: table.name })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Create table error:', { error: err.message })

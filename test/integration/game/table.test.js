@@ -204,6 +204,90 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     })
     assert.equal(res.status, 409)
   })
+
+  it('returns 400 for an invalid seat name', async () => {
+    const { sessionId, playerId } = players[0]
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+    })
+    const { tableId } = await createRes.json()
+
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ seat: 'invalid' }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  it('returns 409 when player is already seated at this table', async () => {
+    const { sessionId, playerId } = players[0]
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+    })
+    const { tableId } = await createRes.json()
+
+    // Sit player 0 at north
+    await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[0].sessionId,
+        'x-player-id': players[0].playerId,
+      },
+      body: JSON.stringify({ seat: 'north' }),
+    })
+
+    // Same player tries to sit at east
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': players[0].sessionId,
+        'x-player-id': players[0].playerId,
+      },
+      body: JSON.stringify({ seat: 'east' }),
+    })
+    assert.equal(res.status, 409)
+  })
+
+  it('returns 404 for a non-existent table', async () => {
+    const { sessionId, playerId } = players[0]
+    const res = await fetch(`${server.baseUrl}/api/tables/00000000-0000-0000-0000-000000000000/sit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ seat: 'north' }),
+    })
+    assert.equal(res.status, 404)
+  })
+
+  it('GET /api/tables/:tableId/state returns 403 when player is not seated', async () => {
+    const { sessionId, playerId } = players[0]
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+    })
+    const { tableId } = await createRes.json()
+
+    // players[3] is not seated at this table
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: {
+        'x-session-id': players[3].sessionId,
+        'x-player-id': players[3].playerId,
+      },
+    })
+    assert.equal(res.status, 403)
+  })
 })
 
 describe('POST /api/tables/:tableId/bid', { skip }, () => {

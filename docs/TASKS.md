@@ -56,7 +56,37 @@
 
 ---
 
-## Slice 2 — Full Lobby & Access Control
+## Slice 2 — Real-Time WebSocket Layer
+
+> Goal: all in-game state updates are delivered via WebSocket push instead of HTTP polling. This slice is a prerequisite for Slice 3 (spectating requires live updates) and Slice 4 (social presence requires connection state). Do not start Slice 3 until this slice is complete and merged to `dev`.
+>
+> See `docs/spades_prd.md` Section 6.4 for the full real-time architecture spec, event catalog, and disconnect/reconnect behaviour.
+
+### Backend
+
+- [ ] `P0` Build `server/ws/` WebSocket server: authenticated connection upgrade (`x-session-id` header), table room management (`table:{tableId}` rooms), heartbeat ping/pong (30 s interval, 10 s timeout)
+- [ ] `P0` Implement Redis pub/sub fan-out: each `table:{tableId}` room and the `lobby` channel map to a Redis pub/sub channel so all server instances can broadcast to connected clients
+- [ ] `P0` Emit in-game events after each validated state mutation: `HAND_DEALT` (per-player), `BID_PLACED`, `BLIND_NIL_EXCHANGE_PROMPT`, `CARD_PLAYED`, `TRICK_COMPLETE`, `HAND_SCORED`, `GAME_OVER`, `TURN_CHANGED`
+- [ ] `P0` Implement player disconnect detection: emit `PLAYER_DISCONNECTED` with a 60 s reconnect window on ping failure or clean close; emit `PLAYER_RECONNECTED` when the player re-joins within the window; stall game with "waiting for reconnect" indicator if window expires
+- [ ] `P1` Emit lobby events to the `lobby` channel: `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED`
+
+### Web Client
+
+- [ ] `P0` Establish authenticated WSS connection on game screen mount; tear down on unmount
+- [ ] `P0` Remove `schedulePoll()` timeout loop from `client/web/src/screens/game.js`; re-render on incoming WebSocket events instead
+- [ ] `P0` On reconnect: call `GET /api/tables/:tableId/state` to re-hydrate, then resume WS event listener
+- [ ] `P1` Subscribe to lobby channel on lobby screen mount; update table list on `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED` — eliminating the manual-refresh requirement
+
+### Testing
+
+- [ ] `P0` Unit tests (`test/ws/`): connection authentication, room join/leave, event emission after each game action, ping/pong lifecycle
+- [ ] `P0` Integration test: play a card action triggers `CARD_PLAYED` event received by all players in the room
+- [ ] `P0` Integration test: disconnect within reconnect window resumes game; expired window stalls game
+- [ ] `P1` Integration test: `TABLE_CREATED` / `TABLE_UPDATED` / `TABLE_REMOVED` events delivered to lobby channel subscribers
+
+---
+
+## Slice 3 — Full Lobby & Access Control
 
 > Goal: the complete table discovery and access model from the PRD is in place — public/friends-only/private visibility, join policies, shareable links, spectating, and the arrive-then-sit flow.
 
@@ -74,7 +104,7 @@
 
 ---
 
-## Slice 3 — Social Features
+## Slice 4 — Social Features
 
 > Goal: players can find and play with friends, see who is online, and communicate during games.
 
@@ -90,7 +120,7 @@
 
 ---
 
-## Slice 4 — UI Polish & Customization
+## Slice 5 — UI Polish & Customization
 
 > Goal: the game looks and feels good; players can personalise their experience.
 
@@ -102,11 +132,11 @@
 
 ---
 
-## Slice 5 — Scale, Harden & Mobile
+## Slice 6 — Scale, Harden & Mobile
 
-> Goal: the game meets its non-functional requirements and is available on mobile.
+> Goal: the game meets its non-functional requirements and is available on mobile. The <200ms p95 latency target is achieved by the WebSocket implementation in Slice 2; this slice validates it at scale.
 
-- [ ] `P0` Achieve <200ms p95 turn action latency (card play → all clients updated)
+- [ ] `P0` Load test and validate <200ms p95 turn action latency (card play → all clients updated) at 10,000+ concurrent sessions
 - [ ] `P0` Support 10,000+ concurrent game sessions at launch
 - [ ] `P0` Maintain 99.5% monthly uptime SLA
 - [ ] `P0` Build responsive web app for Chrome 100+, Firefox 100+, Safari 15+, Edge 100+ (desktop & tablet)

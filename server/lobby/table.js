@@ -6,6 +6,7 @@ const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
  * @typedef {Object} TableState
  * @property {string} tableId
  * @property {string} hostPlayerId
+ * @property {string|null} name
  * @property {{ north: string|null, east: string|null, south: string|null, west: string|null }} seats
  * @property {'waiting'|'playing'} status
  * @property {string|null} gameId
@@ -16,14 +17,15 @@ const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
  * Create a new table in Redis and return its ID.
  *
  * @param {import('redis').RedisClientType} redis
- * @param {{ hostPlayerId: string }} opts
+ * @param {{ hostPlayerId: string, name?: string }} opts
  * @returns {Promise<TableState>}
  */
-export async function createTable(redis, { hostPlayerId }) {
+export async function createTable(redis, { hostPlayerId, name = null }) {
   const tableId = uuidv4()
   const table = {
     tableId,
     hostPlayerId,
+    name,
     seats: { north: null, east: null, south: null, west: null },
     status: 'waiting',
     gameId: null,
@@ -34,9 +36,9 @@ export async function createTable(redis, { hostPlayerId }) {
   await redis.set(key, JSON.stringify(table), { EX: TABLE_TTL_SECONDS })
 
   // Add to the lobby index
-  await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId, status: 'waiting' }))
+  await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId, name, status: 'waiting' }))
 
-  console.log('Table created:', { tableId, hostPlayerId })
+  console.log('Table created:', { tableId, hostPlayerId, name })
   return table
 }
 

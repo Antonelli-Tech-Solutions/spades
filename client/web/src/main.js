@@ -4,6 +4,8 @@ import { renderRegisterScreen } from './screens/register.js'
 import { renderVerifyEmailSuccess, renderVerifyEmailError, renderVerifyEmailExpired } from './screens/verifyEmail.js'
 import { renderForgotPasswordScreen } from './screens/forgotPassword.js'
 import { renderResetPasswordScreen } from './screens/resetPassword.js'
+import { renderLobbyScreen } from './screens/lobby.js'
+import { renderCreateTableScreen } from './screens/createTable.js'
 
 const app = document.getElementById('app')
 
@@ -14,6 +16,8 @@ addRoute('#/verify-email-error', renderVerifyEmailError)
 addRoute('#/verify-email-expired', renderVerifyEmailExpired)
 addRoute('#/forgot-password', renderForgotPasswordScreen)
 addRoute('#/reset-password', renderResetPasswordScreen)
+addRoute('#/lobby', renderLobbyScreen)
+addRoute('#/create-table', renderCreateTableScreen)
 
 // Redirect authenticated users away from auth screens
 if (sessionStorage.getItem('sessionId') && window.location.hash !== '#/lobby') {

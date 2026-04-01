@@ -93,6 +93,31 @@ export async function resetPassword({ token, newPassword }, fetchFn = globalThis
 }
 
 /**
+ * Create a new table. Requires a valid session.
+ * @param {{ name?: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tableId: string, name: string|null }>}
+ */
+export async function createTable({ name, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/tables', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ name: name || null }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to create table.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Log in with email and password.
  * @param {{ email: string, password: string }} data
  * @param {typeof fetch} [fetchFn]

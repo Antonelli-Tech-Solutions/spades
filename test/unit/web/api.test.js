@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerUser, loginUser, resendVerification, forgotPassword, resetPassword, createTable } from '../../../client/web/src/api.js'
+import { registerUser, loginUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable } from '../../../client/web/src/api.js'
 
 /**
  * Build a minimal mock fetch that returns the given status and JSON body.
@@ -224,6 +224,72 @@ describe('createTable', () => {
       (err) => {
         assert.equal(err.status, 400)
         assert.match(err.message, /50 characters/)
+        return true
+      },
+    )
+  })
+})
+
+describe('listTables', () => {
+  const auth = { sessionId: 'sess-1', playerId: 'player-1' }
+
+  it('resolves with tables array on 200', async () => {
+    const tables = [
+      { tableId: 'table-1', name: 'Friday Night', seats: { north: null, east: null, south: null, west: null }, seatsAvailable: 4 },
+    ]
+    const result = await listTables(auth, mockFetch(200, { tables }))
+    assert.deepEqual(result.tables, tables)
+  })
+
+  it('resolves with empty array when no tables', async () => {
+    const result = await listTables(auth, mockFetch(200, { tables: [] }))
+    assert.deepEqual(result.tables, [])
+  })
+
+  it('throws with status 401 when unauthenticated', async () => {
+    await assert.rejects(
+      () => listTables(auth, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => {
+        assert.equal(err.status, 401)
+        return true
+      },
+    )
+  })
+})
+
+describe('sitAtTable', () => {
+  const auth = { sessionId: 'sess-1', playerId: 'player-1' }
+
+  it('resolves on 200 with tableId and seat', async () => {
+    const result = await sitAtTable(
+      { tableId: 'table-1', seat: 'north', ...auth },
+      mockFetch(200, { tableId: 'table-1', seat: 'north' }),
+    )
+    assert.equal(result.tableId, 'table-1')
+    assert.equal(result.seat, 'north')
+  })
+
+  it('throws with status 409 when seat is taken', async () => {
+    await assert.rejects(
+      () => sitAtTable(
+        { tableId: 'table-1', seat: 'north', ...auth },
+        mockFetch(409, { error: 'Seat is already taken' }),
+      ),
+      (err) => {
+        assert.equal(err.status, 409)
+        return true
+      },
+    )
+  })
+
+  it('throws with status 401 when unauthenticated', async () => {
+    await assert.rejects(
+      () => sitAtTable(
+        { tableId: 'table-1', seat: 'north', ...auth },
+        mockFetch(401, { error: 'Unauthorized.' }),
+      ),
+      (err) => {
+        assert.equal(err.status, 401)
         return true
       },
     )

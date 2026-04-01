@@ -45,7 +45,7 @@
 
 - [x] `P0` Registration and login screens
 - [x] `P0` Create table screen: name only (no visibility/join policy yet)
-- [ ] `P0` Join table screen: list of open tables, click to join and choose a seat
+- [x] `P0` Join table screen: list of open tables, click to join and choose a seat
 - [ ] `P0` Game screen: display hand, bid input, card play, current trick, scoreboard
 - [ ] `P0` Build hand display in Spread (fan) and Hand Diagram modes
 - [ ] `P0` Game over screen: show final score and winner

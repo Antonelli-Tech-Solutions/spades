@@ -322,6 +322,122 @@ describe('POST /api/tables/:tableId/bid', { skip }, () => {
   })
 })
 
+describe('GET /api/tables', { skip }, () => {
+  let server, db, redis
+
+  before(async () => {
+    db = getDb()
+    redis = await getRedis()
+    await ensurePlayersTable(db)
+    await insertVerifiedPlayer(db, {
+      email: 'listhost@gtest.spades.invalid',
+      username: 'gtest_listhost',
+      password: 'password123',
+    })
+    server = await startTestServer()
+  })
+
+  after(async () => {
+    await server.close()
+    await closeDb()
+    await closeRedis()
+  })
+
+  it('returns 401 without auth headers', async () => {
+    const res = await fetch(`${server.baseUrl}/api/tables`)
+    assert.equal(res.status, 401)
+  })
+
+  it('returns 200 with tables array when authenticated', async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'listhost@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+    })
+    assert.equal(res.status, 200)
+    const body = await res.json()
+    assert.ok(Array.isArray(body.tables), 'should return a tables array')
+  })
+
+  it('includes newly created waiting tables in the list', async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'listhost@gtest.spades.invalid',
+      'password123',
+    )
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ name: 'Test List Table' }),
+    })
+    const { tableId } = await createRes.json()
+
+    const listRes = await fetch(`${server.baseUrl}/api/tables`, {
+      headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+    })
+    assert.equal(listRes.status, 200)
+    const body = await listRes.json()
+    const found = body.tables.find((t) => t.tableId === tableId)
+    assert.ok(found, 'newly created table should appear in list')
+    assert.equal(found.name, 'Test List Table')
+    assert.ok(found.seats, 'table entry should include seats')
+    assert.equal(found.seatsAvailable, 4)
+  })
+
+  it('does not include tables that are already playing', async () => {
+    const players = []
+    for (let i = 1; i <= 4; i++) {
+      await insertVerifiedPlayer(db, {
+        email: `listplay${i}@gtest.spades.invalid`,
+        username: `gtest_listplay${i}`,
+        password: 'password123',
+      })
+    }
+    for (let i = 1; i <= 4; i++) {
+      const data = await loginPlayer(
+        server.baseUrl,
+        `listplay${i}@gtest.spades.invalid`,
+        'password123',
+      )
+      players.push(data)
+    }
+
+    // Create a table and fill all seats (triggers game start)
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    const { tableId } = await createRes.json()
+
+    const seats = ['north', 'east', 'south', 'west']
+    for (let i = 0; i < 4; i++) {
+      await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': players[i].sessionId,
+          'x-player-id': players[i].playerId,
+        },
+        body: JSON.stringify({ seat: seats[i] }),
+      })
+    }
+
+    const listRes = await fetch(`${server.baseUrl}/api/tables`, {
+      headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
+    })
+    const body = await listRes.json()
+    const found = body.tables.find((t) => t.tableId === tableId)
+    assert.equal(found, undefined, 'playing table should not appear in list')
+  })
+})
+
 describe('POST /api/tables/:tableId/blind-nil-exchange', { skip }, () => {
   let server, db, redis
   const players = []

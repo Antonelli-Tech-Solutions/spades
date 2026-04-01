@@ -15,6 +15,7 @@ import {
   markTablePlaying,
   getGameState,
   saveGameState,
+  listTables,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, getPlayerView } from './game/state.js'
 import { getSeatForPlayer } from './anticheat/validate.js'
@@ -174,6 +175,20 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   // ──────────────────────────────────────────────────────────────────────────
   // Table & Game Routes (all require authentication)
   // ──────────────────────────────────────────────────────────────────────────
+
+  // GET /api/tables — list open (waiting) tables
+  app.get('/api/tables', async (req, res) => {
+    try {
+      const redisClient = await getRedis()
+      await validateAuthHeaders(redisClient, req)
+      const tables = await listTables(redisClient)
+      sendJSON(res, 200, { tables })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('List tables error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
 
   // POST /api/tables — create a new table
   app.post('/api/tables', async (req, res) => {

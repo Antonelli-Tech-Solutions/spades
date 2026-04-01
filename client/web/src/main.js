@@ -6,6 +6,7 @@ import { renderForgotPasswordScreen } from './screens/forgotPassword.js'
 import { renderResetPasswordScreen } from './screens/resetPassword.js'
 import { renderLobbyScreen } from './screens/lobby.js'
 import { renderCreateTableScreen } from './screens/createTable.js'
+import { renderJoinTableScreen } from './screens/joinTable.js'
 
 const app = document.getElementById('app')
 
@@ -18,6 +19,7 @@ addRoute('#/forgot-password', renderForgotPasswordScreen)
 addRoute('#/reset-password', renderResetPasswordScreen)
 addRoute('#/lobby', renderLobbyScreen)
 addRoute('#/create-table', renderCreateTableScreen)
+addRoute('#/join', renderJoinTableScreen)
 
 // Redirect authenticated users away from auth screens
 if (sessionStorage.getItem('sessionId') && window.location.hash !== '#/lobby') {

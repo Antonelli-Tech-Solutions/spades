@@ -118,6 +118,53 @@ export async function createTable({ name, sessionId, playerId }, fetchFn = globa
 }
 
 /**
+ * List all open (waiting) tables. Requires a valid session.
+ * @param {{ sessionId: string, playerId: string }} auth
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tables: Array<{ tableId: string, name: string|null, seats: object, seatsAvailable: number }> }>}
+ */
+export async function listTables({ sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/tables', {
+    headers: {
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to list tables.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Sit at a seat at a table. Requires a valid session.
+ * @param {{ tableId: string, seat: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tableId: string, seat: string }>}
+ */
+export async function sitAtTable({ tableId, seat, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/sit`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ seat }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to sit at table.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Log in with email and password.
  * @param {{ email: string, password: string }} data
  * @param {typeof fetch} [fetchFn]

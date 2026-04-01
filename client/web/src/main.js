@@ -7,6 +7,8 @@ import { renderResetPasswordScreen } from './screens/resetPassword.js'
 import { renderLobbyScreen } from './screens/lobby.js'
 import { renderCreateTableScreen } from './screens/createTable.js'
 import { renderJoinTableScreen } from './screens/joinTable.js'
+import { renderGameScreen } from './screens/game.js'
+import { renderGameOverScreen } from './screens/gameOver.js'
 
 const app = document.getElementById('app')
 
@@ -20,9 +22,14 @@ addRoute('#/reset-password', renderResetPasswordScreen)
 addRoute('#/lobby', renderLobbyScreen)
 addRoute('#/create-table', renderCreateTableScreen)
 addRoute('#/join', renderJoinTableScreen)
+addRoute('#/table', renderGameScreen)
+addRoute('#/game-over', renderGameOverScreen)
 
-// Redirect authenticated users away from auth screens
-if (sessionStorage.getItem('sessionId') && window.location.hash !== '#/lobby') {
+// Redirect unauthenticated users to login from protected screens, and redirect
+// authenticated users away from auth-only screens to lobby.
+const authOnlyScreens = new Set(['', '#/login', '#/register', '#/forgot-password', '#/reset-password'])
+const currentRoute = window.location.hash.split('?')[0]
+if (sessionStorage.getItem('sessionId') && authOnlyScreens.has(currentRoute)) {
   window.location.hash = '#/lobby'
 }
 

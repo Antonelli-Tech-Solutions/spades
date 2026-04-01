@@ -165,6 +165,103 @@ export async function sitAtTable({ tableId, seat, sessionId, playerId }, fetchFn
 }
 
 /**
+ * Get the current game state for a table (filtered to the requesting player's view).
+ * @param {{ tableId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>} Player-specific game state
+ */
+export async function getGameState({ tableId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/state`, {
+    headers: {
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to get game state.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Place a bid during the bidding phase.
+ * @param {{ tableId: string, bid: number|'nil'|'blind_nil', sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>} Updated player-specific game state
+ */
+export async function placeBid({ tableId, bid, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/bid`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ bid }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to place bid.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Play a card during the playing phase.
+ * @param {{ tableId: string, card: { suit: string, rank: string }, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>} Updated player-specific game state
+ */
+export async function playCard({ tableId, card, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/play`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ card }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to play card.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Submit cards for the blind nil exchange.
+ * @param {{ tableId: string, cards: Array<{suit: string, rank: string}>, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>} Updated player-specific game state
+ */
+export async function submitBlindNilExchange({ tableId, cards, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/blind-nil-exchange`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ cards }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to submit blind nil exchange.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Log in with email and password.
  * @param {{ email: string, password: string }} data
  * @param {typeof fetch} [fetchFn]

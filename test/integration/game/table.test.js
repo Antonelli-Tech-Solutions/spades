@@ -173,6 +173,39 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     assert.equal(state.myHand.length, 13, 'player should have 13 cards')
   })
 
+  it('game does not start until all 4 seats are filled', async () => {
+    const { sessionId, playerId } = players[0]
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+    })
+    const { tableId } = await createRes.json()
+
+    const seats = ['north', 'east', 'south']
+    for (let i = 0; i < 3; i++) {
+      const p = players[i]
+      const sitRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': p.sessionId,
+          'x-player-id': p.playerId,
+        },
+        body: JSON.stringify({ seat: seats[i] }),
+      })
+      assert.equal(sitRes.status, 200, `player ${i + 1} sit failed`)
+
+      // After each of the first 3 players sits, game should still be waiting
+      const stateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+        headers: { 'x-session-id': p.sessionId, 'x-player-id': p.playerId },
+      })
+      assert.equal(stateRes.status, 200)
+      const state = await stateRes.json()
+      assert.equal(state.status, 'waiting', `game should still be waiting after ${i + 1} player(s) seated`)
+      assert.equal(state.phase, undefined, 'game phase should not be set before all seats are filled')
+    }
+  })
+
   it('returns 409 when seat is already taken', async () => {
     const { sessionId, playerId } = players[0]
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {

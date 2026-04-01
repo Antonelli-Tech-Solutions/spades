@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { validateCardPlay } from '../../../server/anticheat/validate.js'
+import { validateCardPlay, validateBidTurn } from '../../../server/anticheat/validate.js'
 
 /**
  * Build a minimal game state for anticheat validation tests.
@@ -126,6 +126,37 @@ describe('validateCardPlay — no Spade lead on first trick', () => {
       () => validateCardPlay(state, 'east', { suit: 'hearts', rank: '7' }),
       (e) => e.code === 'ILLEGAL_PLAY',
     )
+  })
+})
+
+describe('validateBidTurn — phase and turn checks', () => {
+  function makeBidState(overrides = {}) {
+    return {
+      phase: 'bidding',
+      currentBidderSeat: 'north',
+      ...overrides,
+    }
+  }
+
+  it('throws INVALID_ACTION when game is not in bidding phase', () => {
+    const state = makeBidState({ phase: 'playing' })
+    assert.throws(
+      () => validateBidTurn(state, 'north'),
+      (e) => e.code === 'INVALID_ACTION',
+    )
+  })
+
+  it('throws NOT_YOUR_TURN when it is not the player\'s turn to bid', () => {
+    const state = makeBidState({ currentBidderSeat: 'east' })
+    assert.throws(
+      () => validateBidTurn(state, 'north'),
+      (e) => e.code === 'NOT_YOUR_TURN',
+    )
+  })
+
+  it('does not throw when phase is bidding and it is the player\'s turn', () => {
+    const state = makeBidState()
+    assert.doesNotThrow(() => validateBidTurn(state, 'north'))
   })
 })
 

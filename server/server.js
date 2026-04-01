@@ -18,7 +18,7 @@ import {
   listTables,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, getPlayerView } from './game/state.js'
-import { getSeatForPlayer } from './anticheat/validate.js'
+import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
 
 function sendJSON(res, statusCode, data) {
   res.status(statusCode).json(data)
@@ -281,6 +281,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const gameState = await getGameState(redisClient, tableId)
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
 
+      validateBidTurn(gameState, seat)
       const newState = placeBid(gameState, seat, bid)
       await saveGameState(redisClient, tableId, newState)
       sendJSON(res, 200, getPlayerView(newState, seat))
@@ -343,6 +344,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const gameState = await getGameState(redisClient, tableId)
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
 
+      validateCardPlay(gameState, seat, card)
       const newState = playCard(gameState, seat, card)
       await saveGameState(redisClient, tableId, newState)
       sendJSON(res, 200, getPlayerView(newState, seat))

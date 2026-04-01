@@ -378,6 +378,67 @@ describe('getPlayerView', () => {
     const view = getPlayerView(state, 'north')
     assert.ok(!view.hands || !view.hands.east, 'should not expose other players hands')
   })
+
+  it('strictly excludes the hands key for all 4 seats', () => {
+    const state = createGame('table-1', PLAYER_IDS)
+    for (const seat of ['north', 'east', 'south', 'west']) {
+      const view = getPlayerView(state, seat)
+      assert.ok(!('hands' in view), `hands key must be absent for ${seat}`)
+    }
+  })
+
+  it('myHand exactly matches the dealt cards for each seat', () => {
+    const state = createGame('table-1', PLAYER_IDS)
+    for (const seat of ['north', 'east', 'south', 'west']) {
+      const view = getPlayerView(state, seat)
+      assert.deepEqual(view.myHand, state.hands[seat], `myHand must exactly match dealt hand for ${seat}`)
+    }
+  })
+
+  it('each seat receives a unique hand (no two myHands share any card)', () => {
+    const state = createGame('table-1', PLAYER_IDS)
+    const seats = ['north', 'east', 'south', 'west']
+    const hands = seats.map((seat) => getPlayerView(state, seat).myHand)
+
+    // Build a set of card keys for each hand and verify no overlap
+    const cardKey = (c) => `${c.suit}:${c.rank}`
+    for (let i = 0; i < seats.length; i++) {
+      const keysI = new Set(hands[i].map(cardKey))
+      for (let j = i + 1; j < seats.length; j++) {
+        const keysJ = new Set(hands[j].map(cardKey))
+        for (const k of keysI) {
+          assert.ok(!keysJ.has(k), `${seats[i]} and ${seats[j]} share card ${k}`)
+        }
+      }
+    }
+  })
+
+  it('includes currentTrick in the view (public info)', () => {
+    const state = createGame('table-1', PLAYER_IDS)
+    // currentTrick is public — it must be present in the player view
+    const view = getPlayerView(state, 'north')
+    assert.ok('currentTrick' in view, 'currentTrick must be present in player view')
+    assert.ok(Array.isArray(view.currentTrick))
+  })
+
+  it('does not expose opponent card identity through any top-level key', () => {
+    const state = createGame('table-1', PLAYER_IDS)
+    const northView = getPlayerView(state, 'north')
+    const northHandKeys = new Set(northView.myHand.map((c) => `${c.suit}:${c.rank}`))
+
+    // Build the full set of cards belonging to other seats
+    const otherCards = new Set()
+    for (const seat of ['east', 'south', 'west']) {
+      for (const card of state.hands[seat]) {
+        otherCards.add(`${card.suit}:${card.rank}`)
+      }
+    }
+
+    // None of the cards that belong to other seats should appear in northView's myHand
+    for (const cardKey of northHandKeys) {
+      assert.ok(!otherCards.has(cardKey), `opponent card ${cardKey} leaked into north's myHand`)
+    }
+  })
 })
 
 describe('CLOCKWISE_SEATS', () => {

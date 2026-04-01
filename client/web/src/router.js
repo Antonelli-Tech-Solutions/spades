@@ -34,7 +34,8 @@ export function navigate(hash) {
 export function init(container) {
   function render() {
     const hash = window.location.hash || '#/login'
-    const fn = routes[hash] ?? routes['#/login']
+    const route = hash.split('?')[0]
+    const fn = routes[route] ?? routes['#/login']
     if (fn) {
       container.innerHTML = ''
       fn(container)

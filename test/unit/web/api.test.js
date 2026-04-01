@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerUser, loginUser, resendVerification } from '../../../client/web/src/api.js'
+import { registerUser, loginUser, resendVerification, forgotPassword, resetPassword } from '../../../client/web/src/api.js'
 
 /**
  * Build a minimal mock fetch that returns the given status and JSON body.
@@ -80,6 +80,50 @@ describe('resendVerification', () => {
       () => resendVerification({ email: 'a@b.com' }, mockFetch(500, { error: 'Internal server error' })),
       (err) => {
         assert.equal(err.status, 500)
+        return true
+      },
+    )
+  })
+})
+
+describe('forgotPassword', () => {
+  it('resolves on 200', async () => {
+    const result = await forgotPassword(
+      { email: 'a@b.com' },
+      mockFetch(200, { message: 'If that email is registered, a reset link has been sent.' }),
+    )
+    assert.ok(result.message)
+  })
+
+  it('throws on server error', async () => {
+    await assert.rejects(
+      () => forgotPassword({ email: 'a@b.com' }, mockFetch(500, { error: 'Internal server error' })),
+      (err) => {
+        assert.equal(err.status, 500)
+        return true
+      },
+    )
+  })
+})
+
+describe('resetPassword', () => {
+  it('resolves with message on 200', async () => {
+    const result = await resetPassword(
+      { token: 'valid-token', newPassword: 'newpassword123' },
+      mockFetch(200, { message: 'Password reset successfully. You may now sign in.' }),
+    )
+    assert.ok(result.message)
+  })
+
+  it('throws with status 400 on invalid or expired token', async () => {
+    await assert.rejects(
+      () =>
+        resetPassword(
+          { token: 'bad-token', newPassword: 'newpassword123' },
+          mockFetch(400, { error: 'invalid or already used reset token' }),
+        ),
+      (err) => {
+        assert.equal(err.status, 400)
         return true
       },
     )

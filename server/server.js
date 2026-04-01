@@ -1,5 +1,6 @@
 import { registerPlayer, verifyEmailToken, resendVerificationEmail } from './auth/registration.js'
-import { sendVerificationEmail as defaultMailer } from './auth/email.js'
+import { forgotPassword, resetPassword } from './auth/passwordReset.js'
+import { sendVerificationEmail as defaultMailer, sendPasswordResetEmail as defaultPasswordResetMailer } from './auth/email.js'
 import { getPlayerProfile, isValidUuid } from './social/profile.js'
 import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession, validateAuthHeaders } from './auth/session.js'
@@ -28,8 +29,9 @@ function sendJSON(res, statusCode, data) {
  * @param {import('express').Application} app
  * @param {{ mailer?: (email: string, token: string) => Promise<void>, redis?: object, rateLimitConfig?: { max?: number, windowSecs?: number } }} [opts]
  */
-export function handler(app, { mailer, redis, rateLimitConfig } = {}) {
+export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConfig } = {}) {
   const emailer = mailer ?? defaultMailer
+  const passwordResetEmailer = passwordResetMailer ?? defaultPasswordResetMailer
   const authRateLimiter = createRateLimiter(redis ?? null, {
     keyPrefix: 'auth',
     ...rateLimitConfig,
@@ -121,6 +123,37 @@ export function handler(app, { mailer, redis, rateLimitConfig } = {}) {
       if (err.code === 'INVALID_CREDENTIALS') return sendJSON(res, 401, { error: err.message })
       if (err.code === 'UNVERIFIED_EMAIL') return sendJSON(res, 403, { error: err.message })
       console.error('Login error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/auth/forgot-password
+  app.post('/api/auth/forgot-password', authRateLimiter, async (req, res) => {
+    const { email } = req.body ?? {}
+    try {
+      const db = getDb()
+      await forgotPassword(db, email || '', passwordResetEmailer)
+      sendJSON(res, 200, {
+        message: 'If that email address is registered, you will receive a password reset link shortly.',
+      })
+    } catch (err) {
+      console.error('Forgot password error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/auth/reset-password
+  app.post('/api/auth/reset-password', authRateLimiter, async (req, res) => {
+    const { token, newPassword } = req.body ?? {}
+    try {
+      const db = getDb()
+      await resetPassword(db, token, newPassword)
+      sendJSON(res, 200, { message: 'Password reset successfully. You may now sign in.' })
+    } catch (err) {
+      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'INVALID_TOKEN') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'EXPIRED_TOKEN') return sendJSON(res, 400, { error: err.message })
+      console.error('Reset password error:', { error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

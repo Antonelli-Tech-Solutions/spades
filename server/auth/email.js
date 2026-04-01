@@ -58,6 +58,49 @@ function createTransport() {
 }
 
 /**
+ * Build the subject, plain-text, and HTML content for a password reset email.
+ *
+ * @param {string} token
+ * @param {string} appUrl - Public base URL of the application (no trailing slash)
+ * @returns {{ subject: string, text: string, html: string }}
+ */
+export function buildPasswordResetEmailContent(token, appUrl) {
+  const resetUrl = `${appUrl}/#/reset-password?token=${token}`
+
+  const subject = 'Reset your Spades Online password'
+
+  const text = [
+    'You requested a password reset for your Spades Online account.',
+    '',
+    'Click the link below to set a new password:',
+    '',
+    resetUrl,
+    '',
+    'This link expires in 1 hour.',
+    '',
+    'If you did not request a password reset, you can safely ignore this email.',
+  ].join('\n')
+
+  const html = `
+    <p>You requested a password reset for your <strong>Spades Online</strong> account.</p>
+    <p>Click the button below to set a new password:</p>
+    <p>
+      <a href="${resetUrl}"
+         style="display:inline-block;padding:10px 20px;background:#1a73e8;color:#fff;
+                text-decoration:none;border-radius:4px;font-weight:bold;">
+        Reset Password
+      </a>
+    </p>
+    <p>Or copy and paste this URL into your browser:</p>
+    <p>${resetUrl}</p>
+    <p>This link expires in 1 hour.</p>
+    <p><small>If you did not request a password reset, you can safely ignore this email.</small></p>
+  `.trim()
+
+  return { subject, text, html }
+}
+
+/**
  * Send a verification email to the given address.
  * Falls back to console logging when EMAIL_HOST is not configured.
  *
@@ -76,6 +119,32 @@ export async function sendVerificationEmail(toEmail, token) {
       to: toEmail,
       subject,
       verificationUrl: `${appUrl}/api/auth/verify-email?token=${token}`,
+    })
+    return
+  }
+
+  await transport.sendMail({ from: fromAddress, to: toEmail, subject, text, html })
+}
+
+/**
+ * Send a password reset email to the given address.
+ * Falls back to console logging when EMAIL_HOST is not configured.
+ *
+ * @param {string} toEmail
+ * @param {string} token
+ */
+export async function sendPasswordResetEmail(toEmail, token) {
+  const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '')
+  const fromAddress = process.env.EMAIL_FROM || 'noreply@spades.online'
+  const { subject, text, html } = buildPasswordResetEmailContent(token, appUrl)
+
+  const transport = createTransport()
+
+  if (!transport) {
+    console.log('Password reset email (EMAIL_HOST not configured — logging instead):', {
+      to: toEmail,
+      subject,
+      resetUrl: `${appUrl}/#/reset-password?token=${token}`,
     })
     return
   }

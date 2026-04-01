@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerUser, loginUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable } from '../../../client/web/src/api.js'
+import { registerUser, loginUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable, getGameState, placeBid, playCard, submitBlindNilExchange } from '../../../client/web/src/api.js'
 
 /**
  * Build a minimal mock fetch that returns the given status and JSON body.
@@ -292,6 +292,157 @@ describe('sitAtTable', () => {
         assert.equal(err.status, 401)
         return true
       },
+    )
+  })
+})
+
+describe('getGameState', () => {
+  const auth = { tableId: 'table-1', sessionId: 'sess-1', playerId: 'player-1' }
+
+  it('resolves with game state on 200', async () => {
+    const gameState = { phase: 'bidding', myHand: [], scores: { ns: 0, ew: 0 }, bags: { ns: 0, ew: 0 } }
+    const result = await getGameState(auth, mockFetch(200, gameState))
+    assert.equal(result.phase, 'bidding')
+    assert.deepEqual(result.myHand, [])
+  })
+
+  it('throws with status 401 when unauthenticated', async () => {
+    await assert.rejects(
+      () => getGameState(auth, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => { assert.equal(err.status, 401); return true },
+    )
+  })
+
+  it('throws with status 403 when not seated at table', async () => {
+    await assert.rejects(
+      () => getGameState(auth, mockFetch(403, { error: 'You are not seated at this table' })),
+      (err) => { assert.equal(err.status, 403); return true },
+    )
+  })
+
+  it('throws with status 404 when table not found', async () => {
+    await assert.rejects(
+      () => getGameState(auth, mockFetch(404, { error: 'Table not found' })),
+      (err) => { assert.equal(err.status, 404); return true },
+    )
+  })
+})
+
+describe('placeBid', () => {
+  const auth = { tableId: 'table-1', bid: 3, sessionId: 'sess-1', playerId: 'player-1' }
+
+  it('resolves with updated state on 200', async () => {
+    const state = { phase: 'bidding', bids: { north: null, east: 3, south: null, west: null }, currentBidderSeat: 'south' }
+    const result = await placeBid(auth, mockFetch(200, state))
+    assert.equal(result.bids.east, 3)
+    assert.equal(result.currentBidderSeat, 'south')
+  })
+
+  it('throws with status 409 when not this player\'s turn', async () => {
+    await assert.rejects(
+      () => placeBid(auth, mockFetch(409, { error: 'Not your turn to bid' })),
+      (err) => { assert.equal(err.status, 409); return true },
+    )
+  })
+
+  it('throws with status 400 on invalid bid value', async () => {
+    await assert.rejects(
+      () => placeBid({ ...auth, bid: 14 }, mockFetch(400, { error: 'Invalid bid value: 14' })),
+      (err) => { assert.equal(err.status, 400); return true },
+    )
+  })
+
+  it('throws with status 400 when not eligible for blind nil', async () => {
+    await assert.rejects(
+      () => placeBid({ ...auth, bid: 'blind_nil' }, mockFetch(400, { error: 'Not eligible for Blind Nil' })),
+      (err) => {
+        assert.equal(err.status, 400)
+        assert.match(err.message, /Blind Nil/)
+        return true
+      },
+    )
+  })
+
+  it('throws with status 401 when unauthenticated', async () => {
+    await assert.rejects(
+      () => placeBid(auth, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => { assert.equal(err.status, 401); return true },
+    )
+  })
+})
+
+describe('playCard', () => {
+  const card = { suit: 'spades', rank: 'A' }
+  const auth = { tableId: 'table-1', card, sessionId: 'sess-1', playerId: 'player-1' }
+
+  it('resolves with updated state on 200', async () => {
+    const state = { phase: 'playing', currentTrick: [{ seat: 'east', card }] }
+    const result = await playCard(auth, mockFetch(200, state))
+    assert.equal(result.phase, 'playing')
+    assert.equal(result.currentTrick.length, 1)
+  })
+
+  it('throws with status 409 when not this player\'s turn', async () => {
+    await assert.rejects(
+      () => playCard(auth, mockFetch(409, { error: 'Not your turn to play' })),
+      (err) => { assert.equal(err.status, 409); return true },
+    )
+  })
+
+  it('throws with status 400 on illegal play', async () => {
+    await assert.rejects(
+      () => playCard(auth, mockFetch(400, { error: 'Illegal play' })),
+      (err) => { assert.equal(err.status, 400); return true },
+    )
+  })
+
+  it('throws with status 400 when card not in hand', async () => {
+    await assert.rejects(
+      () => playCard(auth, mockFetch(400, { error: 'Card not in hand' })),
+      (err) => { assert.equal(err.status, 400); return true },
+    )
+  })
+
+  it('throws with status 401 when unauthenticated', async () => {
+    await assert.rejects(
+      () => playCard(auth, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => { assert.equal(err.status, 401); return true },
+    )
+  })
+})
+
+describe('submitBlindNilExchange', () => {
+  const cards = [{ suit: 'spades', rank: 'A' }, { suit: 'hearts', rank: 'K' }]
+  const auth = { tableId: 'table-1', cards, sessionId: 'sess-1', playerId: 'player-1' }
+
+  it('resolves with updated state on 200', async () => {
+    const state = { phase: 'playing', currentPlayerSeat: 'east' }
+    const result = await submitBlindNilExchange(auth, mockFetch(200, state))
+    assert.equal(result.phase, 'playing')
+  })
+
+  it('throws with status 400 on invalid exchange (wrong number of cards)', async () => {
+    await assert.rejects(
+      () => submitBlindNilExchange({ ...auth, cards: [cards[0]] }, mockFetch(400, { error: 'Must submit exactly 2 cards' })),
+      (err) => {
+        assert.equal(err.status, 400)
+        assert.match(err.message, /2 cards/)
+        return true
+      },
+    )
+  })
+
+  it('throws with status 400 when wrong player tries to exchange', async () => {
+    await assert.rejects(
+      () => submitBlindNilExchange(auth, mockFetch(400, { error: 'Blind Nil player must send cards first' })),
+      (err) => { assert.equal(err.status, 400); return true },
+    )
+  })
+
+  it('throws with status 401 when unauthenticated', async () => {
+    await assert.rejects(
+      () => submitBlindNilExchange(auth, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => { assert.equal(err.status, 401); return true },
     )
   })
 })

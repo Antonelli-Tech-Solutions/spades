@@ -386,6 +386,155 @@ describe('CLOCKWISE_SEATS', () => {
   })
 })
 
+describe('bag tracking — state level', () => {
+  const SEATS = ['north', 'east', 'south', 'west']
+
+  /**
+   * Build a state that is one trick away from completing a hand.
+   *
+   * - North is dealer; bidding order: east, south, west, north
+   * - EW team bid = 6 (west is second bidder); NS team bid = 7 (north is second bidder)
+   * - 12 tricks are already completed with tricksWon as provided
+   * - East (left of dealer) leads the 13th trick with Ace of clubs (guaranteed win)
+   *
+   * After playing the 4 cards of the last trick, east wins it, adding 1 to EW's count.
+   */
+  function buildFinalTrickState(initialScores, initialBags, tricksWon12) {
+    let state = createGame('table-1', PLAYER_IDS)
+    state = { ...state, scores: initialScores, bags: initialBags }
+
+    // Bidding order: east, south, west, north
+    state = placeBid(state, 'east', 2)  // EW advisory
+    state = placeBid(state, 'south', 4) // NS advisory
+    state = placeBid(state, 'west', 6)  // EW second bidder → team total = 6
+    state = placeBid(state, 'north', 7) // NS second bidder → team total = 7
+
+    // Give each seat one unique club card; east gets Ace (leads and wins last trick)
+    const hands = {
+      north: [{ suit: 'clubs', rank: '2' }],
+      east:  [{ suit: 'clubs', rank: 'A' }],
+      south: [{ suit: 'clubs', rank: '4' }],
+      west:  [{ suit: 'clubs', rank: '5' }],
+    }
+
+    state = {
+      ...state,
+      phase: 'playing',
+      hands,
+      completedTricks: Array.from({ length: 12 }, () => ({ winner: 'north', plays: [] })),
+      tricksWon: tricksWon12,
+      currentPlayerSeat: 'east',
+      leadSeat: 'east',
+      isFirstTrick: false,
+      spadesbroken: true,
+      currentTrick: [],
+    }
+
+    // Play the 13th trick clockwise from east
+    for (const seat of ['east', 'south', 'west', 'north']) {
+      state = playCard(state, seat, state.hands[seat][0])
+    }
+
+    return state
+  }
+
+  it('bags accumulate in state after a hand with overtricks', () => {
+    // After 12 tricks: NS has 9, EW has 3 (east wins 13th → EW ends at 4)
+    // NS bid 7 → 9 tricks → 2 overtricks → 2 bags
+    // EW bid 6 → 4 tricks → missed bid (-60), 0 bags
+    const state = buildFinalTrickState(
+      { ns: 0, ew: 0 },
+      { ns: 0, ew: 0 },
+      { north: 4, east: 2, south: 5, west: 1 },
+    )
+
+    assert.equal(state.bags.ns, 2, 'NS should have 2 bags from 2 overtricks')
+    assert.equal(state.bags.ew, 0, 'EW missed bid — no bags')
+    assert.equal(state.scores.ns, 70, 'NS: bid 7 made 9 → +70')
+    assert.equal(state.scores.ew, -60, 'EW: bid 6 made 4 → -60')
+  })
+
+  it('applies -100 penalty and resets bag count when bags reach 10', () => {
+    // Start with NS at 9 bags. Hand produces 2 more overtricks → total 11 → penalty fires
+    const state = buildFinalTrickState(
+      { ns: 100, ew: 100 },
+      { ns: 9, ew: 0 },
+      { north: 4, east: 2, south: 5, west: 1 },
+    )
+
+    // NS: 100 + 70 (bid made) - 100 (bag penalty) = 70; bags: (9+2) % 10 = 1
+    assert.equal(state.scores.ns, 70, 'NS score after bag penalty')
+    assert.equal(state.bags.ns, 1, 'NS bags reset to 1 after penalty')
+    // EW: 100 - 60 = 40; bags unchanged
+    assert.equal(state.scores.ew, 40, 'EW score unaffected by NS bag penalty')
+    assert.equal(state.bags.ew, 0, 'EW bags remain 0')
+  })
+
+  it('bags carry over correctly across two hands with no double-deduction', () => {
+    // Hand 1: NS gets 2 bags, EW gets 0
+    let state = buildFinalTrickState(
+      { ns: 0, ew: 0 },
+      { ns: 0, ew: 0 },
+      { north: 4, east: 2, south: 5, west: 1 },
+    )
+
+    const bagsAfterHand1 = { ...state.bags }
+    const scoresAfterHand1 = { ...state.scores }
+
+    // Verify hand 1 results
+    assert.equal(bagsAfterHand1.ns, 2)
+    assert.equal(scoresAfterHand1.ns, 70)
+
+    // Hand 2: same setup — NS gets 2 more bags, total 4 (no penalty yet)
+    // Bidding order for hand 2: south (east was dealer), west, north, east
+    const dealer2 = state.dealerSeat // should be 'east' after north dealt hand 1
+    assert.equal(dealer2, 'east', 'dealer rotates to east for hand 2')
+
+    // Inject the same controlled end-of-hand state again with accumulated bags
+    const hands2 = {
+      north: [{ suit: 'clubs', rank: '2' }],
+      south:  [{ suit: 'clubs', rank: 'A' }], // south is left of east dealer → leads
+      west: [{ suit: 'clubs', rank: '4' }],
+      east:  [{ suit: 'clubs', rank: '5' }],
+    }
+
+    // For hand 2: south leads (left of east dealer), bidding order: south, west, north, east
+    // NS first bid: south (advisory), NS second: north (sets total)
+    // EW first bid: west (advisory), EW second: east (sets total)
+    state = placeBid(state, 'south', 4)  // NS advisory
+    state = placeBid(state, 'west', 2)   // EW advisory
+    state = placeBid(state, 'north', 7)  // NS second → team total = 7
+    state = placeBid(state, 'east', 6)   // EW second → team total = 6
+
+    // After 12 tricks: NS has 9, EW has 3 (south wins 13th → NS total stays 9+trick from south)
+    // south leads and wins last trick (Ace of clubs) → NS gets +1 → NS ends at 9+1 = 10?
+    // Wait — south wins, so NS gets 1 more: tricksWon12 = {north:4, south:5, east:2, west:1} is 12 tricks
+    // south wins 13th → NS total = 4+5+1 = 10, EW = 2+1 = 3
+    // But NS bid = 7 → 10 tricks → 3 overtricks → 3 more bags → total 2+3=5 bags, no penalty
+
+    state = {
+      ...state,
+      phase: 'playing',
+      hands: hands2,
+      completedTricks: Array.from({ length: 12 }, () => ({ winner: 'north', plays: [] })),
+      tricksWon: { north: 4, east: 2, south: 5, west: 1 },
+      currentPlayerSeat: 'south',
+      leadSeat: 'south',
+      isFirstTrick: false,
+      spadesbroken: true,
+      currentTrick: [],
+    }
+
+    for (const seat of ['south', 'west', 'north', 'east']) {
+      state = playCard(state, seat, state.hands[seat][0])
+    }
+
+    // NS: previous 2 bags + 3 new bags = 5, no penalty
+    assert.equal(state.bags.ns, 5, 'bags carry over correctly — no double deduction')
+    assert.ok(state.scores.ns > 0, 'no spurious bag penalty applied')
+  })
+})
+
 describe('dealer rotation', () => {
   const SEATS = ['north', 'east', 'south', 'west']
 

@@ -116,6 +116,19 @@ export function isTableFull(table) {
 }
 
 /**
+ * Add a bot player to an empty seat. The bot's player ID is "bot:<seat>".
+ * Reuses sitAtTable's validation (seat must be empty, game must not have started).
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {'north'|'east'|'south'|'west'} seat
+ * @returns {Promise<TableState>}
+ */
+export async function addBotToTable(redis, tableId, seat) {
+  return sitAtTable(redis, tableId, `bot:${seat}`, seat)
+}
+
+/**
  * Mark the table as in-game and record the gameId.
  *
  * @param {import('redis').RedisClientType} redis

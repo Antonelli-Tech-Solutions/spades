@@ -9,6 +9,8 @@
 
 ## ✅ Completed
 
+- [x] `DEV` `DEV_AUTO_VERIFY` env var — when set to `true`, registration skips email verification and marks the player as verified immediately. Enables registering multiple test accounts without an email server. Never set in production.
+- [x] `DEV` Simple bot players — `POST /api/tables/:tableId/add-bot` lets the table host add a bot to any empty seat. Bots bid the number of spades in their hand and play a random legal card. Bot turns advance automatically server-side after each human action; no client round-trips needed. Bot IDs follow the pattern `bot:<seat>` and are scoped to dev/test use — they do not affect the production bot design in v1.1.
 - [x] `P0` Implement email/password registration with required email verification
 - [x] `P0` Resend verification email flow: `POST /api/auth/resend-verification` + UI prompt on login 403 and registration success screen
 - [x] `P0` Forgot password flow: `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, forgot/reset password screens with proper success/error landing pages

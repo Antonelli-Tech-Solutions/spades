@@ -3,6 +3,7 @@ import {
   placeBid as apiBid,
   playCard as apiPlay,
   submitBlindNilExchange as apiExchange,
+  addBotToTable as apiAddBot,
 } from '../api.js'
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml } from '../hand.js'
@@ -133,8 +134,61 @@ export function renderGameScreen(container) {
     }, 2000)
   }
 
+  function renderWaiting() {
+    const seats = state.seats || {}
+    const SEAT_NAMES = ['north', 'east', 'south', 'west']
+    const emptySeats = SEAT_NAMES.filter((s) => seats[s] === null)
+    const rows = SEAT_NAMES.map((s) => {
+      const occupied = seats[s] !== null
+      const cls = occupied ? 'waiting-seat waiting-seat--taken' : 'waiting-seat waiting-seat--empty'
+      const label = s.charAt(0).toUpperCase() + s.slice(1)
+      const status = occupied ? (seats[s].startsWith('bot:') ? 'Bot' : 'Joined') : 'Empty'
+      return `<div class="${cls}"><span>${esc(label)}</span><span class="waiting-seat-status">${status}</span></div>`
+    }).join('')
+
+    const fillBotsBtn = state.isHost && emptySeats.length > 0
+      ? `<button class="btn-primary" id="fill-bots-btn">Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})</button>`
+      : ''
+
+    container.innerHTML = `
+      <div class="game-screen">
+        <div class="waiting-screen">
+          <h2 class="waiting-title">Waiting for players\u2026</h2>
+          <div class="waiting-seats">${rows}</div>
+          <div class="form-error waiting-err" role="alert" aria-live="polite"></div>
+          ${fillBotsBtn}
+          <p class="auth-link"><a href="#/lobby">Leave table</a></p>
+        </div>
+      </div>`
+
+    container.querySelector('#fill-bots-btn')?.addEventListener('click', async () => {
+      const btn = container.querySelector('#fill-bots-btn')
+      const errEl = container.querySelector('.waiting-err')
+      btn.disabled = true
+      btn.textContent = 'Adding bots\u2026'
+      errEl.textContent = ''
+      try {
+        for (const s of emptySeats) {
+          await apiAddBot({ tableId, seat: s, sessionId, playerId })
+        }
+        // Fetch updated state (game should have started)
+        state = await getGameState({ tableId, sessionId, playerId })
+        render()
+        schedulePoll()
+      } catch (err) {
+        errEl.textContent = err.message || 'Failed to add bots.'
+        btn.disabled = false
+        btn.textContent = `Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})`
+      }
+    })
+  }
+
   function render() {
     if (!state) return
+    if (state.status === 'waiting') {
+      renderWaiting()
+      return
+    }
     if (state.phase === 'game_over') {
       navigate(`#/game-over?tableId=${tableId}`)
       return

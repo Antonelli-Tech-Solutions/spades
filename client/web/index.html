@@ -801,6 +801,58 @@
       .game-msg a:hover {
         text-decoration: underline;
       }
+
+      /* Waiting screen */
+      .waiting-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 3rem 1rem;
+        gap: 1.5rem;
+      }
+
+      .waiting-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #e0e0e0;
+        margin: 0;
+      }
+
+      .waiting-seats {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+        max-width: 260px;
+      }
+
+      .waiting-seat {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0.875rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+      }
+
+      .waiting-seat--taken {
+        background: #1a2e1a;
+        border: 1px solid #2e7d32;
+        color: #81c784;
+      }
+
+      .waiting-seat--empty {
+        background: #1e1e1e;
+        border: 1px solid #333;
+        color: #666;
+      }
+
+      .waiting-seat-status {
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
     </style>
   </head>
   <body>

@@ -177,6 +177,30 @@ export async function saveGameState(redis, tableId, gameState) {
 }
 
 /**
+ * Remove a player from any waiting table they are currently seated at.
+ * Only affects tables with status 'waiting' — in-progress games require
+ * separate disconnect handling.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} playerId
+ */
+export async function removePlayerFromTables(redis, playerId) {
+  const raw = await redis.hGetAll('lobby:tables')
+  for (const json of Object.values(raw)) {
+    const entry = JSON.parse(json)
+    if (entry.status !== 'waiting') continue
+    const table = await getTable(redis, entry.tableId)
+    if (!table || table.status !== 'waiting') continue
+    const seatEntry = Object.entries(table.seats).find(([, id]) => id === playerId)
+    if (!seatEntry) continue
+    const [seat] = seatEntry
+    const updated = { ...table, seats: { ...table.seats, [seat]: null } }
+    await saveTable(redis, updated)
+    console.log('Player removed from table on logout:', { tableId: table.tableId, playerId, seat })
+  }
+}
+
+/**
  * List all open (waiting) tables from the lobby index.
  * Fetches full table state for each waiting entry to include seat info.
  *

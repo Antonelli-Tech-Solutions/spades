@@ -3,7 +3,7 @@ import { forgotPassword, resetPassword } from './auth/passwordReset.js'
 import { sendVerificationEmail as defaultMailer, sendPasswordResetEmail as defaultPasswordResetMailer } from './auth/email.js'
 import { getPlayerProfile, isValidUuid } from './social/profile.js'
 import { loginPlayer } from './auth/login.js'
-import { createSession, deleteSession, validateAuthHeaders } from './auth/session.js'
+import { createSession, deleteSession, getSession, validateAuthHeaders } from './auth/session.js'
 import { getDb } from './db.js'
 import { getRedis } from './redis.js'
 import { createRateLimiter } from './middleware/rateLimiter.js'
@@ -17,6 +17,7 @@ import {
   saveGameState,
   listTables,
   addBotToTable,
+  removePlayerFromTables,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, getPlayerView } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -196,6 +197,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     const sessionId = req.headers['x-session-id']
     try {
       const redis = await getRedis()
+      const session = await getSession(redis, sessionId)
+      if (session) {
+        await removePlayerFromTables(redis, session.playerId)
+      }
       await deleteSession(redis, sessionId)
       sendJSON(res, 200, { message: 'Logged out successfully.' })
     } catch (err) {

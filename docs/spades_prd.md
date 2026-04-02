@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Version** | 1.3 — Real-Time Architecture |
+| **Version** | 1.4 — Visibility-Aware Lobby Events |
 | **Date** | April 2026 |
 | **Status** | For Review |
 | **Product** | Spades Online (Mobile & Web) |
@@ -199,7 +199,7 @@ All in-game state updates and lobby changes are delivered to clients via a persi
 
 - Clients establish an authenticated WebSocket connection on game screen mount (or lobby screen mount for lobby events).
 - Authentication occurs on the connection upgrade handshake using the player's session token (`x-session-id` header). Unauthenticated upgrade requests are rejected with HTTP 401.
-- Clients join a **room** corresponding to `table:{tableId}` upon seating or spectating. Lobby subscribers join a `lobby` channel.
+- Clients join a **room** corresponding to `table:{tableId}` upon seating or spectating. Lobby subscribers join a `lobby` channel. Each authenticated client also subscribes to their own **personal notification channel** `player:{playerId}:notify` on connect — this is the delivery rail for Friends-Only table events and Slice 4 social notifications (friend requests, in-app invites).
 - The server emits a heartbeat ping every 30 seconds; clients must respond with a pong within 10 seconds or the connection is considered dead.
 - On reconnect, clients call `GET /api/tables/:tableId/state` to re-hydrate from authoritative server state, then resume listening for WebSocket events.
 
@@ -230,11 +230,35 @@ Events must not change shape in a backward-incompatible way without coordinating
 
 #### 6.4.4 Lobby Events
 
-| Event | Audience | Key Payload Fields |
+Lobby events are routed by visibility so that Friends-Only and Private table information is never broadcast to players who should not know the table exists.
+
+| Event | Channel | Key Payload Fields |
 |---|---|---|
-| `TABLE_CREATED` | Lobby channel | `id`, `name`, `host`, `seats`, `ruleset`, `joinPolicy` |
-| `TABLE_UPDATED` | Lobby channel | `tableId`, updated fields |
-| `TABLE_REMOVED` | Lobby channel | `tableId` |
+| `TABLE_CREATED` | `lobby` (Public tables) · `player:{friendId}:notify` per friend of host (Friends-Only) · *(no broadcast)* (Private) | `tableId`, `name`, `host`, `seats`, `ruleset`, `visibility`, `joinPolicy` |
+| `TABLE_UPDATED` | Same routing as `TABLE_CREATED` for the table's *current* visibility. When visibility changes, the server sends `TABLE_REMOVED` on the old audience's channel and `TABLE_CREATED` on the new audience's channel (see transitions below). | `tableId`, changed fields — always includes `visibility` |
+| `TABLE_REMOVED` | `lobby` (was Public) · `player:{friendId}:notify` per friend of host (was Friends-Only) · *(no broadcast)* (was Private) | `tableId` |
+
+The `visibility` field is included in every `TABLE_CREATED` and `TABLE_UPDATED` payload so clients can route the event to the correct UI surface (lobby browser for Public; friends/notifications panel for Friends-Only).
+
+##### Visibility Transitions
+
+When a host changes a table's visibility setting, the server must close out the old audience and open the new one atomically to prevent ghost entries or leaks:
+
+| Old → New | Server action |
+|---|---|
+| Public → Friends-Only | Send `TABLE_REMOVED` to `lobby`; send `TABLE_CREATED` to each friend's `player:{id}:notify` |
+| Public → Private | Send `TABLE_REMOVED` to `lobby` |
+| Friends-Only → Public | Send `TABLE_REMOVED` to each friend's `player:{id}:notify`; send `TABLE_CREATED` to `lobby` |
+| Friends-Only → Private | Send `TABLE_REMOVED` to each friend's `player:{id}:notify` |
+| Private → Public | Send `TABLE_CREATED` to `lobby` |
+| Private → Friends-Only | Send `TABLE_CREATED` to each friend's `player:{id}:notify` |
+
+##### Friend List Changes While a Table Is Live
+
+When a Friends-Only table is active, changes to the host's friend list require immediate side-effect events:
+
+- **Host removes or blocks a player:** send `TABLE_REMOVED` to that player's `player:{id}:notify` so the table disappears from their view immediately.
+- **Host accepts a new friend request:** send `TABLE_CREATED` (with current state) to the new friend's `player:{id}:notify` so the table appears in their friends list.
 
 #### 6.4.5 Fan-Out Architecture
 
@@ -381,4 +405,4 @@ Variants may introduce separate casual lobbies.
 
 ---
 
-*End of Document — Spades Online PRD v1.3*
+*End of Document — Spades Online PRD v1.4*

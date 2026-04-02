@@ -68,14 +68,14 @@
 - [ ] `P0` Implement Redis pub/sub fan-out: each `table:{tableId}` room and the `lobby` channel map to a Redis pub/sub channel so all server instances can broadcast to connected clients
 - [ ] `P0` Emit in-game events after each validated state mutation: `HAND_DEALT` (per-player), `BID_PLACED`, `BLIND_NIL_EXCHANGE_PROMPT`, `CARD_PLAYED`, `TRICK_COMPLETE`, `HAND_SCORED`, `GAME_OVER`, `TURN_CHANGED`
 - [ ] `P0` Implement player disconnect detection: emit `PLAYER_DISCONNECTED` with a 60 s reconnect window on ping failure or clean close; emit `PLAYER_RECONNECTED` when the player re-joins within the window; stall game with "waiting for reconnect" indicator if window expires
-- [ ] `P1` Emit lobby events to the `lobby` channel: `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED`
+- [ ] `P1` Emit lobby events to the `lobby` channel for **Public tables only**: `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED` — visibility-aware routing (Friends-Only → `player:{id}:notify`, transitions on visibility change, friend-list side effects) is implemented in Slice 3 alongside the full visibility model
 
 ### Web Client
 
 - [ ] `P0` Establish authenticated WSS connection on game screen mount; tear down on unmount
 - [ ] `P0` Remove `schedulePoll()` timeout loop from `client/web/src/screens/game.js`; re-render on incoming WebSocket events instead
 - [ ] `P0` On reconnect: call `GET /api/tables/:tableId/state` to re-hydrate, then resume WS event listener
-- [ ] `P1` Subscribe to lobby channel on lobby screen mount; update table list on `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED` — eliminating the manual-refresh requirement
+- [ ] `P1` Subscribe to lobby channel on lobby screen mount; update table list on `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED` — eliminating the manual-refresh requirement for Public tables (Friends-Only table events arrive on the personal notification channel added in Slice 3)
 
 ### Testing
 
@@ -90,6 +90,12 @@
 
 > Goal: the complete table discovery and access model from the PRD is in place — public/friends-only/private visibility, join policies, shareable links, spectating, and the arrive-then-sit flow.
 
+- [ ] `P0` Subscribe each connected client to their personal notification channel `player:{playerId}:notify` on WebSocket connect; this channel delivers Friends-Only table events and Slice 4 social notifications (friend requests, in-app invites)
+- [ ] `P0` Implement visibility-aware lobby event routing: Public tables → `lobby` channel; Friends-Only tables → `player:{friendId}:notify` per friend of host; Private tables → no broadcast (see PRD Section 6.4.4)
+- [ ] `P0` Implement visibility transition events: when a host changes table visibility, send `TABLE_REMOVED` on the old audience's channel and `TABLE_CREATED` on the new audience's channel (all six transition combinations in PRD Section 6.4.4)
+- [ ] `P0` Implement friend-list side effects for Friends-Only tables: on host-removes-friend emit `TABLE_REMOVED` to that player's notify channel; on host-accepts-friend-request emit `TABLE_CREATED` (current state) to new friend's notify channel
+- [ ] `P0` Add `visibility` field to `TABLE_CREATED` and `TABLE_UPDATED` payloads
+- [ ] `P1` Integration tests: Friends-Only table events reach only host's friends; visibility transition correctly removes from old audience and adds to new; friend-list change side effects fire correctly
 - [ ] `P0` Implement full table creation config: visibility (Public / Friends-Only / Private), join policy (filtered by visibility), spectating toggle
 - [ ] `P0` Enforce join policy constraint: join policy cannot be less restrictive than visibility; hide join policy control for Private tables
 - [ ] `P0` Build public lobby browser showing table name, host, seat count, ruleset, and join policy

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { cardHtml, handSpreadHtml, handDiagramHtml } from '../../../client/web/src/hand.js'
+import { cardHtml, handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../../../client/web/src/hand.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -221,5 +221,85 @@ describe('handDiagramHtml', () => {
     assert.ok(spIdx < hIdx, 'spades before hearts')
     assert.ok(hIdx < dIdx, 'hearts before diamonds')
     assert.ok(dIdx < cIdx, 'diamonds before clubs')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// lastTrickHtml
+// ---------------------------------------------------------------------------
+
+describe('lastTrickHtml', () => {
+  const rel = { me: 'south', right: 'west', across: 'north', left: 'east' }
+
+  const fullTrick = {
+    winner: 'north',
+    plays: [
+      { seat: 'north', card: { suit: 'spades', rank: 'A' } },
+      { seat: 'east',  card: { suit: 'clubs',  rank: '2' } },
+      { seat: 'south', card: { suit: 'hearts', rank: 'K' } },
+      { seat: 'west',  card: { suit: 'diamonds', rank: 'Q' } },
+    ],
+  }
+
+  it('renders all 4 cards', () => {
+    const html = lastTrickHtml(fullTrick, rel)
+    assert.ok(html.includes('A\u2660'), 'should contain A♠')
+    assert.ok(html.includes('2\u2663'), 'should contain 2♣')
+    assert.ok(html.includes('K\u2665'), 'should contain K♥')
+    assert.ok(html.includes('Q\u2666'), 'should contain Q♦')
+  })
+
+  it('shows "Won by You" when current player won', () => {
+    const trick = { winner: 'south', plays: fullTrick.plays }
+    const html = lastTrickHtml(trick, rel)
+    assert.ok(html.includes('Won by You'), 'should say "Won by You"')
+  })
+
+  it('shows capitalized seat name when an opponent won', () => {
+    const html = lastTrickHtml(fullTrick, rel)
+    assert.ok(html.includes('Won by North'), 'should say "Won by North"')
+  })
+
+  it('applies trick-red class to red-suit cards', () => {
+    const html = lastTrickHtml(fullTrick, rel)
+    // hearts (K) and diamonds (Q) should have trick-red
+    const redCount = (html.match(/trick-red/g) || []).length
+    assert.equal(redCount, 2, 'exactly 2 red-suit cards should have trick-red')
+  })
+
+  it('does not apply trick-red to black-suit cards', () => {
+    const blackOnly = {
+      winner: 'north',
+      plays: [
+        { seat: 'north', card: { suit: 'spades',  rank: 'A' } },
+        { seat: 'east',  card: { suit: 'clubs',   rank: '2' } },
+        { seat: 'south', card: { suit: 'spades',  rank: '3' } },
+        { seat: 'west',  card: { suit: 'clubs',   rank: '4' } },
+      ],
+    }
+    const html = lastTrickHtml(blackOnly, rel)
+    assert.equal((html.match(/trick-red/g) || []).length, 0)
+  })
+
+  it('escapes HTML special characters in card rank', () => {
+    const trick = {
+      winner: 'north',
+      plays: [
+        { seat: 'north', card: { suit: 'spades', rank: '<b>' } },
+        { seat: 'east',  card: { suit: 'clubs',  rank: '2' } },
+        { seat: 'south', card: { suit: 'hearts', rank: '3' } },
+        { seat: 'west',  card: { suit: 'diamonds', rank: '4' } },
+      ],
+    }
+    const html = lastTrickHtml(trick, rel)
+    assert.ok(!html.includes('<b>'), 'raw HTML should be escaped')
+    assert.ok(html.includes('&lt;b&gt;'))
+  })
+
+  it('renders the overlay and modal wrapper elements', () => {
+    const html = lastTrickHtml(fullTrick, rel)
+    assert.ok(html.includes('last-trick-overlay'), 'should include overlay element')
+    assert.ok(html.includes('last-trick-modal'), 'should include modal element')
+    assert.ok(html.includes('last-trick-close'), 'should include close button')
   })
 })

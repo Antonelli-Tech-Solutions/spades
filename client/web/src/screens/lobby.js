@@ -1,4 +1,5 @@
 import { navigate } from '../router.js'
+import { logoutUser } from '../api.js'
 
 /**
  * Render the lobby screen into `container`.
@@ -15,6 +16,7 @@ export function renderLobbyScreen(container) {
       <div class="lobby-actions">
         <button id="create-table-btn" class="btn-primary">Create Table</button>
         <button id="join-table-btn" class="btn-secondary">Join Table</button>
+        <button id="logout-btn" class="btn-link">Log out</button>
       </div>
     </div>
   `
@@ -25,6 +27,19 @@ export function renderLobbyScreen(container) {
 
   container.querySelector('#join-table-btn').addEventListener('click', () => {
     navigate('#/join')
+  })
+
+  container.querySelector('#logout-btn').addEventListener('click', async () => {
+    const sessionId = sessionStorage.getItem('sessionId')
+    try {
+      await logoutUser({ sessionId })
+    } catch (err) {
+      console.log('Logout error (proceeding anyway):', { error: err.message })
+    }
+    sessionStorage.removeItem('sessionId')
+    sessionStorage.removeItem('playerId')
+    sessionStorage.removeItem('username')
+    navigate('#/login')
   })
 }
 

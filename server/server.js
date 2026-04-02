@@ -330,7 +330,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
 
       const gameState = await getGameState(redisClient, tableId)
-      if (!gameState) return sendJSON(res, 200, { status: 'waiting', seats: table.seats })
+      if (!gameState) return sendJSON(res, 200, { status: 'waiting', seats: table.seats, isHost: table.hostPlayerId === session.playerId })
 
       sendJSON(res, 200, getPlayerView(gameState, seat))
     } catch (err) {

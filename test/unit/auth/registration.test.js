@@ -175,6 +175,53 @@ describe('resendVerificationEmail', () => {
   })
 })
 
+describe('registerPlayer — DEV_AUTO_VERIFY', () => {
+  it('skips email and token when DEV_AUTO_VERIFY=true', async () => {
+    process.env.DEV_AUTO_VERIFY = 'true'
+    const queries = []
+    const emailsSent = []
+    const db = {
+      query: async (sql, params) => {
+        queries.push({ sql, params })
+        if (sql.includes('INSERT INTO players')) return { rows: [{ id: 'auto-id' }] }
+        return { rows: [] }
+      },
+    }
+    const result = await registerPlayer(
+      db,
+      { email: 'dev@example.com', username: 'devuser', password: 'password123' },
+      async (email) => emailsSent.push(email),
+    )
+    delete process.env.DEV_AUTO_VERIFY
+
+    assert.equal(result.playerId, 'auto-id')
+    assert.equal(emailsSent.length, 0, 'should not send verification email')
+    const tokenInsert = queries.find((q) => q.sql.includes('email_verification_tokens'))
+    assert.ok(!tokenInsert, 'should not insert a verification token')
+    const playerInsert = queries.find((q) => q.sql.includes('INSERT INTO players'))
+    // is_verified param should be true
+    assert.equal(playerInsert.params[3], true)
+  })
+
+  it('sends email normally when DEV_AUTO_VERIFY is not set', async () => {
+    delete process.env.DEV_AUTO_VERIFY
+    const emailsSent = []
+    const db = {
+      query: async (sql) => {
+        if (sql.includes('INSERT INTO players')) return { rows: [{ id: 'normal-id' }] }
+        return { rows: [] }
+      },
+    }
+    await registerPlayer(
+      db,
+      { email: 'user@example.com', username: 'normaluser', password: 'password123' },
+      async (email) => emailsSent.push(email),
+    )
+    assert.equal(emailsSent.length, 1)
+    assert.equal(emailsSent[0], 'user@example.com')
+  })
+})
+
 describe('verifyEmailToken — input validation', () => {
   it('throws VALIDATION_ERROR when token is missing', async () => {
     const db = {}

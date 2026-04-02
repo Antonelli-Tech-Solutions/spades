@@ -57,6 +57,41 @@ npm start
 | `PUSH_API_KEY` | No | — | Push notification service API key |
 | `GIT_BRANCH` | No | — | Current branch (set by CI) |
 | `GIT_COMMIT_SHA` | No | — | Current commit SHA (set by CI) |
+| `DEV_AUTO_VERIFY` | No | — | Set to `true` to skip email verification on registration. **Local dev only — never set in production.** |
+
+### Dev & Testing Tools
+
+These tools exist to make manual testing easier during development. They are not production features.
+
+#### `DEV_AUTO_VERIFY` — skip email verification
+
+If you do not have an SMTP server configured, you cannot verify more than one account using the normal email flow. Set `DEV_AUTO_VERIFY=true` when starting the server:
+
+```bash
+DEV_AUTO_VERIFY=true npm start
+```
+
+With this flag set, `POST /api/auth/register` marks accounts as verified immediately — no email is sent, no token is required, and you can log in straight away. The flag is read at request time, so it can be toggled without a restart.
+
+#### Bot players — fill seats for solo testing
+
+The table host can fill any empty seat with a bot:
+
+```http
+POST /api/tables/:tableId/add-bot
+Headers: x-session-id, x-player-id
+Body: { "seat": "north" }  // or "east", "south", "west"
+```
+
+Bot behaviour:
+- **Bid:** counts the number of spades in its hand and bids that number
+- **Play:** picks a random card from the set of legal plays
+
+Bot turns are processed server-side automatically — after each human action (bid or card play), the server immediately plays all consecutive bot turns until it is a human's turn again. The human player just polls `GET /api/tables/:tableId/state` as normal.
+
+Bot player IDs follow the pattern `bot:<seat>` (e.g. `bot:north`). A table can have any mix of human and bot seats. Once all 4 seats are filled (by humans and/or bots), the game starts automatically.
+
+> These bots are intentionally minimal — they are a testing convenience, not the production AI opponent planned for v1.1.
 
 ### Running Tests
 

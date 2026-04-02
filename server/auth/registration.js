@@ -44,13 +44,17 @@ export async function registerPlayer(db, { email, username, password }, sendVeri
   const trimmedUsername = username.trim()
   const passwordHash = await hashPassword(password)
 
+  // DEV_AUTO_VERIFY=true skips email verification entirely — for local testing only.
+  // Never set this in production.
+  const autoVerify = process.env.DEV_AUTO_VERIFY === 'true'
+
   let player
   try {
     const result = await db.query(
       `INSERT INTO players (email, username, password_hash, is_verified)
-       VALUES ($1, $2, $3, FALSE)
+       VALUES ($1, $2, $3, $4)
        RETURNING id`,
-      [normalizedEmail, trimmedUsername, passwordHash],
+      [normalizedEmail, trimmedUsername, passwordHash, autoVerify],
     )
     player = result.rows[0]
   } catch (err) {
@@ -64,6 +68,11 @@ export async function registerPlayer(db, { email, username, password }, sendVeri
       }
     }
     throw err
+  }
+
+  if (autoVerify) {
+    console.log('DEV_AUTO_VERIFY: skipped email verification for player', player.id)
+    return { playerId: player.id }
   }
 
   const token = generateVerificationToken()

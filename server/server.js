@@ -16,12 +16,44 @@ import {
   getGameState,
   saveGameState,
   listTables,
+  addBotToTable,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, getPlayerView } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
+import { isBot, botBid, botPlay } from './game/bot.js'
 
 function sendJSON(res, statusCode, data) {
   res.status(statusCode).json(data)
+}
+
+/**
+ * Automatically advance the game state through any consecutive bot turns.
+ * Loops until it is a human player's turn or the game is over.
+ *
+ * @param {object} state - Current game state
+ * @returns {object} Updated game state after all bot actions are applied
+ */
+function advanceBotTurns(state) {
+  let current = state
+  while (true) {
+    if (current.phase === 'bidding') {
+      const seat = current.currentBidderSeat
+      if (!seat || !isBot(current.players[seat])) break
+      const bid = botBid(current.hands[seat])
+      console.log('Bot bid:', { seat, bid, tableId: current.tableId })
+      current = placeBid(current, seat, bid)
+    } else if (current.phase === 'playing') {
+      const seat = current.currentPlayerSeat
+      if (!seat || !isBot(current.players[seat])) break
+      const card = botPlay(current.hands[seat], current.currentTrick, current.spadesbroken, current.isFirstTrick)
+      console.log('Bot play:', { seat, card, tableId: current.tableId })
+      current = playCard(current, seat, card)
+    } else {
+      // blind_nil_exchange or game_over — bots never bid blind nil, nothing to auto-advance
+      break
+    }
+  }
+  return current
 }
 
 /**
@@ -220,10 +252,11 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const session = await validateAuthHeaders(redisClient, req)
       const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
 
-      // If table is now full, start the game
+      // If table is now full, start the game and advance any leading bot turns
       if (isTableFull(table)) {
         const players = table.seats // { north, east, south, west } → playerIds
-        const gameState = createGame(tableId, players)
+        let gameState = createGame(tableId, players)
+        gameState = advanceBotTurns(gameState)
         await saveGameState(redisClient, tableId, gameState)
         await markTablePlaying(redisClient, tableId, gameState.gameId)
         console.log('Game started:', { tableId, gameId: gameState.gameId })
@@ -238,6 +271,43 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'ALREADY_SEATED') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
       console.error('Sit at table error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/add-bot — add a bot to an empty seat (host only)
+  app.post('/api/tables/:tableId/add-bot', async (req, res) => {
+    const { tableId } = req.params
+    const { seat } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+      if (table.hostPlayerId !== session.playerId) {
+        return sendJSON(res, 403, { error: 'Only the host can add bots' })
+      }
+
+      const updated = await addBotToTable(redisClient, tableId, seat)
+
+      // If table is now full, start the game and advance any leading bot turns
+      if (isTableFull(updated)) {
+        const players = updated.seats
+        let gameState = createGame(tableId, players)
+        gameState = advanceBotTurns(gameState)
+        await saveGameState(redisClient, tableId, gameState)
+        await markTablePlaying(redisClient, tableId, gameState.gameId)
+        console.log('Game started with bots:', { tableId, gameId: gameState.gameId })
+      }
+
+      sendJSON(res, 200, { tableId, seat })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      console.error('Add bot error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })
@@ -282,7 +352,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
 
       validateBidTurn(gameState, seat)
-      const newState = placeBid(gameState, seat, bid)
+      let newState = placeBid(gameState, seat, bid)
+      newState = advanceBotTurns(newState)
       await saveGameState(redisClient, tableId, newState)
       sendJSON(res, 200, getPlayerView(newState, seat))
     } catch (err) {
@@ -314,7 +385,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const gameState = await getGameState(redisClient, tableId)
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
 
-      const newState = submitBlindNilExchange(gameState, seat, cards)
+      let newState = submitBlindNilExchange(gameState, seat, cards)
+      newState = advanceBotTurns(newState)
       await saveGameState(redisClient, tableId, newState)
       sendJSON(res, 200, getPlayerView(newState, seat))
     } catch (err) {
@@ -345,7 +417,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
 
       validateCardPlay(gameState, seat, card)
-      const newState = playCard(gameState, seat, card)
+      let newState = playCard(gameState, seat, card)
+      newState = advanceBotTurns(newState)
       await saveGameState(redisClient, tableId, newState)
       sendJSON(res, 200, getPlayerView(newState, seat))
     } catch (err) {

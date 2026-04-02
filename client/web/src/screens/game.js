@@ -6,7 +6,7 @@ import {
   addBotToTable as apiAddBot,
 } from '../api.js'
 import { navigate } from '../router.js'
-import { handSpreadHtml, handDiagramHtml } from '../hand.js'
+import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const RED_SUIT = new Set(['hearts', 'diamonds'])
@@ -106,6 +106,7 @@ export function renderGameScreen(container) {
   let state = null
   let handMode = 'spread'
   let selectedCards = []
+  let showLastTrick = false
   let pollTimer = null
   let acting = false
   let mounted = true
@@ -200,6 +201,9 @@ export function renderGameScreen(container) {
       return
     }
 
+    // Dismiss last trick overlay at the start of each new hand
+    if (state.completedTricks.length === 0) showLastTrick = false
+
     const rel = relSeats(seat)
     const isMyBidTurn = state.phase === 'bidding' && state.currentBidderSeat === seat
     const isMyPlayTurn = state.phase === 'playing' && state.currentPlayerSeat === seat
@@ -284,7 +288,12 @@ export function renderGameScreen(container) {
             <div class="table-side table-left">
               ${seatInfoHtml(state, rel.left, rel.left.charAt(0).toUpperCase() + rel.left.slice(1))}
             </div>
-            ${trickHtml(state, rel)}
+            <div class="trick-wrap">
+              ${trickHtml(state, rel)}
+              ${state.phase === 'playing' && state.completedTricks.length > 0
+                ? '<button class="last-trick-btn" id="last-trick-btn">Last Trick</button>'
+                : ''}
+            </div>
             <div class="table-side table-right">
               ${seatInfoHtml(state, rel.right, rel.right.charAt(0).toUpperCase() + rel.right.slice(1))}
             </div>
@@ -309,6 +318,10 @@ export function renderGameScreen(container) {
           <div class="hand-cards" id="hand-cards">${handHtml}</div>
           <div class="form-error play-err" role="alert" aria-live="polite"></div>
         </div>
+
+        ${showLastTrick && state.completedTricks.length > 0
+          ? lastTrickHtml(state.completedTricks[state.completedTricks.length - 1], rel)
+          : ''}
       </div>`
 
     // Mode toggle
@@ -317,6 +330,20 @@ export function renderGameScreen(container) {
         handMode = btn.dataset.mode
         render()
       })
+    })
+
+    // Last trick button — show overlay
+    container.querySelector('#last-trick-btn')?.addEventListener('click', () => {
+      showLastTrick = true
+      render()
+    })
+
+    // Last trick overlay — dismiss on backdrop click or close button
+    container.querySelector('#last-trick-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'last-trick-overlay' || e.target.id === 'last-trick-close') {
+        showLastTrick = false
+        render()
+      }
     })
 
     // Bid buttons

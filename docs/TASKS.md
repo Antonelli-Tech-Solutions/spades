@@ -9,6 +9,8 @@
 
 ## ✅ Completed
 
+- [x] `BUG` Fix play/bid order appearing counterclockwise in the web UI: `relSeats()` in `client/web/src/screens/game.js` had `left` and `right` swapped, making each player's clockwise neighbour appear on the wrong side of the screen. Extracted `relSeats` and `CW` to `client/web/src/seatUtils.js` and added unit tests. Server engine was unaffected.
+
 - [x] `DEV` `DEV_AUTO_VERIFY` env var — when set to `true`, registration skips email verification and marks the player as verified immediately. Enables registering multiple test accounts without an email server. Never set in production.
 - [x] `DEV` Simple bot players — `POST /api/tables/:tableId/add-bot` lets the table host add a bot to any empty seat. Bots bid the number of spades in their hand and play a random legal card. Bot turns advance automatically server-side after each human action; no client round-trips needed. Bot IDs follow the pattern `bot:<seat>` and are scoped to dev/test use — they do not affect the production bot design in v1.1.
 - [x] `P0` Implement email/password registration with required email verification

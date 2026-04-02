@@ -229,7 +229,7 @@ describe('handDiagramHtml', () => {
 // ---------------------------------------------------------------------------
 
 describe('lastTrickHtml', () => {
-  const rel = { me: 'south', right: 'west', across: 'north', left: 'east' }
+  const rel = { me: 'south', right: 'east', across: 'north', left: 'west' }
 
   const fullTrick = {
     winner: 'north',

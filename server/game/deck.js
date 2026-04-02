@@ -1,4 +1,4 @@
-export const SUITS = ['clubs', 'diamonds', 'hearts', 'spades']
+export const SUITS = ['spades', 'hearts', 'clubs', 'diamonds']
 export const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
 
 const SUIT_ORDER = Object.fromEntries(SUITS.map((s, i) => [s, i]))
@@ -49,7 +49,7 @@ export function rankValue(rank) {
 }
 
 /**
- * Sort a hand by suit (clubs < diamonds < hearts < spades) then rank (2 < … < A).
+ * Sort a hand by suit (spades > hearts > clubs > diamonds) then rank (A > … > 2).
  * Returns a new array — does not mutate the input.
  * @param {Card[]} hand
  * @returns {Card[]}
@@ -59,7 +59,7 @@ export function sortHand(hand) {
     if (SUIT_ORDER[a.suit] !== SUIT_ORDER[b.suit]) {
       return SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]
     }
-    return RANK_ORDER[a.rank] - RANK_ORDER[b.rank]
+    return RANK_ORDER[b.rank] - RANK_ORDER[a.rank]
   })
 }
 

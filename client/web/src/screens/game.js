@@ -7,10 +7,10 @@ import {
 } from '../api.js'
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
+import { relSeats } from '../seatUtils.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const RED_SUIT = new Set(['hearts', 'diamonds'])
-const CW = ['north', 'east', 'south', 'west']
 const PARTNER = { north: 'south', south: 'north', east: 'west', west: 'east' }
 const TEAM = { north: 'ns', south: 'ns', east: 'ew', west: 'ew' }
 
@@ -25,18 +25,6 @@ function esc(s) {
 
 function getSeatForPlayer(players, playerId) {
   return Object.entries(players).find(([, pid]) => pid === playerId)?.[0] ?? null
-}
-
-// Returns seats from the current player's perspective:
-//   me = bottom, right = clockwise neighbour, across = partner, left = counter-clockwise neighbour
-function relSeats(seat) {
-  const i = CW.indexOf(seat)
-  return {
-    me: CW[i],
-    right: CW[(i + 1) % 4],
-    across: CW[(i + 2) % 4],
-    left: CW[(i + 3) % 4],
-  }
 }
 
 function bidLabel(bid) {

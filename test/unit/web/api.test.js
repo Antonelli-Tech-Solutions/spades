@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerUser, loginUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable, getGameState, placeBid, playCard, submitBlindNilExchange } from '../../../client/web/src/api.js'
+import { registerUser, loginUser, logoutUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable, getGameState, placeBid, playCard, submitBlindNilExchange } from '../../../client/web/src/api.js'
 
 /**
  * Build a minimal mock fetch that returns the given status and JSON body.
@@ -124,6 +124,26 @@ describe('resetPassword', () => {
         ),
       (err) => {
         assert.equal(err.status, 400)
+        return true
+      },
+    )
+  })
+})
+
+describe('logoutUser', () => {
+  it('resolves with message on 200', async () => {
+    const result = await logoutUser(
+      { sessionId: 'sess-1' },
+      mockFetch(200, { message: 'Logged out successfully.' }),
+    )
+    assert.ok(result.message)
+  })
+
+  it('throws on server error', async () => {
+    await assert.rejects(
+      () => logoutUser({ sessionId: 'sess-1' }, mockFetch(500, { error: 'Internal server error' })),
+      (err) => {
+        assert.equal(err.status, 500)
         return true
       },
     )

@@ -17,6 +17,7 @@
 - [x] `P0` Implement login and session management
 - [x] `P0` Apply rate limiting on all authentication endpoints
 - [x] `P1` Build player profile page (username, avatar, career win/loss record, recent 20 games, cosmetics)
+- [x] `P1` Add logout button to the lobby screen (`client/web/src/screens/lobby.js`): calls `POST /api/auth/logout`, clears `sessionStorage`, and redirects to the login screen
 
 ---
 

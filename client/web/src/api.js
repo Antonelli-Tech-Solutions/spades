@@ -262,6 +262,26 @@ export async function submitBlindNilExchange({ tableId, cards, sessionId, player
 }
 
 /**
+ * Log out the current session.
+ * @param {{ sessionId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ message: string }>}
+ */
+export async function logoutUser({ sessionId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/auth/logout', {
+    method: 'POST',
+    headers: { 'x-session-id': sessionId },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Logout failed.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Log in with email and password.
  * @param {{ email: string, password: string }} data
  * @param {typeof fetch} [fetchFn]

@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| **Version** | 1.2 — Rules Clarifications |
-| **Date** | March 2026 |
+| **Version** | 1.3 — Real-Time Architecture |
+| **Date** | April 2026 |
 | **Status** | For Review |
 | **Product** | Spades Online (Mobile & Web) |
 
@@ -191,6 +191,61 @@ The bidding sequence follows a partnership model designed to allow informed team
 - **Account security:** email/password with required email verification; optional 2FA via authenticator app.
 - Rate limiting on all authentication and social endpoints to prevent abuse.
 
+### 6.4 Real-Time Architecture
+
+All in-game state updates and lobby changes are delivered to clients via a persistent WebSocket connection rather than polling. The REST API remains the **action** mechanism (clients POST bids, card plays, etc.); WebSockets are the **notification** mechanism (the server pushes authoritative state updates to all interested clients immediately after each state change).
+
+#### 6.4.1 Connection Lifecycle
+
+- Clients establish an authenticated WebSocket connection on game screen mount (or lobby screen mount for lobby events).
+- Authentication occurs on the connection upgrade handshake using the player's session token (`x-session-id` header). Unauthenticated upgrade requests are rejected with HTTP 401.
+- Clients join a **room** corresponding to `table:{tableId}` upon seating or spectating. Lobby subscribers join a `lobby` channel.
+- The server emits a heartbeat ping every 30 seconds; clients must respond with a pong within 10 seconds or the connection is considered dead.
+- On reconnect, clients call `GET /api/tables/:tableId/state` to re-hydrate from authoritative server state, then resume listening for WebSocket events.
+
+#### 6.4.2 Event Shape
+
+All WebSocket events follow the envelope:
+
+```json
+{ "type": "EVENT_NAME", "payload": { ... } }
+```
+
+Events must not change shape in a backward-incompatible way without coordinating a client release.
+
+#### 6.4.3 In-Game Events
+
+| Event | Audience | Key Payload Fields |
+|---|---|---|
+| `HAND_DEALT` | Per-player (4 individual sends) | `myHand`, `dealer`, `biddingOrder` |
+| `BID_PLACED` | All in room | `seat`, `bidType` (`nil` / `blindNil` / `number`); numeric value hidden until end-of-hand scoring |
+| `BLIND_NIL_EXCHANGE_PROMPT` | Specific player | `direction` (`send` / `receive`), `count` |
+| `CARD_PLAYED` | All in room | `seat`, `card` |
+| `TRICK_COMPLETE` | All in room | `winnerSeat`, `plays` |
+| `HAND_SCORED` | All in room | `scoreDelta`, `newTotals`, `bags` |
+| `GAME_OVER` | All in room | `winningTeam`, `finalScores` |
+| `TURN_CHANGED` | All in room | `activeSeat`, `phase` |
+| `PLAYER_DISCONNECTED` | All in room | `seat`, `reconnectWindowSeconds` |
+| `PLAYER_RECONNECTED` | All in room | `seat` |
+
+#### 6.4.4 Lobby Events
+
+| Event | Audience | Key Payload Fields |
+|---|---|---|
+| `TABLE_CREATED` | Lobby channel | `id`, `name`, `host`, `seats`, `ruleset`, `joinPolicy` |
+| `TABLE_UPDATED` | Lobby channel | `tableId`, updated fields |
+| `TABLE_REMOVED` | Lobby channel | `tableId` |
+
+#### 6.4.5 Fan-Out Architecture
+
+The WebSocket server uses Redis pub/sub as its broadcast bus. Each room (`table:{tableId}`, `lobby`) maps to a Redis pub/sub channel. This allows multiple server instances to fan out events to all connected clients in a room, ensuring horizontal scalability without sticky sessions.
+
+#### 6.4.6 Player Disconnect & Reconnect
+
+1. When a WebSocket connection drops (ping failure or clean close), the server emits `PLAYER_DISCONNECTED` to the room with a countdown (default 60 seconds).
+2. If the player reconnects and re-authenticates within the window, they re-join the room and receive a full state re-hydration via `GET /api/tables/:tableId/state`.
+3. If the reconnect window expires: the game stalls for other players with a "waiting for reconnect" indicator. The v1.1 disconnect-fill bot (see [Section 9](#9-post-launch-roadmap)) takes over at the start of the next hand once this infrastructure is in place.
+
 ---
 
 ## 7. Open Questions
@@ -326,4 +381,4 @@ Variants may introduce separate casual lobbies.
 
 ---
 
-*End of Document — Spades Online PRD v1.2*
+*End of Document — Spades Online PRD v1.3*

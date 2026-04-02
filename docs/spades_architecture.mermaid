@@ -20,7 +20,7 @@ graph TB
     end
 
     subgraph Realtime["Real-Time Layer"]
-        WS["WebSocket Server<br/>p95 latency < 200ms"]
+        WS["WebSocket Server<br/>p95 latency < 200ms<br/>──────────────────<br/>HAND_DEALT · CARD_PLAYED<br/>BID_PLACED · TRICK_COMPLETE<br/>HAND_SCORED · GAME_OVER<br/>TURN_CHANGED · PLAYER_DISCONNECTED<br/>TABLE_CREATED · TABLE_UPDATED"]
         ANTICHEAT["Anti-Cheat Engine<br/>Server-side State Validation<br/>Legal Move Enforcement<br/>Card Visibility Control"]
     end
 
@@ -37,7 +37,7 @@ graph TB
     end
 
     WEB & IOS & AND -->|HTTPS| GW
-    WEB & IOS & AND <-->|WSS| WS
+    WEB & IOS & AND <-->|"WSS (authenticated)"| WS
 
     GW --> AUTH
     AUTH --> SESSION
@@ -50,6 +50,7 @@ graph TB
 
     WS --> ANTICHEAT
     ANTICHEAT --> MATCH
+    WS <-->|"pub/sub (fan-out)"| CACHE
 
     MATCH --> GAMEDB
     MATCH --> CACHE

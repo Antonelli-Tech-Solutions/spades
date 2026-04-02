@@ -210,6 +210,44 @@ describe('POST /api/auth/logout', { skip }, () => {
     })
     assert.equal(res.status, 200)
   })
+
+  it('removes the player from any waiting table they are seated at', async () => {
+    const loginRes = await fetch(`${server.baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'logout_ok@test.spades.invalid', password: 'password123' }),
+    })
+    const { sessionId, playerId } = await loginRes.json()
+
+    // Create a table and sit in a seat
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId, 'x-player-id': playerId },
+      body: JSON.stringify({}),
+    })
+    const { tableId } = await createRes.json()
+
+    await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId, 'x-player-id': playerId },
+      body: JSON.stringify({ seat: 'north' }),
+    })
+
+    // Confirm seated before logout
+    const tableBefore = JSON.parse(await redis.get(`table:${tableId}`))
+    assert.equal(tableBefore.seats.north, playerId, 'player should be seated before logout')
+
+    // Logout
+    const logoutRes = await fetch(`${server.baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+    })
+    assert.equal(logoutRes.status, 200)
+
+    // Player should be removed from the seat
+    const tableAfter = JSON.parse(await redis.get(`table:${tableId}`))
+    assert.equal(tableAfter.seats.north, null, 'player should be removed from table after logout')
+  })
 })
 
 describe('Auth header validation', { skip }, () => {

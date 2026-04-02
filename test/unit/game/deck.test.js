@@ -90,7 +90,7 @@ describe('deal', () => {
 })
 
 describe('sortHand', () => {
-  it('sorts clubs before diamonds before hearts before spades', () => {
+  it('sorts spades before hearts before clubs before diamonds', () => {
     const hand = [
       { suit: 'spades', rank: '2' },
       { suit: 'hearts', rank: '3' },
@@ -98,13 +98,13 @@ describe('sortHand', () => {
       { suit: 'diamonds', rank: '5' },
     ]
     const sorted = sortHand(hand)
-    assert.equal(sorted[0].suit, 'clubs')
-    assert.equal(sorted[1].suit, 'diamonds')
-    assert.equal(sorted[2].suit, 'hearts')
-    assert.equal(sorted[3].suit, 'spades')
+    assert.equal(sorted[0].suit, 'spades')
+    assert.equal(sorted[1].suit, 'hearts')
+    assert.equal(sorted[2].suit, 'clubs')
+    assert.equal(sorted[3].suit, 'diamonds')
   })
 
-  it('sorts by rank ascending within the same suit', () => {
+  it('sorts by rank descending within the same suit', () => {
     const hand = [
       { suit: 'clubs', rank: 'A' },
       { suit: 'clubs', rank: '2' },
@@ -114,7 +114,7 @@ describe('sortHand', () => {
     const sorted = sortHand(hand)
     assert.deepEqual(
       sorted.map((c) => c.rank),
-      ['2', '10', 'K', 'A'],
+      ['A', 'K', '10', '2'],
     )
   })
 

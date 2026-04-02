@@ -53,11 +53,11 @@ describe('createGame', () => {
       for (let i = 1; i < hand.length; i++) {
         const prev = hand[i - 1]
         const curr = hand[i]
-        const suitOrder = ['clubs', 'diamonds', 'hearts', 'spades']
+        const suitOrder = ['spades', 'hearts', 'clubs', 'diamonds']
         const rankOrder = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
         if (prev.suit === curr.suit) {
           assert.ok(
-            rankOrder.indexOf(prev.rank) <= rankOrder.indexOf(curr.rank),
+            rankOrder.indexOf(prev.rank) >= rankOrder.indexOf(curr.rank),
             `hand not sorted by rank for ${seat}`,
           )
         } else {
@@ -234,7 +234,8 @@ describe('playCard', () => {
 
   it('removes played card from hand', () => {
     let state = getToPlayingPhase()
-    const card = state.hands.east[0]
+    // east[0] may be a spade (illegal on trick 1); pick first non-spade card instead
+    const card = state.hands.east.find((c) => c.suit !== 'spades')
     state = playCard(state, 'east', card)
     assert.equal(state.hands.east.length, 12)
     assert.ok(!state.hands.east.some((c) => c.suit === card.suit && c.rank === card.rank))

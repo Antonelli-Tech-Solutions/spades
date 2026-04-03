@@ -249,8 +249,8 @@ describe('endOfHandSummaryHtml — bag penalty', () => {
     const html = endOfHandSummaryHtml(entry, 'north')
     assert.ok(html.includes('200'), 'should show 200 for double bag penalty')
     assert.ok(
-      html.toLowerCase().includes('penalty'),
-      'should show penalty label',
+      html.toLowerCase().includes('twice'),
+      'should show "twice" label for double bag-out',
     )
   })
 })

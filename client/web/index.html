@@ -551,10 +551,38 @@
         font-weight: 600;
         cursor: pointer;
         transition: background 0.15s;
+        position: relative;
       }
 
       .bid-num-btn:hover {
         background: #388e3c;
+      }
+
+      .bid-num-btn[data-tooltip]:hover::after,
+      .bid-num-btn[data-tooltip]:focus::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #222;
+        color: #b0b0b0;
+        font-size: 0.75rem;
+        font-weight: 400;
+        padding: 5px 8px;
+        border-radius: 4px;
+        white-space: normal;
+        width: max-content;
+        max-width: 220px;
+        z-index: 100;
+        pointer-events: none;
+        border: 1px solid #444;
+        text-align: left;
+      }
+
+      .bid-num-btn--warn[data-tooltip]:hover::after,
+      .bid-num-btn--warn[data-tooltip]:focus::after {
+        color: #ffa726;
       }
 
       .bid-special-row {
@@ -957,18 +985,6 @@
         font-size: 0.8rem;
         color: #90caf9;
         margin-bottom: 0.5rem;
-      }
-
-      .bid-hint {
-        min-height: 1.25rem;
-        font-size: 0.78rem;
-        color: #b0b0b0;
-        margin-top: 0.25rem;
-        margin-bottom: 0.25rem;
-      }
-
-      .bid-hint--warning {
-        color: #ffa726;
       }
 
       /* Post-bid team summary */

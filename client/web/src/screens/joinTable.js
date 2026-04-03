@@ -1,5 +1,6 @@
 import { listTables, sitAtTable } from '../api.js'
 import { navigate } from '../router.js'
+import { redirectIfSeated } from '../redirectIfSeated.js'
 
 /**
  * Render the join table screen into `container`.
@@ -12,13 +13,15 @@ import { navigate } from '../router.js'
  *
  * @param {HTMLElement} container
  */
-export function renderJoinTableScreen(container) {
+export async function renderJoinTableScreen(container) {
   const sessionId = sessionStorage.getItem('sessionId')
   const playerId = sessionStorage.getItem('playerId')
   if (!sessionId || !playerId) {
     navigate('#/login')
     return
   }
+
+  if (await redirectIfSeated(sessionId, playerId)) return
 
   const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
   const tableId = params.get('tableId')
@@ -182,6 +185,7 @@ async function renderSeatPicker(container, tableId, sessionId, playerId) {
 
       try {
         await sitAtTable({ tableId, seat, sessionId, playerId })
+        sessionStorage.setItem('currentTableId', tableId)
         console.log('Seated:', { tableId, seat })
         navigate(`#/table?tableId=${tableId}`)
       } catch (err) {

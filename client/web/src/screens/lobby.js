@@ -1,12 +1,20 @@
 import { navigate } from '../router.js'
 import { logoutUser } from '../api.js'
+import { redirectIfSeated } from '../redirectIfSeated.js'
 
 /**
  * Render the lobby screen into `container`.
  * This is the main menu after login — from here players can create or join a table.
+ * If the player is currently seated at an active table, redirect them back to it.
  * @param {HTMLElement} container
  */
-export function renderLobbyScreen(container) {
+export async function renderLobbyScreen(container) {
+  const sessionId = sessionStorage.getItem('sessionId')
+  const playerId = sessionStorage.getItem('playerId')
+  if (!sessionId || !playerId) { navigate('#/login'); return }
+
+  if (await redirectIfSeated(sessionId, playerId)) return
+
   const username = sessionStorage.getItem('username') || 'Player'
 
   container.innerHTML = `
@@ -39,6 +47,7 @@ export function renderLobbyScreen(container) {
     sessionStorage.removeItem('sessionId')
     sessionStorage.removeItem('playerId')
     sessionStorage.removeItem('username')
+    sessionStorage.removeItem('currentTableId')
     navigate('#/login')
   })
 }

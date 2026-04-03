@@ -19,6 +19,7 @@ import {
   addBotToTable,
   removePlayerFromTables,
   terminateTable,
+  findTableForPlayer,
   leaveTable,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView } from './game/state.js'
@@ -237,6 +238,20 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('List tables error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // GET /api/player/table — returns the tableId if the authenticated player is seated at an active table
+  app.get('/api/player/table', async (req, res) => {
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const tableId = await findTableForPlayer(redisClient, session.playerId)
+      sendJSON(res, 200, { tableId: tableId ?? null })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Get player table error:', { error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

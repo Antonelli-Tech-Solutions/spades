@@ -1,14 +1,22 @@
 import { createTable } from '../api.js'
 import { navigate } from '../router.js'
+import { redirectIfSeated } from '../redirectIfSeated.js'
 
 /**
  * Render the create table screen into `container`.
  * On success, navigates to the join table screen (#/join) for the new table.
  * Name is optional — the PRD specifies it is displayed in the public lobby browser
  * but is not required.
+ * If the player is currently seated at an active table, redirect them back to it.
  * @param {HTMLElement} container
  */
-export function renderCreateTableScreen(container) {
+export async function renderCreateTableScreen(container) {
+  const sessionId = sessionStorage.getItem('sessionId')
+  const playerId = sessionStorage.getItem('playerId')
+  if (!sessionId || !playerId) { navigate('#/login'); return }
+
+  if (await redirectIfSeated(sessionId, playerId)) return
+
   container.innerHTML = `
     <div class="auth-card">
       <h1 class="auth-title">Create Table</h1>

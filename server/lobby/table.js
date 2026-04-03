@@ -245,6 +245,32 @@ export async function terminateTable(redis, tableId) {
 }
 
 /**
+ * Find the tableId of an active table where the given player is seated.
+ * Returns null if the player is not seated at any active table, or if the
+ * only matching table's game is already over.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} playerId
+ * @returns {Promise<string|null>}
+ */
+export async function findTableForPlayer(redis, playerId) {
+  const raw = await redis.hGetAll('lobby:tables')
+  for (const json of Object.values(raw)) {
+    const entry = JSON.parse(json)
+    const table = await getTable(redis, entry.tableId)
+    if (!table) continue
+    const seated = Object.values(table.seats).includes(playerId)
+    if (!seated) continue
+    if (table.status === 'playing') {
+      const gameState = await getGameState(redis, entry.tableId)
+      if (gameState && gameState.phase === 'game_over') continue
+    }
+    return entry.tableId
+  }
+  return null
+}
+
+/**
  * List all open (waiting) tables from the lobby index.
  * Fetches full table state for each waiting entry to include seat info.
  *

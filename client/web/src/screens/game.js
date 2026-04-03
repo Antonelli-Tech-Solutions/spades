@@ -5,6 +5,7 @@ import {
   submitBlindNilExchange as apiExchange,
   addBotToTable as apiAddBot,
   revealHand as apiRevealHand,
+  terminateGame as apiTerminate,
 } from '../api.js'
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
@@ -273,7 +274,13 @@ export function renderGameScreen(container) {
           state = s
           render()
         }
-      } catch (_) {
+      } catch (err) {
+        if (err.status === 404) {
+          // Table was terminated — redirect to lobby
+          cleanup()
+          navigate('#/lobby')
+          return
+        }
         // silent — retry on next poll
       }
       schedulePoll()
@@ -296,6 +303,10 @@ export function renderGameScreen(container) {
       ? `<button class="btn-primary" id="fill-bots-btn">Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})</button>`
       : ''
 
+    const terminateBtn = state.isHost
+      ? `<button class="btn-danger" id="terminate-btn">Terminate Game</button>`
+      : ''
+
     container.innerHTML = `
       <div class="game-screen">
         <div class="waiting-screen">
@@ -303,6 +314,7 @@ export function renderGameScreen(container) {
           <div class="waiting-seats">${rows}</div>
           <div class="form-error waiting-err" role="alert" aria-live="polite"></div>
           ${fillBotsBtn}
+          ${terminateBtn}
           <p class="auth-link"><a href="#/lobby">Leave table</a></p>
         </div>
       </div>`
@@ -325,6 +337,21 @@ export function renderGameScreen(container) {
         errEl.textContent = err.message || 'Failed to add bots.'
         btn.disabled = false
         btn.textContent = `Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})`
+      }
+    })
+
+    container.querySelector('#terminate-btn')?.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to terminate this game? This cannot be undone.')) return
+      const btn = container.querySelector('#terminate-btn')
+      const errEl = container.querySelector('.waiting-err')
+      btn.disabled = true
+      try {
+        await apiTerminate({ tableId, sessionId, playerId })
+        cleanup()
+        navigate('#/lobby')
+      } catch (err) {
+        errEl.textContent = err.message || 'Failed to terminate game.'
+        btn.disabled = false
       }
     })
   }
@@ -526,6 +553,8 @@ export function renderGameScreen(container) {
         ${showLastTrick && state.completedTricks.length > 0
           ? lastTrickHtml(state.completedTricks[state.completedTricks.length - 1], rel)
           : ''}
+
+        ${state.isHost ? '<div class="host-controls"><button class="btn-danger btn-sm" id="terminate-btn">Terminate Game</button></div>' : ''}
       </div>`
 
     // Mode toggle
@@ -547,6 +576,21 @@ export function renderGameScreen(container) {
       if (e.target.id === 'last-trick-overlay' || e.target.id === 'last-trick-close') {
         showLastTrick = false
         render()
+      }
+    })
+
+    // Terminate game button (host only, in-game)
+    container.querySelector('#terminate-btn')?.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to terminate this game? This cannot be undone.')) return
+      const btn = container.querySelector('#terminate-btn')
+      btn.disabled = true
+      try {
+        await apiTerminate({ tableId, sessionId, playerId })
+        cleanup()
+        navigate('#/lobby')
+      } catch (err) {
+        btn.disabled = false
+        console.log('Terminate failed:', { error: err.message })
       }
     })
 

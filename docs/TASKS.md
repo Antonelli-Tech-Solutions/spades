@@ -57,7 +57,7 @@
 - [ ] `P0` Blind Nil hand hiding — web UI: when `HAND_DEALT` arrives with `blindNilEligible: true` and no `myHand`, render face-down card backs in the hand area and show "Reveal Hand" and "Bid Blind Nil" action buttons in place of the normal bid input; on "Reveal Hand", call `POST /api/tables/:tableId/reveal-hand` and display cards when `HAND_REVEALED` arrives; on "Bid Blind Nil", submit the bid directly — the hand is never displayed to the player
 - [x] `P0` Build hand display in Spread (fan) and Hand Diagram modes
 - [x] `P0` Game over screen: show final score and winner
-- [ ] `P1` End-of-trick hold: when the fourth card of a trick is played, keep the completed trick visible for 1500 ms (normal speed, hardcoded until the animation speed setting ships in Slice 5), highlight the winning seat, then clear — state updates that arrive during the hold window are queued and applied only after the hold expires
+- [x] `P1` End-of-trick hold: when the fourth card of a trick is played, keep the completed trick visible for 1500 ms (normal speed, hardcoded until the animation speed setting ships in Slice 5), highlight the winning seat, then clear — state updates that arrive during the hold window are queued and applied only after the hold expires
 - [ ] `P1` Input blocking: disable card play input for the active player from when they play a card until the card play animation (Slice 2) and end-of-trick hold have both fully completed — a `TURN_CHANGED` event arriving during this window must not re-enable input early
 
 ### Testing

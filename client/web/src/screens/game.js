@@ -8,6 +8,7 @@ import {
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
 import { relSeats } from '../seatUtils.js'
+import { HOLD_DURATIONS, detectCompletedTrick, trickHoldHtml } from '../trickHold.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const RED_SUIT = new Set(['hearts', 'diamonds'])
@@ -34,13 +35,14 @@ function bidLabel(bid) {
   return String(bid)
 }
 
-function seatInfoHtml(state, seat, label) {
+function seatInfoHtml(state, seat, label, isWinner = false) {
   const bid = state.bids[seat]
   const tricks = state.tricksWon[seat]
   const isActive = state.currentBidderSeat === seat || state.currentPlayerSeat === seat
   const activeCls = isActive ? ' seat-active' : ''
+  const winnerCls = isWinner ? ' seat-winner' : ''
   return `
-    <div class="seat-info${activeCls}">
+    <div class="seat-info${activeCls}${winnerCls}">
       <span class="seat-name">${esc(label)}</span>
       <div class="seat-stats">
         <span>Bid: ${esc(bidLabel(bid))}</span>
@@ -98,11 +100,33 @@ export function renderGameScreen(container) {
   let pollTimer = null
   let acting = false
   let mounted = true
+  let holdActive = false
+  let holdTrick = null
+  let holdTimer = null
+  let queuedState = null
 
   function cleanup() {
     mounted = false
     clearTimeout(pollTimer)
+    clearTimeout(holdTimer)
     if (appEl) appEl.classList.remove('app--game')
+  }
+
+  function startHold(trick) {
+    holdActive = true
+    holdTrick = trick
+    queuedState = null
+    clearTimeout(holdTimer)
+    render()
+    holdTimer = setTimeout(() => {
+      holdActive = false
+      holdTrick = null
+      if (queuedState !== null) {
+        state = queuedState
+        queuedState = null
+      }
+      render()
+    }, HOLD_DURATIONS.normal)
   }
   window.addEventListener('hashchange', cleanup, { once: true })
 
@@ -114,8 +138,13 @@ export function renderGameScreen(container) {
       try {
         const s = await getGameState({ tableId, sessionId, playerId })
         if (!mounted) return
-        state = s
-        render()
+        if (holdActive) {
+          // Queue the update — apply it after the hold window expires
+          queuedState = s
+        } else {
+          state = s
+          render()
+        }
       } catch (_) {
         // silent — retry on next poll
       }
@@ -270,24 +299,24 @@ export function renderGameScreen(container) {
 
         <div class="game-table">
           <div class="table-top">
-            ${seatInfoHtml(state, rel.across, rel.across.charAt(0).toUpperCase() + rel.across.slice(1))}
+            ${seatInfoHtml(state, rel.across, rel.across.charAt(0).toUpperCase() + rel.across.slice(1), holdActive && holdTrick?.winner === rel.across)}
           </div>
           <div class="table-middle">
             <div class="table-side table-left">
-              ${seatInfoHtml(state, rel.left, rel.left.charAt(0).toUpperCase() + rel.left.slice(1))}
+              ${seatInfoHtml(state, rel.left, rel.left.charAt(0).toUpperCase() + rel.left.slice(1), holdActive && holdTrick?.winner === rel.left)}
             </div>
             <div class="trick-wrap">
-              ${trickHtml(state, rel)}
-              ${state.phase === 'playing' && state.completedTricks.length > 0
+              ${holdActive ? trickHoldHtml(holdTrick, rel) : trickHtml(state, rel)}
+              ${!holdActive && state.phase === 'playing' && state.completedTricks.length > 0
                 ? '<button class="last-trick-btn" id="last-trick-btn">Last Trick</button>'
                 : ''}
             </div>
             <div class="table-side table-right">
-              ${seatInfoHtml(state, rel.right, rel.right.charAt(0).toUpperCase() + rel.right.slice(1))}
+              ${seatInfoHtml(state, rel.right, rel.right.charAt(0).toUpperCase() + rel.right.slice(1), holdActive && holdTrick?.winner === rel.right)}
             </div>
           </div>
           <div class="table-bottom">
-            ${seatInfoHtml(state, rel.me, 'You')}
+            ${seatInfoHtml(state, rel.me, 'You', holdActive && holdTrick?.winner === rel.me)}
           </div>
         </div>
 
@@ -372,11 +401,17 @@ export function renderGameScreen(container) {
             if (acting) return
             acting = true
             clearTimeout(pollTimer)
+            const prevState = state
             try {
               const s = await apiPlay({ tableId, card, sessionId, playerId })
               if (!mounted) return
+              const completedTrick = detectCompletedTrick(prevState, s)
               state = s
-              render()
+              if (completedTrick) {
+                startHold(completedTrick)
+              } else {
+                render()
+              }
             } catch (err) {
               if (!mounted) return
               const errEl = container.querySelector('.play-err')

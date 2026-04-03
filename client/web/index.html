@@ -412,6 +412,11 @@
         background: #183018;
       }
 
+      .seat-info.seat-winner {
+        border-color: #ffd54f;
+        background: #2a2200;
+      }
+
       .seat-name {
         display: block;
         font-size: 0.7rem;
@@ -441,6 +446,19 @@
         border-radius: 8px;
         padding: 0.5rem;
         min-height: 130px;
+      }
+
+      /* Hold state — completed trick is kept visible while the hold timer runs */
+      .trick-area--hold {
+        border: 1px solid #ffd54f;
+      }
+
+      .trick-winner-banner {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #ffd54f;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
       }
 
       .trick-row {

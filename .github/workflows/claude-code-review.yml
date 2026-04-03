@@ -12,7 +12,7 @@ on:
 
 jobs:
   claude-review:
-    if: false # temporarily disable
+    # if: false # temporarily disable
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||

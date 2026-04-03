@@ -21,14 +21,23 @@ export function getBotPlayerId(seat) {
 }
 
 /**
- * Compute the bot's bid: count the number of spades in its hand.
- * This is a legal bid value (0–13) under all conditions.
+ * Compute the bot's bid.
+ *
+ * When bidding first (partnerBid is null), bids its spades count.
+ * When bidding second (partnerBid is a number), bids partner's bid + spades count
+ * so the team total equals partner's contribution plus the bot's individual spades.
+ * If the partner bid nil or blind_nil (individual bids), falls back to spades count only.
  *
  * @param {Array<{suit: string, rank: string}>} hand
+ * @param {number|'nil'|'blind_nil'|null} [partnerBid] - Partner's bid if bot is bidding second
  * @returns {number}
  */
-export function botBid(hand) {
-  return hand.filter((c) => c.suit === 'spades').length
+export function botBid(hand, partnerBid = null) {
+  const spades = hand.filter((c) => c.suit === 'spades').length
+  if (typeof partnerBid === 'number') {
+    return partnerBid + spades
+  }
+  return spades
 }
 
 /**

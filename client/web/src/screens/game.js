@@ -35,6 +35,59 @@ function bidLabel(bid) {
   return String(bid)
 }
 
+/**
+ * Computes the bid contribution hint for the second bidder.
+ * @param {number} teamTotal - The combined team target being considered
+ * @param {number} partnerBid - The first bidder's already-placed numeric bid
+ * @returns {{ yourBid: number, isWarning: boolean }}
+ */
+export function bidContributionHint(teamTotal, partnerBid) {
+  return {
+    yourBid: teamTotal - partnerBid,
+    isWarning: teamTotal < partnerBid,
+  }
+}
+
+/**
+ * Renders the post-bid team summary bar once both players on a team have bid.
+ * Nil and Blind Nil bids are excluded from the combined team total.
+ * Returns an empty string if bidding is not yet complete for either team.
+ * @param {{ bids: object }} state
+ * @returns {string}
+ */
+export function teamBidSummaryHtml(state) {
+  const teams = [
+    { label: 'N/S', seats: ['north', 'south'] },
+    { label: 'E/W', seats: ['east', 'west'] },
+  ]
+
+  const bars = []
+  for (const { label, seats } of teams) {
+    const [a, b] = seats
+    const bidA = state.bids[a]
+    const bidB = state.bids[b]
+    if (bidA === null || bidA === undefined || bidB === null || bidB === undefined) continue
+
+    const isSpecialA = bidA === 'nil' || bidA === 'blind_nil'
+    const isSpecialB = bidB === 'nil' || bidB === 'blind_nil'
+    const nameA = a.charAt(0).toUpperCase() + a.slice(1)
+    const nameB = b.charAt(0).toUpperCase() + b.slice(1)
+
+    let summary
+    if (!isSpecialA && !isSpecialB) {
+      const total = bidA + bidB
+      summary = `${esc(label)}: ${total} \u2014 ${esc(nameA)} ${bidA}, ${esc(nameB)} ${bidB}`
+    } else {
+      summary = `${esc(label)}: ${esc(nameA)} ${esc(bidLabel(bidA))}, ${esc(nameB)} ${esc(bidLabel(bidB))}`
+    }
+
+    bars.push(`<div class="bid-summary-team">${summary}</div>`)
+  }
+
+  if (bars.length === 0) return ''
+  return `<div class="bid-summary">${bars.join('')}</div>`
+}
+
 function seatInfoHtml(state, seat, label, isWinner = false) {
   const bid = state.bids[seat]
   const tricks = state.tricksWon[seat]

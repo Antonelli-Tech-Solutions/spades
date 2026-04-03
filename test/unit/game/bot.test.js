@@ -65,6 +65,31 @@ describe('botBid', () => {
     ]
     assert.equal(botBid(hand), 13)
   })
+
+  describe('second bidder (partnerBid provided)', () => {
+    const hand = [
+      { suit: 'spades', rank: 'A' },
+      { suit: 'spades', rank: 'K' },
+      { suit: 'hearts', rank: 'Q' },
+      { suit: 'clubs', rank: '7' },
+    ] // 2 spades
+
+    it('returns partner bid + spades when partner bid a number', () => {
+      assert.equal(botBid(hand, 4), 6) // team total = 4 + 2
+    })
+
+    it('returns partner bid + spades when partner bid 0', () => {
+      assert.equal(botBid(hand, 0), 2) // team total = 0 + 2
+    })
+
+    it('returns just spades count when partner bid nil', () => {
+      assert.equal(botBid(hand, 'nil'), 2)
+    })
+
+    it('returns just spades count when partner bid blind_nil', () => {
+      assert.equal(botBid(hand, 'blind_nil'), 2)
+    })
+  })
 })
 
 describe('botPlay', () => {

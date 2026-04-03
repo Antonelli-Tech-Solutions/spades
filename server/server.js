@@ -41,7 +41,9 @@ function advanceBotTurns(state) {
     if (current.phase === 'bidding') {
       const seat = current.currentBidderSeat
       if (!seat || !isBot(current.players[seat])) break
-      const bid = botBid(current.hands[seat])
+      const partnerSeat = getPartnerSeat(seat)
+      const partnerBid = current.bids[partnerSeat]
+      const bid = botBid(current.hands[seat], partnerBid)
       console.log('Bot bid:', { seat, bid, tableId: current.tableId })
       current = placeBid(current, seat, bid)
     } else if (current.phase === 'playing') {

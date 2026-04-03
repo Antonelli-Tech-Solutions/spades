@@ -20,6 +20,7 @@ import {
   removePlayerFromTables,
   terminateTable,
   findTableForPlayer,
+  leaveTable,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView } from './game/state.js'
 import { getPartnerSeat } from './game/bid.js'
@@ -362,6 +363,25 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Terminate game error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/leave — leave a waiting table (removes player from their seat)
+  app.post('/api/tables/:tableId/leave', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      await leaveTable(redisClient, tableId, session.playerId)
+      console.log('Player left table:', { tableId, playerId: session.playerId })
+      sendJSON(res, 200, { message: 'Left table.' })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
+      console.error('Leave table error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

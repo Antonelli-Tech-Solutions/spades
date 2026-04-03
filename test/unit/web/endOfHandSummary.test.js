@@ -267,3 +267,55 @@ describe('endOfHandSummaryHtml — running totals', () => {
     assert.ok(html.includes('3'), 'should show ns bags 3')
   })
 })
+
+describe('endOfHandSummaryHtml — gameOverInfo (game over mode)', () => {
+  it('includes GAME OVER in the title when gameOverInfo is provided', () => {
+    const html = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ns' })
+    assert.ok(html.includes('GAME OVER'), 'should include GAME OVER in title')
+  })
+
+  it('shows winner announcement when gameOverInfo is provided', () => {
+    const html = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ns' })
+    assert.ok(
+      html.toLowerCase().includes('win') || html.toLowerCase().includes('north') || html.toLowerCase().includes('n/s'),
+      'should announce the winner',
+    )
+  })
+
+  it('shows "Back to Lobby" button instead of "Continue" when gameOverInfo is provided', () => {
+    const html = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ns' })
+    assert.ok(html.includes('hand-summary-lobby') || html.toLowerCase().includes('back to lobby'), 'should have Back to Lobby button')
+    assert.ok(!html.includes('hand-summary-continue'), 'should not have Continue button')
+  })
+
+  it('still shows normal hand summary content when gameOverInfo is provided', () => {
+    const entry = makeEntry({ scoreDelta: { ns: 70, ew: 70 } })
+    const html = endOfHandSummaryHtml(entry, 'north', { winner: 'ns' })
+    assert.ok(html.includes('+70'), 'should still show hand score delta')
+  })
+
+  it('shows "Continue" button and no GAME OVER title when gameOverInfo is null', () => {
+    const html = endOfHandSummaryHtml(makeEntry(), 'north', null)
+    assert.ok(html.includes('hand-summary-continue') || html.toLowerCase().includes('continue'), 'should have Continue button')
+    assert.ok(!html.includes('GAME OVER'), 'should not include GAME OVER')
+  })
+
+  it('shows "Continue" button and no GAME OVER title when gameOverInfo is omitted', () => {
+    const html = endOfHandSummaryHtml(makeEntry(), 'north')
+    assert.ok(html.includes('hand-summary-continue') || html.toLowerCase().includes('continue'), 'should have Continue button')
+    assert.ok(!html.includes('GAME OVER'), 'should not include GAME OVER')
+  })
+
+  it('announces winning team by label', () => {
+    const htmlNs = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ns' })
+    assert.ok(
+      htmlNs.includes('N/S') || htmlNs.toLowerCase().includes('north'),
+      'should reference ns winner',
+    )
+    const htmlEw = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ew' })
+    assert.ok(
+      htmlEw.includes('E/W') || htmlEw.toLowerCase().includes('east'),
+      'should reference ew winner',
+    )
+  })
+})

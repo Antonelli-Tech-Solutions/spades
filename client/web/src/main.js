@@ -8,7 +8,6 @@ import { renderLobbyScreen } from './screens/lobby.js'
 import { renderCreateTableScreen } from './screens/createTable.js'
 import { renderJoinTableScreen } from './screens/joinTable.js'
 import { renderGameScreen } from './screens/game.js'
-import { renderGameOverScreen } from './screens/gameOver.js'
 
 const app = document.getElementById('app')
 
@@ -23,7 +22,6 @@ addRoute('#/lobby', renderLobbyScreen)
 addRoute('#/create-table', renderCreateTableScreen)
 addRoute('#/join', renderJoinTableScreen)
 addRoute('#/table', renderGameScreen)
-addRoute('#/game-over', renderGameOverScreen)
 
 // Redirect unauthenticated users to login from protected screens, and redirect
 // authenticated users away from auth-only screens to lobby.

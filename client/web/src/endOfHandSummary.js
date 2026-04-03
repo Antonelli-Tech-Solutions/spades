@@ -12,7 +12,7 @@
  * The caller renders this as an overlay and wires up the Continue button.
  */
 
-import { BAG_ICON } from './icons.js'
+import { BAG_ICON, DUNCE_CAP_ICON } from './icons.js'
 
 const TEAM = { north: 'ns', south: 'ns', east: 'ew', west: 'ew' }
 const TEAM_SEATS = { ns: ['north', 'south'], ew: ['east', 'west'] }
@@ -80,9 +80,13 @@ function teamColHtml(team, entry, colLabel) {
   let penaltyHtml = ''
   if (entry.bagPenalty[team] > 0) {
     const penaltyPts = entry.bagPenalty[team] * 100
+    const isDouble = entry.bagPenalty[team] > 1
+    const penaltyLabel = isDouble
+      ? `Bagged out TWICE ${DUNCE_CAP_ICON}`
+      : 'Bagged out'
     penaltyHtml = `
       <div class="summary-row penalty-row">
-        <span class="summary-row-label">Bag penalty${entry.bagPenalty[team] > 1 ? ` \u00d7${entry.bagPenalty[team]}` : ''}</span>
+        <span class="summary-row-label">${penaltyLabel}</span>
         <span class="summary-row-value">\u2212${penaltyPts} pts</span>
       </div>`
   }

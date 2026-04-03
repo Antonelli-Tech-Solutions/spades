@@ -207,41 +207,40 @@ describe('endOfHandSummaryHtml — double nil (both players on a team bid nil)',
 })
 
 describe('endOfHandSummaryHtml — bag penalty', () => {
-  it('shows bag penalty notice when bagPenalty.ns is 1 for ns player', () => {
+  it('shows "Bagged out" notice when bagPenalty.ns is 1 for ns player', () => {
     const entry = makeEntry({
       bagPenalty: { ns: 1, ew: 0 },
       scoresAfter: { ns: -30, ew: 70 }, // 70 - 100 penalty = -30
     })
     const html = endOfHandSummaryHtml(entry, 'north')
     assert.ok(
-      html.toLowerCase().includes('bag') && (html.includes('100') || html.toLowerCase().includes('penalty')),
-      'should show bag penalty notice',
+      html.toLowerCase().includes('bagged out') && html.includes('100'),
+      'should show "Bagged out" notice with −100 pts',
     )
   })
 
-  it('does not show bag penalty notice when no penalty', () => {
+  it('does not show "Bagged out" notice when no penalty', () => {
     const entry = makeEntry({ bagPenalty: { ns: 0, ew: 0 } })
     const html = endOfHandSummaryHtml(entry, 'north')
-    // "penalty" text should not appear
     assert.ok(
-      !html.toLowerCase().includes('penalty'),
-      'should not show penalty text when no penalty occurred',
+      !html.toLowerCase().includes('bagged out'),
+      'should not show "Bagged out" text when no penalty occurred',
     )
   })
 
-  it('shows bag penalty for the opponent team when they cross 10 bags', () => {
+  it('shows "Bagged out" for the opponent team when they cross 10 bags', () => {
     const entry = makeEntry({
       bagPenalty: { ns: 0, ew: 1 },
       scoresAfter: { ns: 70, ew: -30 },
     })
     const html = endOfHandSummaryHtml(entry, 'north') // north is ns, ew is "them"
     assert.ok(
-      html.toLowerCase().includes('penalty') || html.includes('100'),
-      'should show bag penalty for ew team',
+      html.toLowerCase().includes('bagged out') || html.includes('100'),
+      'should show "Bagged out" for ew team',
     )
   })
 
-  it('shows −200 pts when a team bags out twice in one hand', () => {
+  it('shows "Bagged out TWICE" and −200 pts when a team bags out twice in one hand', () => {
     const entry = makeEntry({
       bagPenalty: { ns: 2, ew: 0 },
       scoresAfter: { ns: -130, ew: 70 }, // 70 - 200 = -130
@@ -249,8 +248,8 @@ describe('endOfHandSummaryHtml — bag penalty', () => {
     const html = endOfHandSummaryHtml(entry, 'north')
     assert.ok(html.includes('200'), 'should show 200 for double bag penalty')
     assert.ok(
-      html.toLowerCase().includes('penalty'),
-      'should show penalty label',
+      html.toLowerCase().includes('bagged out twice'),
+      'should show "Bagged out TWICE" label for double bag-out',
     )
   })
 })

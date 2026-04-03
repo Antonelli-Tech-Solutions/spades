@@ -9,6 +9,19 @@
  * fine because all instances are visually identical.
  */
 
+// Dunce cap — used for the "Bagged out TWICE" double-bag-out penalty label.
+// Classic pointed cone hat with a yellow band at the brim and a red pompom on top.
+export const DUNCE_CAP_ICON = [
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-2px">',
+  // Cone body — red/pink pointed hat
+  '<path d="M12 2 L20 20 L4 20 Z" fill="#FF6B6B" stroke="#CC2222" stroke-width="1" stroke-linejoin="round"/>',
+  // Brim band — yellow stripe across the base
+  '<rect x="4" y="18.5" width="16" height="2.5" rx="1.2" fill="#FFE55C" stroke="#CC8800" stroke-width="0.8"/>',
+  // Pompom — small circle at the very tip
+  '<circle cx="12" cy="2.8" r="1.4" fill="#FFE55C" stroke="#CC8800" stroke-width="0.6"/>',
+  '</svg>',
+].join('')
+
 export const BAG_ICON = [
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-2px">',
   '<defs>',

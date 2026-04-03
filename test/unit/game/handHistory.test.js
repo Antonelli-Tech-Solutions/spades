@@ -203,17 +203,13 @@ describe('handHistory — accumulates across multiple hands', () => {
 
     if (state.phase === 'game_over') return // game ended in 1 hand; skip multi-hand check
 
-    const scoresAfterHand1 = state.handHistory[0].scoresAfter
+    // After hand 1: scoresAfter should match state.scores (start of hand 2 bidding)
+    assert.deepEqual(state.handHistory[0].scoresAfter, state.scores)
+
     state = completeOneHand(state)
 
-    if (state.phase === 'game_over') {
-      // Last hand — scoresAfter should be the final scores
-      assert.deepEqual(state.handHistory[1].scoresAfter, state.scores)
-    } else {
-      // scoresAfterHand1 from entry 0 should match state.scores at start of hand 2 bidding
-      // (hand 2 scores haven't changed yet since we just started bidding)
-      assert.deepEqual(scoresAfterHand1, state.scores)
-    }
+    // After hand 2: scoresAfter should match state.scores (start of hand 3, or final scores)
+    assert.deepEqual(state.handHistory[1].scoresAfter, state.scores)
   })
 })
 

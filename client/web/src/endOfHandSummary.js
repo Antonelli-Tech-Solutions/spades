@@ -115,10 +115,25 @@ export function endOfHandSummaryHtml(entry, mySeat) {
   const usLabel = `Us (${TEAM_LABEL[myTeam]})`
   const themLabel = `Them (${TEAM_LABEL[theirTeam]})`
 
+  const scoresBefore = entry.scoresBefore || { ns: 0, ew: 0 }
+  const myScoreBefore = scoresBefore[myTeam]
+  const theirScoreBefore = scoresBefore[theirTeam]
+
   return `
     <div class="hand-summary-overlay" id="hand-summary-overlay">
       <div class="hand-summary-modal" role="dialog" aria-label="Hand ${esc(String(entry.handNumber))} Summary">
         <h3 class="hand-summary-title">Hand ${esc(String(entry.handNumber))} Summary</h3>
+        <div class="hand-summary-scores-before">
+          <div class="scores-before-team">
+            <span class="scores-before-label">${esc(usLabel)}</span>
+            <span class="scores-before-value">${myScoreBefore}</span>
+          </div>
+          <div class="scores-before-sep">vs</div>
+          <div class="scores-before-team">
+            <span class="scores-before-label">${esc(themLabel)}</span>
+            <span class="scores-before-value">${theirScoreBefore}</span>
+          </div>
+        </div>
         <div class="hand-summary-cols">
           ${teamColHtml(myTeam, entry, usLabel)}
           ${teamColHtml(theirTeam, entry, themLabel)}

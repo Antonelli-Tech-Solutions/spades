@@ -105,6 +105,7 @@ export function teamBidSummaryHtml(state) {
     if (!isSpecialA && !isSpecialB) {
       // Use the authoritative team total from the server; the second bidder's stored
       // bid value is the team total, not their individual contribution.
+
       // Fall back to the second bidder's stored bid when teamBids hasn't been
       // populated yet (i.e. the other team hasn't finished bidding).
       const biddingOrder = state.biddingOrder || []

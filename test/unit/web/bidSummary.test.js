@@ -198,4 +198,23 @@ describe('teamBidSummaryHtml', () => {
     assert.ok(!html.includes('11'), 'must not incorrectly add raw bids (4 + 7 = 11)')
     assert.ok(!html.includes('South 7'), 'must not show second bidder raw team total as their individual bid')
   })
+
+  it('shows correct E/W summary mid-hand when teamBids not yet computed (only E/W have bid)', () => {
+    // Regression test for issue #166: "E/W: null — East 2, West -2"
+    // state.teamBids is only populated after ALL 4 players bid. If only E/W have
+    // finished bidding, teamBids.ew is still null. The summary must fall back to
+    // the second bidder's stored bid (which equals the team total per partnership rules).
+    // East bids 2 (first for EW), West enters 3 as team total (second for EW).
+    // state.bids.west = 3 (team total), state.teamBids.ew = null (not yet computed).
+    const state = makeState(
+      { north: null, south: null, east: 2, west: 3 },
+      { teamBids: { ew: null } }, // teamBids not yet computed — only EW have bid
+    )
+    const html = teamBidSummaryHtml(state)
+    assert.ok(html.includes('E/W: 3'), 'team total must be 3 (derived from second bidder\'s stored bid)')
+    assert.ok(html.includes('East 2'), 'first bidder East shows advisory bid 2')
+    assert.ok(html.includes('West 1'), 'second bidder West shows individual contribution (3 − 2 = 1)')
+    assert.ok(!html.includes('null'), 'must not render "null" in the summary')
+    assert.ok(!html.includes('West -'), 'must not show a negative individual bid for West')
+  })
 })

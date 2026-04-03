@@ -77,6 +77,24 @@ describe('teamBidSummaryHtml', () => {
     assert.ok(html.includes('West 3'), 'should show West individual contribution 3')
   })
 
+  it('mid-bidding: renders E/W summary correctly when teamBids.ew is null', () => {
+    // Simulates real server state mid-bidding: East and West have both bid,
+    // but North/South have not yet bid, so state.teamBids is still { ns: null, ew: null }
+    // (the server only calls computeTeamBids after all 4 players have bid).
+    // East bids 5 (first for EW). West enters 8 as team total (second for EW).
+    // West individual = 8 - 5 = 3.
+    const state = makeState(
+      { north: null, south: null, east: 5, west: 8 },
+      // teamBids not provided — defaults to { ns: null, ew: null }
+    )
+    const html = teamBidSummaryHtml(state)
+    assert.ok(html.includes('E/W'), 'should include team label E/W')
+    assert.ok(html.includes('East 5'), 'should show East individual bid 5')
+    assert.ok(html.includes('West 3'), 'should show West individual contribution 3')
+    assert.ok(!html.includes('null'), 'should not render the string "null"')
+    assert.ok(!html.includes('West -'), 'should not show a negative West bid')
+  })
+
   it('renders both team summaries when all four players have bid', () => {
     // NS: North 4, South enters 7 (team total). EW: East 5, West enters 7 (team total).
     const state = makeState(

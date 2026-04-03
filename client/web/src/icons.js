@@ -32,3 +32,33 @@ export const BAG_ICON = [
   '<path d="M14.5 13.8 Q14.5 11.5 12 11.5 Q9.5 11.5 9.5 13.8 Q9.5 16 12 16 Q14.5 16 14.5 18.2 Q14.5 20.5 12 20.5 Q9.5 20.5 9.5 18.2" fill="none" stroke="#6B4400" stroke-width="1.4" stroke-linecap="round"/>',
   '</svg>',
 ].join('')
+
+export const DUNCE_CAP_ICON = [
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-2px">',
+  // Hat body — red cone
+  '<path d="M12 2 L3 20 L21 20 Z" fill="#CC2200" stroke="#991100" stroke-width="0.8"/>',
+  // Brim — yellow band
+  '<ellipse cx="12" cy="20" rx="9" ry="2" fill="#FFD700" stroke="#CC9900" stroke-width="0.8"/>',
+  // Pompom — yellow circle at tip
+  '<circle cx="12" cy="3" r="1.8" fill="#FFD700" stroke="#CC9900" stroke-width="0.6"/>',
+  '</svg>',
+].join('')
+
+export const EMBARRASSED_FACE_ICON = [
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-2px">',
+  // Face
+  '<circle cx="12" cy="12" r="10" fill="#FFD700" stroke="#CC9900" stroke-width="1"/>',
+  // Left eye — X
+  '<line x1="7" y1="8" x2="10" y2="11" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>',
+  '<line x1="10" y1="8" x2="7" y2="11" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>',
+  // Right eye — X
+  '<line x1="14" y1="8" x2="17" y2="11" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>',
+  '<line x1="17" y1="8" x2="14" y2="11" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>',
+  // Left blush
+  '<ellipse cx="7.5" cy="14.5" rx="2.5" ry="1.5" fill="#FF8080" opacity="0.7"/>',
+  // Right blush
+  '<ellipse cx="16.5" cy="14.5" rx="2.5" ry="1.5" fill="#FF8080" opacity="0.7"/>',
+  // Worried mouth
+  '<path d="M9 18 Q12 16 15 18" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>',
+  '</svg>',
+].join('')

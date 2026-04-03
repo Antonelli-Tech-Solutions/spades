@@ -106,9 +106,12 @@ function teamColHtml(team, entry, colLabel) {
  *
  * @param {object} entry - A hand history entry from state.handHistory
  * @param {string} mySeat - The viewing player's seat ('north'|'east'|'south'|'west')
+ * @param {{ winner: string } | null} [gameOverInfo] - When provided, augments the
+ *   overlay with a game-over announcement and replaces the Continue button with
+ *   a Back to Lobby button. `winner` is 'ns' or 'ew'.
  * @returns {string} HTML string for the overlay
  */
-export function endOfHandSummaryHtml(entry, mySeat) {
+export function endOfHandSummaryHtml(entry, mySeat, gameOverInfo = null) {
   const myTeam = TEAM[mySeat]
   const theirTeam = myTeam === 'ns' ? 'ew' : 'ns'
 
@@ -119,10 +122,25 @@ export function endOfHandSummaryHtml(entry, mySeat) {
   const myScoreBefore = scoresBefore[myTeam]
   const theirScoreBefore = scoresBefore[theirTeam]
 
+  const titleSuffix = gameOverInfo ? ' \u00b7 GAME OVER' : ''
+
+  let gameOverBannerHtml = ''
+  if (gameOverInfo) {
+    const winnerTeamLabel = TEAM_LABEL[gameOverInfo.winner] ?? gameOverInfo.winner.toUpperCase()
+    const iWon = gameOverInfo.winner === myTeam
+    const announcement = iWon ? `Your team (${winnerTeamLabel}) wins!` : `${winnerTeamLabel} wins!`
+    gameOverBannerHtml = `<div class="game-over-banner${iWon ? ' game-over-banner--win' : ' game-over-banner--loss'}">${esc(announcement)}</div>`
+  }
+
+  const actionButtonHtml = gameOverInfo
+    ? `<button class="btn-primary hand-summary-lobby" id="hand-summary-lobby">Back to Lobby</button>`
+    : `<button class="btn-primary hand-summary-continue" id="hand-summary-continue">Continue</button>`
+
   return `
     <div class="hand-summary-overlay" id="hand-summary-overlay">
       <div class="hand-summary-modal" role="dialog" aria-label="Hand ${esc(String(entry.handNumber))} Summary">
-        <h3 class="hand-summary-title">Hand ${esc(String(entry.handNumber))} Summary</h3>
+        <h3 class="hand-summary-title">Hand ${esc(String(entry.handNumber))} Summary${titleSuffix}</h3>
+        ${gameOverBannerHtml}
         <div class="hand-summary-scores-before">
           <div class="scores-before-team">
             <span class="scores-before-label">${esc(usLabel)}</span>
@@ -138,7 +156,7 @@ export function endOfHandSummaryHtml(entry, mySeat) {
           ${teamColHtml(myTeam, entry, usLabel)}
           ${teamColHtml(theirTeam, entry, themLabel)}
         </div>
-        <button class="btn-primary hand-summary-continue" id="hand-summary-continue">Continue</button>
+        ${actionButtonHtml}
       </div>
     </div>`
 }

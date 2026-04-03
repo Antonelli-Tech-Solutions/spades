@@ -331,11 +331,20 @@ export function renderGameScreen(container) {
 
   function renderHandSummary(seat) {
     const entry = state.handHistory[state.handHistory.length - 1]
-    container.innerHTML = `<div class="game-screen">${endOfHandSummaryHtml(entry, seat)}</div>`
-    container.querySelector('#hand-summary-continue')?.addEventListener('click', () => {
-      dismissedHandCount++
-      render()
-    })
+    const isGameOver = state.phase === 'game_over'
+    const gameOverInfo = isGameOver ? { winner: state.winner } : null
+    container.innerHTML = `<div class="game-screen">${endOfHandSummaryHtml(entry, seat, gameOverInfo)}</div>`
+    if (isGameOver) {
+      container.querySelector('#hand-summary-lobby')?.addEventListener('click', () => {
+        cleanup()
+        navigate('#/lobby')
+      })
+    } else {
+      container.querySelector('#hand-summary-continue')?.addEventListener('click', () => {
+        dismissedHandCount++
+        render()
+      })
+    }
   }
 
   function render() {
@@ -356,7 +365,9 @@ export function renderGameScreen(container) {
     }
 
     if (state.phase === 'game_over') {
-      navigate(`#/game-over?tableId=${tableId}`)
+      // Final hand summary was already dismissed (e.g. page reload after game ended).
+      // Navigate directly to lobby — there is nothing left to show.
+      navigate('#/lobby')
       return
     }
     if (!seat) {

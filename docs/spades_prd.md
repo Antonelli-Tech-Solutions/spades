@@ -288,6 +288,10 @@ The WebSocket server uses Redis pub/sub as its broadcast bus. Each room (`table:
 2. If the player reconnects and re-authenticates within the window, they re-join the room and receive a full state re-hydration via `GET /api/tables/:tableId/state`.
 3. If the reconnect window expires: the game stalls for other players with a "waiting for reconnect" indicator. The v1.1 disconnect-fill bot (see [Section 9](#9-post-launch-roadmap)) takes over at the start of the next hand once this infrastructure is in place.
 
+#### 6.4.7 Player-Initiated Leave During In-Progress Game
+
+**Decision (recorded April 2026):** When a seated player calls `POST /api/tables/:tableId/leave` while a game is in progress, the server immediately replaces the vacated seat with a bot (`bot:<seat>`). The bot takes over from the current game state and plays automatically for the remainder of the game using the existing bot logic. This is distinct from the v1.1 disconnect-fill, which applies only on network disconnect and activates at the start of the next hand. The voluntary-leave bot-fill is in scope for v1.0.
+
 ---
 
 ## 7. Open Questions
@@ -344,6 +348,8 @@ A rule-based AI opponent that plays legal, competent Spades. Serves two purposes
 - **Disconnect fill** — when a player disconnects and does not reconnect by the start of the next hand, a bot takes their seat for that hand. The player may rejoin at the start of any subsequent hand.
 
 Table host may configure: bot fill on disconnect only, always allow bots, or no bots.
+
+> **Note:** Voluntary-leave bot-fill (player presses "Leave Table" during an in-progress game) was promoted to v1.0 scope (see Section 6.4.7). This v1.1 item covers disconnect-fill and the full casual-bot experience only.
 
 ---
 

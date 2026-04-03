@@ -262,6 +262,30 @@ export async function submitBlindNilExchange({ tableId, cards, sessionId, player
 }
 
 /**
+ * Reveal the player's hand during the Blind Nil eligibility window.
+ * @param {{ tableId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>} Updated player-specific game state including myHand
+ */
+export async function revealHand({ tableId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/reveal-hand`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to reveal hand.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Add a bot player to an empty seat at a table (host only).
  * @param {{ tableId: string, seat: string, sessionId: string, playerId: string }} data
  * @param {typeof fetch} [fetchFn]

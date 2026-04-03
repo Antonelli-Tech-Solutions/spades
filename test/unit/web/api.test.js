@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerUser, loginUser, logoutUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable, getGameState, placeBid, playCard, submitBlindNilExchange } from '../../../client/web/src/api.js'
+import { registerUser, loginUser, logoutUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable, getGameState, placeBid, playCard, submitBlindNilExchange, revealHand } from '../../../client/web/src/api.js'
 
 /**
  * Build a minimal mock fetch that returns the given status and JSON body.
@@ -427,6 +427,67 @@ describe('playCard', () => {
     await assert.rejects(
       () => playCard(auth, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => { assert.equal(err.status, 401); return true },
+    )
+  })
+})
+
+describe('revealHand', () => {
+  const auth = { tableId: 'table-1', sessionId: 'sess-1', playerId: 'player-1' }
+
+  it('resolves with updated state including myHand on 200', async () => {
+    const hand = Array.from({ length: 13 }, (_, i) => ({ suit: 'spades', rank: String(i + 2) }))
+    const state = { phase: 'bidding', blindNilEligible: true, myHand: hand }
+    const result = await revealHand(auth, mockFetch(200, state))
+    assert.ok(Array.isArray(result.myHand), 'myHand should be present after reveal')
+    assert.equal(result.myHand.length, 13)
+  })
+
+  it('throws with status 409 when player has already placed a bid', async () => {
+    await assert.rejects(
+      () => revealHand(auth, mockFetch(409, { error: 'Bid already placed' })),
+      (err) => {
+        assert.equal(err.status, 409)
+        assert.match(err.message, /Bid already placed/)
+        return true
+      },
+    )
+  })
+
+  it('throws with status 400 when player is not eligible for Blind Nil', async () => {
+    await assert.rejects(
+      () => revealHand(auth, mockFetch(400, { error: 'Not eligible for Blind Nil' })),
+      (err) => {
+        assert.equal(err.status, 400)
+        assert.match(err.message, /Not eligible/)
+        return true
+      },
+    )
+  })
+
+  it('throws with status 400 when not in bidding phase', async () => {
+    await assert.rejects(
+      () => revealHand(auth, mockFetch(400, { error: 'Invalid action outside bidding phase' })),
+      (err) => {
+        assert.equal(err.status, 400)
+        return true
+      },
+    )
+  })
+
+  it('throws with status 401 when unauthenticated', async () => {
+    await assert.rejects(
+      () => revealHand(auth, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => { assert.equal(err.status, 401); return true },
+    )
+  })
+
+  it('throws a generic message when response body has no error field', async () => {
+    await assert.rejects(
+      () => revealHand(auth, mockFetch(500, {})),
+      (err) => {
+        assert.ok(err.message)
+        return true
+      },
     )
   })
 })

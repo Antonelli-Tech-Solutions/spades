@@ -4,6 +4,7 @@ import {
   playCard as apiPlay,
   submitBlindNilExchange as apiExchange,
   addBotToTable as apiAddBot,
+  revealHand as apiRevealHand,
 } from '../api.js'
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
@@ -23,6 +24,31 @@ function esc(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+/**
+ * Render 13 face-down card backs for the Blind Nil eligibility window.
+ * @returns {string} HTML string
+ */
+export function blindNilHandHtml() {
+  return Array.from({ length: 13 }, () => '<span class="card card-back"></span>').join('')
+}
+
+/**
+ * Render the Blind Nil choice panel shown when it is the player's bid turn
+ * and their hand is still hidden (blindNilEligible and no myHand).
+ * @returns {string} HTML string
+ */
+export function blindNilChoicePanelHtml() {
+  return `
+    <div class="blind-nil-choice-panel">
+      <p class="blind-nil-choice-title">Choose your action:</p>
+      <div class="blind-nil-choice-btns">
+        <button class="btn-primary blind-nil-reveal-btn" id="blind-nil-reveal-btn">Reveal Hand</button>
+        <button class="btn-secondary blind-nil-bid-btn" id="blind-nil-bid-btn">Bid Blind Nil</button>
+      </div>
+      <div class="form-error blind-nil-err" role="alert" aria-live="polite"></div>
+    </div>`
 }
 
 function getSeatForPlayer(players, playerId) {
@@ -289,6 +315,7 @@ export function renderGameScreen(container) {
     )
 
     const selectedSet = new Set(selectedCards.map((c) => `${c.suit}-${c.rank}`))
+    const handHidden = state.blindNilEligible === true && !state.myHand
 
     function cardExtraCls(card) {
       const key = `${card.suit}-${card.rank}`
@@ -297,9 +324,11 @@ export function renderGameScreen(container) {
       return ''
     }
 
-    const handHtml = handMode === 'spread'
-      ? handSpreadHtml(state.myHand, cardExtraCls)
-      : `<div class="hand-diagram">${handDiagramHtml(state.myHand, cardExtraCls)}</div>`
+    const handHtml = handHidden
+      ? blindNilHandHtml()
+      : (handMode === 'spread'
+        ? handSpreadHtml(state.myHand, cardExtraCls)
+        : `<div class="hand-diagram">${handDiagramHtml(state.myHand, cardExtraCls)}</div>`)
 
     let statusMsg = ''
     if (state.phase === 'bidding') {
@@ -334,7 +363,10 @@ export function renderGameScreen(container) {
       }
     }
 
-    const bidPanelHtml = isMyBidTurn ? `
+    const bidPanelHtml = isMyBidTurn
+      ? (handHidden
+        ? blindNilChoicePanelHtml()
+        : `
       <div class="bid-panel">
         <p class="bid-title">${esc(bidPanelTitle)}</p>
         ${bidPartnerInfoHtml}
@@ -347,7 +379,8 @@ export function renderGameScreen(container) {
         </div>
         ${bidHintHtml}
         <div class="form-error bid-err" role="alert" aria-live="polite"></div>
-      </div>` : ''
+      </div>`)
+      : ''
 
     const exchangePanelHtml = isMyExchangeTurn ? `
       <div class="exchange-panel">
@@ -560,6 +593,47 @@ export function renderGameScreen(container) {
         if (!mounted) return
         const errEl = container.querySelector('.exchange-err')
         if (errEl) errEl.textContent = err.message || 'Failed to exchange cards.'
+      } finally {
+        acting = false
+        schedulePoll()
+      }
+    })
+
+    // Reveal Hand — call reveal-hand endpoint; state update will include myHand
+    container.querySelector('#blind-nil-reveal-btn')?.addEventListener('click', async () => {
+      if (acting) return
+      acting = true
+      clearTimeout(pollTimer)
+      try {
+        const s = await apiRevealHand({ tableId, sessionId, playerId })
+        if (!mounted) return
+        state = s
+        render()
+      } catch (err) {
+        if (!mounted) return
+        const errEl = container.querySelector('.blind-nil-err')
+        if (errEl) errEl.textContent = err.message || 'Failed to reveal hand.'
+      } finally {
+        acting = false
+        schedulePoll()
+      }
+    })
+
+    // Bid Blind Nil directly — submit blind_nil bid without ever showing the hand
+    container.querySelector('#blind-nil-bid-btn')?.addEventListener('click', async () => {
+      if (acting) return
+      acting = true
+      clearTimeout(pollTimer)
+      try {
+        const s = await apiBid({ tableId, bid: 'blind_nil', sessionId, playerId })
+        if (!mounted) return
+        state = s
+        selectedCards = []
+        render()
+      } catch (err) {
+        if (!mounted) return
+        const errEl = container.querySelector('.blind-nil-err')
+        if (errEl) errEl.textContent = err.message || 'Failed to place bid.'
       } finally {
         acting = false
         schedulePoll()

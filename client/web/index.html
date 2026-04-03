@@ -987,6 +987,142 @@
         color: #b0b0b0;
         text-align: center;
       }
+
+      /* ── End-of-hand summary overlay ─────────────────────────────────── */
+
+      .hand-summary-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.78);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+        padding: 1rem;
+      }
+
+      .hand-summary-modal {
+        background: #1b2d1b;
+        border: 1px solid #3a5a3a;
+        border-radius: 10px;
+        padding: 1.5rem 1.75rem 1.25rem;
+        width: 100%;
+        max-width: 480px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.1rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      }
+
+      .hand-summary-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #e8e8e8;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin: 0;
+      }
+
+      .hand-summary-cols {
+        display: flex;
+        gap: 0.75rem;
+        width: 100%;
+      }
+
+      .hand-summary-col {
+        flex: 1;
+        background: #131f13;
+        border: 1px solid #2e4a2e;
+        border-radius: 7px;
+        padding: 0.75rem 0.875rem 0.875rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .summary-col-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #81c784;
+        text-align: center;
+        margin: 0 0 0.6rem;
+      }
+
+      .summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.4rem;
+        padding: 0.3rem 0;
+        border-bottom: 1px solid #1e341e;
+        font-size: 0.78rem;
+        color: #c8c8c8;
+      }
+
+      .summary-row:last-of-type {
+        border-bottom: none;
+      }
+
+      .summary-row-label {
+        color: #909090;
+        flex-shrink: 0;
+      }
+
+      .summary-row-value {
+        font-weight: 600;
+        text-align: right;
+      }
+
+      .nil-row.nil-made .summary-row-label,
+      .nil-row.nil-made .summary-row-value {
+        color: #66bb6a;
+      }
+
+      .nil-row.nil-failed .summary-row-label,
+      .nil-row.nil-failed .summary-row-value {
+        color: #e57373;
+      }
+
+      .penalty-row .summary-row-label,
+      .penalty-row .summary-row-value {
+        color: #ffa726;
+      }
+
+      .summary-total {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        margin-top: 0.75rem;
+        padding-top: 0.6rem;
+        border-top: 1px solid #2e4a2e;
+        gap: 0.1rem;
+      }
+
+      .summary-score {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #fff;
+        line-height: 1.2;
+      }
+
+      .summary-bags {
+        font-size: 0.72rem;
+        color: #777;
+      }
+
+      .hand-summary-continue {
+        width: auto;
+        min-width: 140px;
+        padding: 0.6rem 2rem;
+        font-size: 0.9rem;
+        border-radius: 6px;
+        align-self: center;
+      }
     </style>
   </head>
   <body>

@@ -132,12 +132,12 @@ describe('handHistory — after one completed hand', () => {
     assert.ok('ew' in newBags)
   })
 
-  it('entry has bagPenalty booleans for both teams', () => {
+  it('entry has bagPenalty counts (numbers) for both teams', () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { bagPenalty } = state.handHistory[0]
-    assert.equal(typeof bagPenalty.ns, 'boolean')
-    assert.equal(typeof bagPenalty.ew, 'boolean')
+    assert.equal(typeof bagPenalty.ns, 'number')
+    assert.equal(typeof bagPenalty.ew, 'number')
   })
 
   it('entry has scoresAfter matching the state scores after the hand', () => {
@@ -158,18 +158,17 @@ describe('handHistory — after one completed hand', () => {
     assert.deepEqual(state.handHistory[0].bagsAfter, state.bags)
   })
 
-  it('bagPenalty.ns is false when bags are below 10', () => {
+  it('bagPenalty.ns is 0 when bags are below 10', () => {
     // With bid=6 and 13 tricks total, bags are minimal; penalty at 10 bags is unlikely in hand 1
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { bagPenalty, bagsAfter } = state.handHistory[0]
     // If bagsAfter for a team < 10 after hand 1, no penalty applied
-    // (may have wrapped if penalty applied; test the logic indirectly)
-    if (bagsAfter.ns < 10 && !bagPenalty.ns) {
+    if (bagsAfter.ns < 10 && bagPenalty.ns === 0) {
       assert.ok(true)
-    } else if (bagPenalty.ns) {
-      // A penalty was applied — scoresAfter should reflect a -100 deduction
-      assert.ok(true) // Just verify it's a boolean, actual value tested elsewhere
+    } else if (bagPenalty.ns > 0) {
+      // A penalty was applied — scoresAfter should reflect a -100 deduction per penalty
+      assert.ok(true) // Just verify it's a number, actual value tested elsewhere
     }
   })
 })
@@ -214,7 +213,7 @@ describe('handHistory — accumulates across multiple hands', () => {
 })
 
 describe('handHistory — bag penalty detection', () => {
-  it('bagPenalty.ns is true when ns crosses 10 bags in a hand', () => {
+  it('bagPenalty.ns is 1 when ns crosses 10 bags in a hand', () => {
     // Construct a state with 9 bags for ns and force another bag this hand
     // We'll build a synthetic state snapshot rather than playing through it
     const initial = createGame('table-1', PLAYER_IDS)
@@ -234,9 +233,30 @@ describe('handHistory — bag penalty detection', () => {
     // Find the entry and check if a penalty was applied whenever ns bags crossed 10
     const entry = s.handHistory.find((e) => e.handNumber === 1)
     assert.ok(entry, 'hand 1 entry should exist')
-    // If ns earned ≥1 bag (9 + ≥1 = ≥10), penalty should be true
+    // If ns earned ≥1 bag (9 + ≥1 = ≥10), penalty should be > 0
     if (entry.newBags.ns >= 1) {
-      assert.equal(entry.bagPenalty.ns, true, 'bag penalty should be flagged when bags cross 10')
+      assert.ok(entry.bagPenalty.ns > 0, 'bag penalty count should be > 0 when bags cross 10')
     }
+  })
+
+  it('bagPenalty.ns is 2 when ns accumulates 20+ bags (double bag-out) in a hand', () => {
+    // Start with 9 bags, NS bids 0 (every trick becomes a bag).
+    // 9 + 13 = 22 total → Math.floor(22/10) = 2 penalties.
+    const initial = createGame('table-1', PLAYER_IDS)
+    const stateWith9Bags = { ...initial, bags: { ns: 9, ew: 0 } }
+
+    // NS bids 0 (team total 0 → every trick is a bag)
+    let s = bidAll(stateWith9Bags, [
+      ['east', 4],
+      ['south', 0],
+      ['west', 3],
+      ['north', 0],
+    ])
+    s = playFullHand(s)
+
+    const entry = s.handHistory.find((e) => e.handNumber === 1)
+    assert.ok(entry, 'hand 1 entry should exist')
+    // NS takes all 13 tricks as bags → 9 + 13 = 22, floor(22/10) = 2 penalties
+    assert.equal(entry.bagPenalty.ns, 2, 'should record 2 bag penalties when 20+ bags crossed')
   })
 })

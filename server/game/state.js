@@ -388,10 +388,10 @@ function scoreCompletedHand(state) {
     ew: state.scores.ew + scoreDelta.ew,
   }
 
-  // Detect bag penalties before applying them (crosses 10 bags)
+  // Count how many 10-bag penalties each team crosses this hand
   const bagPenalty = {
-    ns: Math.floor((state.bags.ns + newBags.ns) / 10) > 0,
-    ew: Math.floor((state.bags.ew + newBags.ew) / 10) > 0,
+    ns: Math.floor((state.bags.ns + newBags.ns) / 10),
+    ew: Math.floor((state.bags.ew + newBags.ew) / 10),
   }
 
   const { scores, bags } = applyBagPenalties(rawScores, state.bags, newBags)

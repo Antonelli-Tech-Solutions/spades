@@ -65,7 +65,7 @@ function teamColHtml(team, entry, colLabel) {
     const delta = entry.scoreDelta[team]
     const sign = delta >= 0 ? '+' : ''
     const bagsEarned = entry.newBags[team]
-    const bagsText = bagsEarned > 0 ? `, +${bagsEarned} bag${bagsEarned !== 1 ? 's' : ''}` : ''
+    const bagsText = bagsEarned > 0 ? `, +${bagsEarned}\u{1F45D}` : ''
     teamRowHtml = `
       <div class="summary-row team-row">
         <span class="summary-row-label">Bid ${esc(String(teamBid))}, Took ${teamTricks}</span>
@@ -96,7 +96,7 @@ function teamColHtml(team, entry, colLabel) {
       ${penaltyHtml}
       <div class="summary-total">
         <span class="summary-score">${scoreAfter} pts</span>
-        <span class="summary-bags">${bagsAfter} bag${bagsAfter !== 1 ? 's' : ''}</span>
+        <span class="summary-bags">${bagsAfter}\u{1F45D}</span>
       </div>
     </div>`
 }

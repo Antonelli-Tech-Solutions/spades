@@ -21,11 +21,11 @@ describe('scoreHand — basic team bid', () => {
       teamBids: { ns: 7, ew: 7 },
       tricksWon: { north: 4, east: 5, south: 4, west: 3 },
     })
-    // NS: 8 tricks vs bid 7 → +70 + 1 bag
-    assert.equal(scoreDelta.ns, 70)
+    // NS: 8 tricks vs bid 7 → +70 + 1 bag (+1 pt) = 71
+    assert.equal(scoreDelta.ns, 71)
     assert.equal(newBags.ns, 1)
-    // EW: 8 tricks vs bid 7 → +70 + 1 bag
-    assert.equal(scoreDelta.ew, 70)
+    // EW: 8 tricks vs bid 7 → +70 + 1 bag (+1 pt) = 71
+    assert.equal(scoreDelta.ew, 71)
     assert.equal(newBags.ew, 1)
   })
 
@@ -75,8 +75,8 @@ describe('scoreHand — nil bid', () => {
       tricksWon: { north: 3, east: 4, south: 5, west: 3 },
     })
     // North failed nil: -50
-    // NS: 8 tricks vs bid 5 → +50 + 3 bags
-    assert.equal(scoreDelta.ns, -50 + 50)
+    // NS: 8 tricks vs bid 5 → +50 + 3 bags (+3 pts) = 3
+    assert.equal(scoreDelta.ns, -50 + 50 + 3)
     assert.equal(newBags.ns, 3)
   })
 })
@@ -121,8 +121,8 @@ describe('scoreHand — double nil', () => {
       teamBids: { ns: null, ew: 7 },
       tricksWon: { north: 2, east: 4, south: 0, west: 3 },
     })
-    // North failed nil (-50); south made nil (+50); north's 2 tricks = 2 bags
-    assert.equal(scoreDelta.ns, -50 + 50)
+    // North failed nil (-50); south made nil (+50); north's 2 tricks = 2 bags (+2 pts)
+    assert.equal(scoreDelta.ns, -50 + 50 + 2)
     assert.equal(newBags.ns, 2)
   })
 })
@@ -134,8 +134,8 @@ describe('scoreHand — team bid of 0', () => {
       teamBids: { ns: 0, ew: 7 },
       tricksWon: { north: 2, east: 4, south: 1, west: 3 },
     })
-    // NS team bid 0: every trick is a bag, no positive/negative score
-    assert.equal(scoreDelta.ns, 0)
+    // NS team bid 0: every trick is a bag (+1 pt each)
+    assert.equal(scoreDelta.ns, 3) // 3 bags = +3 pts
     assert.equal(newBags.ns, 3) // 2 + 1
   })
 })

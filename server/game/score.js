@@ -66,6 +66,11 @@ export function scoreHand({ bids, teamBids, tricksWon }) {
     }
   }
 
+  // Each bag is worth +1 point (PRD §5.1)
+  for (const team of TEAMS) {
+    scoreDelta[team] += newBags[team]
+  }
+
   return { scoreDelta, newBags }
 }
 

@@ -237,6 +237,7 @@ export function renderGameScreen(container) {
     clearTimeout(pollTimer)
     clearTimeout(holdTimer)
     if (appEl) appEl.classList.remove('app--game')
+    sessionStorage.removeItem('currentTableId')
   }
 
   function startHold(trick) {

@@ -223,6 +223,23 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `400` | Missing/invalid token, expired token, or password too short |
 | `500` | Internal server error |
 
+### Tables
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/player/table` | Required | Returns the tableId of the active table the authenticated player is currently seated at, or `null` if they are not seated anywhere. Does not return a table whose game is already over. |
+
+#### `GET /api/player/table`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ "tableId": "<uuid>" }` or `{ "tableId": null }` |
+| `401` | Missing or invalid session |
+
 ## Web UI
 
 The web client is served as static files from `client/web/` by the Express server. Open `http://localhost:3000` in a browser after starting the server.

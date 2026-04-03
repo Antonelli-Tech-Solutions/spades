@@ -355,6 +355,30 @@ export async function logoutUser({ sessionId }, fetchFn = globalThis.fetch) {
 }
 
 /**
+ * Get the active table for the authenticated player.
+ * Returns { tableId } where tableId is the UUID of the table the player is seated at,
+ * or null if the player is not currently seated at any active table.
+ * @param {{ sessionId: string, playerId: string }} auth
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tableId: string|null }>}
+ */
+export async function getActiveTable({ sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/player/table', {
+    headers: {
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to get active table.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Log in with email and password.
  * @param {{ email: string, password: string }} data
  * @param {typeof fetch} [fetchFn]

@@ -6,6 +6,7 @@ import {
   addBotToTable as apiAddBot,
   revealHand as apiRevealHand,
   terminateGame as apiTerminate,
+  leaveTable as apiLeaveTable,
 } from '../api.js'
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
@@ -316,7 +317,7 @@ export function renderGameScreen(container) {
           <div class="form-error waiting-err" role="alert" aria-live="polite"></div>
           ${fillBotsBtn}
           ${terminateBtn}
-          <p class="auth-link"><a href="#/lobby">Leave table</a></p>
+          <button class="btn-secondary" id="leave-table-btn">Leave Table</button>
         </div>
       </div>`
 
@@ -353,6 +354,23 @@ export function renderGameScreen(container) {
       } catch (err) {
         errEl.textContent = err.message || 'Failed to terminate game.'
         btn.disabled = false
+      }
+    })
+
+    container.querySelector('#leave-table-btn')?.addEventListener('click', async () => {
+      const btn = container.querySelector('#leave-table-btn')
+      const errEl = container.querySelector('.waiting-err')
+      btn.disabled = true
+      btn.textContent = 'Leaving\u2026'
+      errEl.textContent = ''
+      try {
+        await apiLeaveTable({ tableId, sessionId, playerId })
+        cleanup()
+        navigate('#/lobby')
+      } catch (err) {
+        errEl.textContent = err.message || 'Failed to leave table.'
+        btn.disabled = false
+        btn.textContent = 'Leave Table'
       }
     })
   }

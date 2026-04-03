@@ -201,6 +201,36 @@ export async function removePlayerFromTables(redis, playerId) {
 }
 
 /**
+ * Remove the requesting player from a waiting table's seat.
+ * Only allowed while the table is in 'waiting' status — in-progress games
+ * require separate disconnect handling.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @returns {Promise<TableState>}
+ * @throws {Error} If the table is not found, game is in progress, or player is not seated
+ */
+export async function leaveTable(redis, tableId, playerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.status === 'playing') {
+    throw Object.assign(new Error('Cannot leave a game in progress'), { code: 'GAME_IN_PROGRESS' })
+  }
+  const seatEntry = Object.entries(table.seats).find(([, id]) => id === playerId)
+  if (!seatEntry) {
+    throw Object.assign(new Error('You are not seated at this table'), { code: 'NOT_SEATED' })
+  }
+  const [seat] = seatEntry
+  const updated = { ...table, seats: { ...table.seats, [seat]: null } }
+  await saveTable(redis, updated)
+  console.log('Player left table:', { tableId, playerId, seat })
+  return updated
+}
+
+/**
  * Terminate a table and its associated game state, removing all Redis keys.
  * Used by the host to forcibly end a game at any point (waiting or in progress).
  *

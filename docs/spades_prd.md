@@ -127,7 +127,9 @@ Players may personalize their experience through the following visual settings, 
 
 - Hands are always sorted by suit and rank. This is not configurable.
 - **Confirm plays:** toggle a confirmation prompt before playing a card (off by default).
-- **Animation speed:** slow / normal / fast for card animations.
+- **Animation speed:** slow / normal / fast for card animations. The speed setting governs both card play animations and the end-of-trick hold duration. Hold durations by speed: slow = 2500 ms, normal = 1500 ms, fast = 800 ms. Defaults to normal until the setting is configurable.
+- **End-of-trick hold:** when the fourth card of a trick is played, the client keeps the completed trick visible for the configured hold duration and highlights the winning seat before clearing the trick area. State updates (e.g. `TURN_CHANGED`) that arrive during the hold window are queued and applied only after the hold expires.
+- **Input blocking during animations and hold:** card play input is disabled for the active player from the moment they play a card until both the card play animation *and* any subsequent end-of-trick hold have fully completed. A `TURN_CHANGED` event arriving during this window does not re-enable input early — it is applied to the UI only after the hold clears. This prevents a player from clicking their next card before the current trick has been visually resolved.
 - **Previous trick:** players may tap/click to view the previous trick at any time until they have played a card to the current trick, at which point it is no longer accessible.
 - **Notifications:** configure push notification preferences for friend activity and game invitations.
 

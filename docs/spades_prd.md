@@ -127,7 +127,8 @@ Players may personalize their experience through the following visual settings, 
 
 - Hands are always sorted by suit and rank. This is not configurable.
 - **Confirm plays:** toggle a confirmation prompt before playing a card (off by default).
-- **Animation speed:** slow / normal / fast for card animations.
+- **Animation speed:** slow / normal / fast. Controls both card play animations and the end-of-trick hold duration. Default durations: slow = 2500 ms, normal = 1500 ms, fast = 800 ms. The hold duration defaults to normal (1500 ms) until the player saves a preference. This setting is implemented in Slice 5; the hold logic ships in Slice 1 hardcoded to the normal duration.
+- **End-of-trick hold:** when the fourth card of a trick is played, the client must keep the completed trick visible for the configured hold duration, highlight the winning seat, then clear the trick area before rendering the next state. This is a client-side UX behaviour — the server applies no delay. The hold must not drop any state updates that arrive during the window; they are applied after the hold expires.
 - **Previous trick:** players may tap/click to view the previous trick at any time until they have played a card to the current trick, at which point it is no longer accessible.
 - **Notifications:** configure push notification preferences for friend activity and game invitations.
 

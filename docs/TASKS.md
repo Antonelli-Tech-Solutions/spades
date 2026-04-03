@@ -54,6 +54,7 @@
 - [x] `P0` Game screen: display hand, bid input, card play, current trick, scoreboard
 - [x] `P0` Build hand display in Spread (fan) and Hand Diagram modes
 - [x] `P0` Game over screen: show final score and winner
+- [ ] `P1` End-of-trick hold: when the fourth card of a trick is played, keep the completed trick visible for 1500 ms (normal speed, hardcoded until the animation speed setting ships in Slice 5), highlight the winning seat, then clear — do not drop state updates that arrive during the hold window
 
 ### Testing
 

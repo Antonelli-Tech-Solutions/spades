@@ -213,6 +213,23 @@ describe('handHistory — accumulates across multiple hands', () => {
   })
 })
 
+describe('handHistory — scoresBefore field', () => {
+  it('scoresBefore is { ns: 0, ew: 0 } for the first hand', () => {
+    const initial = createGame('table-1', PLAYER_IDS)
+    const state = completeOneHand(initial)
+    assert.deepEqual(state.handHistory[0].scoresBefore, { ns: 0, ew: 0 })
+  })
+
+  it('scoresBefore for hand 2 equals scoresAfter of hand 1', () => {
+    let state = createGame('table-1', PLAYER_IDS)
+    state = completeOneHand(state)
+    if (state.phase === 'game_over') return // skip if game ended in one hand
+    const scoresAfterHand1 = state.handHistory[0].scoresAfter
+    state = completeOneHand(state)
+    assert.deepEqual(state.handHistory[1].scoresBefore, scoresAfterHand1)
+  })
+})
+
 describe('handHistory — bag penalty detection', () => {
   it('bagPenalty.ns is 1 when ns crosses 10 bags in a hand', () => {
     // Construct a state with 9 bags for ns and force another bag this hand

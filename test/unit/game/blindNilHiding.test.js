@@ -61,6 +61,12 @@ describe('getPlayerView — Blind Nil hand hiding', () => {
     assert.equal(westView.myHand.length, 13)
   })
 
+  it('ineligible player has blindNilEligible: false', () => {
+    const state = makeNsEligibleState()
+    const eastView = getPlayerView(state, 'east')
+    assert.equal(eastView.blindNilEligible, false, 'blindNilEligible must be false for ineligible player')
+  })
+
   it('eligible player receives myHand after reveal-hand', () => {
     const state = makeNsEligibleState()
     const revealed = revealHand(state, 'north')

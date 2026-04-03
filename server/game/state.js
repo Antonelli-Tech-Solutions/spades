@@ -74,6 +74,7 @@ export function createGame(tableId, players) {
     players,
     scores: { ns: 0, ew: 0 },
     bags: { ns: 0, ew: 0 },
+    handHistory: [],
     phase: 'bidding',
     gameOver: false,
     winner: null,
@@ -373,6 +374,7 @@ export function playCard(state, seat, card) {
 
 /**
  * Score a completed hand and transition to the next hand or end the game.
+ * Appends a summary entry to state.handHistory before transitioning.
  */
 function scoreCompletedHand(state) {
   const { scoreDelta, newBags } = scoreHand({
@@ -386,6 +388,12 @@ function scoreCompletedHand(state) {
     ew: state.scores.ew + scoreDelta.ew,
   }
 
+  // Detect bag penalties before applying them (crosses 10 bags)
+  const bagPenalty = {
+    ns: Math.floor((state.bags.ns + newBags.ns) / 10) > 0,
+    ew: Math.floor((state.bags.ew + newBags.ew) / 10) > 0,
+  }
+
   const { scores, bags } = applyBagPenalties(rawScores, state.bags, newBags)
 
   console.log('Hand scored:', {
@@ -393,9 +401,24 @@ function scoreCompletedHand(state) {
     handNumber: state.handNumber,
     scoreDelta,
     newBags,
+    bagPenalty,
     scores,
     bags,
   })
+
+  // Build the hand history entry for this completed hand
+  const handEntry = {
+    handNumber: state.handNumber,
+    bids: { ...state.bids },
+    teamBids: { ...state.teamBids },
+    tricksWon: { ...state.tricksWon },
+    scoreDelta,
+    newBags,
+    bagPenalty,
+    scoresAfter: { ...scores },
+    bagsAfter: { ...bags },
+  }
+  const handHistory = [...(state.handHistory || []), handEntry]
 
   const winLoss = checkWinLoss(scores)
   if (winLoss) {
@@ -404,6 +427,7 @@ function scoreCompletedHand(state) {
       ...state,
       scores,
       bags,
+      handHistory,
       phase: 'game_over',
       gameOver: true,
       winner: winLoss.winner,
@@ -427,6 +451,7 @@ function scoreCompletedHand(state) {
     dealerSeat: nextDealer,
     scores,
     bags,
+    handHistory,
     phase: 'bidding',
     gameOver: false,
     winner: null,

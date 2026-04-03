@@ -59,7 +59,7 @@
 - [x] `P0` Build hand display in Spread (fan) and Hand Diagram modes
 - [x] `P0` Game over screen: show final score and winner
 - [x] `P1` End-of-trick hold: when the fourth card of a trick is played, keep the completed trick visible for 1500 ms (normal speed, hardcoded until the animation speed setting ships in Slice 5), highlight the winning seat, then clear — state updates that arrive during the hold window are queued and applied only after the hold expires
-- [ ] `P1` Input blocking: disable card play input for the active player from when they play a card until the card play animation (Slice 2) and end-of-trick hold have both fully completed — a `TURN_CHANGED` event arriving during this window must not re-enable input early
+- [x] `P1` Input blocking: disable card play input for the active player from when they play a card until the card play animation (Slice 2) and end-of-trick hold have both fully completed — a `TURN_CHANGED` event arriving during this window must not re-enable input early
 
 ### Testing
 

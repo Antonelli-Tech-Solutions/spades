@@ -9,6 +9,7 @@ import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
 import { relSeats } from '../seatUtils.js'
 import { HOLD_DURATIONS, detectCompletedTrick, trickHoldHtml } from '../trickHold.js'
+import { createInputBlocker } from '../inputBlock.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const RED_SUIT = new Set(['hearts', 'diamonds'])
@@ -104,6 +105,7 @@ export function renderGameScreen(container) {
   let holdTrick = null
   let holdTimer = null
   let queuedState = null
+  const inputBlocker = createInputBlocker()
 
   function cleanup() {
     mounted = false
@@ -121,6 +123,9 @@ export function renderGameScreen(container) {
     holdTimer = setTimeout(() => {
       holdActive = false
       holdTrick = null
+      // Slice 2: also wait for the card-play animation before calling unblock().
+      // For now the animation is stubbed, so unblock as soon as the hold expires.
+      inputBlocker.unblock()
       if (queuedState !== null) {
         state = queuedState
         queuedState = null
@@ -234,7 +239,7 @@ export function renderGameScreen(container) {
 
     function cardExtraCls(card) {
       const key = `${card.suit}-${card.rank}`
-      if (isMyPlayTurn) return 'card-play'
+      if (isMyPlayTurn && !inputBlocker.isBlocked()) return 'card-play'
       if (isMyExchangeTurn) return selectedSet.has(key) ? 'card-sel' : 'card-exch'
       return ''
     }
@@ -391,15 +396,16 @@ export function renderGameScreen(container) {
     }
 
     // Hand card interactions (play or exchange)
-    const handIsInteractive = isMyPlayTurn || isMyExchangeTurn
+    const handIsInteractive = (isMyPlayTurn && !inputBlocker.isBlocked()) || isMyExchangeTurn
     if (handIsInteractive) {
       container.querySelectorAll('#hand-cards [data-suit]').forEach((el) => {
         el.addEventListener('click', async () => {
           const card = { suit: el.dataset.suit, rank: el.dataset.rank }
 
           if (isMyPlayTurn) {
-            if (acting) return
+            if (acting || inputBlocker.isBlocked()) return
             acting = true
+            inputBlocker.block()
             clearTimeout(pollTimer)
             const prevState = state
             try {
@@ -408,12 +414,16 @@ export function renderGameScreen(container) {
               const completedTrick = detectCompletedTrick(prevState, s)
               state = s
               if (completedTrick) {
+                // startHold owns the unblock() call — it fires when both the hold
+                // window and any card-play animation (Slice 2) have completed.
                 startHold(completedTrick)
               } else {
+                inputBlocker.unblock()
                 render()
               }
             } catch (err) {
               if (!mounted) return
+              inputBlocker.unblock()
               const errEl = container.querySelector('.play-err')
               if (errEl) errEl.textContent = err.message || 'Cannot play that card.'
             } finally {

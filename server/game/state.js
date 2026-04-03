@@ -416,6 +416,7 @@ function scoreCompletedHand(state) {
     newBags,
     bagPenalty,
     scoresBefore: { ...state.scores },
+    bagsBefore: { ...state.bags },
     scoresAfter: { ...scores },
     bagsAfter: { ...bags },
   }

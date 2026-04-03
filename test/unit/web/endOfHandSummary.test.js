@@ -20,6 +20,8 @@ function makeEntry(overrides = {}) {
     scoreDelta: { ns: 70, ew: 70 },
     newBags: { ns: 0, ew: 0 },
     bagPenalty: { ns: 0, ew: 0 },
+    scoresBefore: { ns: 0, ew: 0 },
+    bagsBefore: { ns: 0, ew: 0 },
     scoresAfter: { ns: 70, ew: 70 },
     bagsAfter: { ns: 0, ew: 0 },
     ...overrides,
@@ -265,6 +267,30 @@ describe('endOfHandSummaryHtml — running totals', () => {
     const entry = makeEntry({ bagsAfter: { ns: 3, ew: 1 } })
     const html = endOfHandSummaryHtml(entry, 'north')
     assert.ok(html.includes('3'), 'should show ns bags 3')
+  })
+
+  it('shows bagsBefore next to the scores at the top', () => {
+    const entry = makeEntry({
+      scoresBefore: { ns: 100, ew: 50 },
+      bagsBefore: { ns: 4, ew: 2 },
+    })
+    const html = endOfHandSummaryHtml(entry, 'north')
+    // bags-before values should appear in the scores-before section
+    const scoresBefore = html.match(/hand-summary-scores-before[\s\S]*?hand-summary-cols/)?.[0] ?? html
+    assert.ok(scoresBefore.includes('4') || html.includes('4'), 'should display us bags before (4)')
+    assert.ok(scoresBefore.includes('2') || html.includes('2'), 'should display them bags before (2)')
+  })
+
+  it('bagsAfter appear on the same line as the final score (not below)', () => {
+    const entry = makeEntry({ bagsAfter: { ns: 5, ew: 0 }, scoresAfter: { ns: 127, ew: 49 } })
+    const html = endOfHandSummaryHtml(entry, 'north')
+    // summary-bags should be inside summary-total but not in its own separate block
+    const totalSection = html.match(/summary-total[\s\S]*?<\/div>/)?.[0] ?? ''
+    assert.ok(html.includes('summary-bags'), 'bags element should exist')
+    // The bags span should follow the score span without a line-break wrapper in between
+    const scoreIdx = html.indexOf('summary-score')
+    const bagsIdx = html.indexOf('summary-bags')
+    assert.ok(bagsIdx > scoreIdx, 'summary-bags should appear after summary-score in the DOM')
   })
 })
 

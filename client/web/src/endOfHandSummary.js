@@ -95,8 +95,7 @@ function teamColHtml(team, entry, colLabel) {
       ${nilRows}
       ${penaltyHtml}
       <div class="summary-total">
-        <span class="summary-score">${scoreAfter} pts</span>
-        <span class="summary-bags">${bagsAfter}\u{1F45D}</span>
+        <span class="summary-score">${scoreAfter} pts</span> <span class="summary-bags">${bagsAfter}\u{1F45D}</span>
       </div>
     </div>`
 }
@@ -119,8 +118,11 @@ export function endOfHandSummaryHtml(entry, mySeat, gameOverInfo = null) {
   const themLabel = `Them (${TEAM_LABEL[theirTeam]})`
 
   const scoresBefore = entry.scoresBefore || { ns: 0, ew: 0 }
+  const bagsBefore = entry.bagsBefore || { ns: 0, ew: 0 }
   const myScoreBefore = scoresBefore[myTeam]
   const theirScoreBefore = scoresBefore[theirTeam]
+  const myBagsBefore = bagsBefore[myTeam]
+  const theirBagsBefore = bagsBefore[theirTeam]
 
   const titleSuffix = gameOverInfo ? ' \u00b7 GAME OVER' : ''
 
@@ -144,12 +146,12 @@ export function endOfHandSummaryHtml(entry, mySeat, gameOverInfo = null) {
         <div class="hand-summary-scores-before">
           <div class="scores-before-team">
             <span class="scores-before-label">${esc(usLabel)}</span>
-            <span class="scores-before-value">${myScoreBefore}</span>
+            <span class="scores-before-value">${myScoreBefore} <span class="scores-before-bags">${myBagsBefore}\u{1F45D}</span></span>
           </div>
           <div class="scores-before-sep">vs</div>
           <div class="scores-before-team">
             <span class="scores-before-label">${esc(themLabel)}</span>
-            <span class="scores-before-value">${theirScoreBefore}</span>
+            <span class="scores-before-value">${theirScoreBefore} <span class="scores-before-bags">${theirBagsBefore}\u{1F45D}</span></span>
           </div>
         </div>
         <div class="hand-summary-cols">

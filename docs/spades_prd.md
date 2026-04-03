@@ -165,6 +165,15 @@ The bidding sequence follows a partnership model designed to allow informed team
 
 > **Example:** North bids 4. South (second bidder) sees the 4 and bids a team total of 7. The team target is 7 (South has effectively bid 3 for themselves). If North had instead bid Nil, North's Nil bid stands and South bids only their own hand.
 
+### 5.3 Bidding UI Requirements
+
+The bidding phase UI must clearly communicate the partnership bidding model to all players. Confusion about whether the second bid is individual or a team total is a known UX risk.
+
+- **Second bidder labelling:** When it is the second bidder's turn, the bid input must be labelled **"Team Total"** (not "Your Bid") to make explicit that the number entered is the combined team target.
+- **Partner's bid visible:** While the second bidder is inputting, their partner's already-placed bid must be shown adjacent to the input (e.g., *"Partner bid 4 — enter team total:"*). This gives the second bidder necessary context and signals to all other players that the second bid is a team total.
+- **Individual contribution hint:** A helper label below the second bidder's input must show what their individual contribution would be, updating live as the player adjusts the value (e.g., *"You are bidding 3 (team total 7 − partner's 4)"*). If the entered team total is lower than the partner's bid, the hint must reflect a contribution of 0 and not display a negative number.
+- **Post-bid team total display:** After both players on a team have bid, the bid summary area (scoreboard header or dedicated bid row) must display the **team's combined bid** alongside each individual bid (e.g., *"N/S: 7 — North 4, South 3"*). Nil and Blind Nil bids are displayed individually with their label; the team total reflects only the numeric bidders' sum plus the Nil bidder's individual tag.
+
 ---
 
 ## 6. Technical Requirements

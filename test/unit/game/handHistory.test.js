@@ -60,15 +60,12 @@ function playFullHand(state) {
 /**
  * Bid and play one full hand, starting from a freshly created game.
  * Each player bids 6 (second bidder's number sets the team total).
+ * Uses state.biddingOrder so it works correctly for any hand number,
+ * regardless of who is currently dealing.
  */
 function completeOneHand(state) {
-  // Bidding order: east, south, west, north (north deals hand 1)
-  const s = bidAll(state, [
-    ['east', 6],
-    ['south', 6],
-    ['west', 6],
-    ['north', 6],
-  ])
+  const bids = state.biddingOrder.map((seat) => [seat, 6])
+  const s = bidAll(state, bids)
   return playFullHand(s)
 }
 

@@ -485,6 +485,7 @@ export function getPlayerView(state, seat) {
 
   return {
     ...rest,
+    blindNilEligible: false,
     myHand: hands[seat],
     // Include played cards from the current trick (visible to all)
     // Do NOT include other players' unplayed hands

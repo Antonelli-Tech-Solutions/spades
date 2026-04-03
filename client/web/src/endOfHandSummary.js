@@ -41,7 +41,7 @@ function nilBidderRowsHtml(team, entry) {
     const label = bid === 'blind_nil' ? 'Blind Nil' : 'Nil'
     const name = seat.charAt(0).toUpperCase() + seat.slice(1)
     const resultClass = made ? 'nil-made' : 'nil-failed'
-    const resultText = made ? `Made \u2713 +${points}` : `Failed \u2717 \u2212${points}`
+    const resultText = made ? `Made \u2713 +${points} pts` : `Failed \u2717 \u2212${points} pts`
 
     rows.push(`
       <div class="summary-row nil-row ${resultClass}">
@@ -64,7 +64,15 @@ function teamColHtml(team, entry, colLabel) {
   if (!isDoubleNil) {
     const teamBid = entry.teamBids[team]
     const teamTricks = seats.reduce((sum, s) => sum + entry.tricksWon[s], 0)
-    const delta = entry.scoreDelta[team]
+    // Compute tricks-only delta: exclude nil/blind nil contributions from the team score delta
+    let nilContribution = 0
+    for (const seat of seats) {
+      if (entry.bids[seat] === 'nil' || entry.bids[seat] === 'blind_nil') {
+        const nilPoints = entry.bids[seat] === 'blind_nil' ? 100 : 50
+        nilContribution += entry.tricksWon[seat] === 0 ? nilPoints : -nilPoints
+      }
+    }
+    const delta = entry.scoreDelta[team] - nilContribution
     const sign = delta >= 0 ? '+' : ''
     const bagsEarned = entry.newBags[team]
     const bagsSuffix = bagsEarned > 0 ? `, +${bagsEarned}${BAG_ICON}` : ''

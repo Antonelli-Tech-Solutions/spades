@@ -177,6 +177,55 @@ describe('endOfHandSummaryHtml — nil bid', () => {
       'should mention blind nil or 100 points',
     )
   })
+
+  it('shows tricks-only score in "Bid X, Took Y" row when team has a failed nil bidder', () => {
+    // Bid 3, Took 3 → +30 pts from tricks. Failed nil → -50. scoreDelta = -20.
+    // The "Bid X, Took Y" row must show +30, not the net -20.
+    const entry = makeEntry({
+      bids: { north: 'nil', east: 4, south: 3, west: 3 },
+      teamBids: { ns: 3, ew: 7 },
+      tricksWon: { north: 1, east: 4, south: 2, west: 3 },
+      scoreDelta: { ns: -20, ew: 70 },
+    })
+    const html = endOfHandSummaryHtml(entry, 'north')
+    assert.ok(html.includes('+30'), 'Bid X, Took Y row should show +30 (tricks only), not -20 (net)')
+    assert.ok(!html.includes('-20'), 'should not show the net score -20 in the team row')
+  })
+
+  it('shows tricks-only score in "Bid X, Took Y" row when team has a made nil bidder', () => {
+    // Bid 5, Took 5 → +50 pts from tricks. Made nil → +50. scoreDelta = 100.
+    // The "Bid X, Took Y" row must show +50, not +100.
+    const entry = makeEntry({
+      bids: { north: 'nil', east: 4, south: 5, west: 3 },
+      teamBids: { ns: 5, ew: 7 },
+      tricksWon: { north: 0, east: 4, south: 5, west: 3 },
+      scoreDelta: { ns: 100, ew: 70 },
+    })
+    const html = endOfHandSummaryHtml(entry, 'north')
+    assert.ok(html.includes('+50 pts'), 'Bid X, Took Y row should show +50 pts (tricks only)')
+  })
+
+  it('nil result rows include "pts" suffix', () => {
+    const entry = makeEntry({
+      bids: { north: 'nil', east: 4, south: 5, west: 3 },
+      teamBids: { ns: 5, ew: 7 },
+      tricksWon: { north: 2, east: 3, south: 5, west: 3 },
+      scoreDelta: { ns: 0, ew: 70 },
+    })
+    const html = endOfHandSummaryHtml(entry, 'north')
+    assert.ok(html.includes('−50 pts') || html.includes('-50 pts'), 'failed nil row should include "pts" suffix')
+  })
+
+  it('made nil result rows include "pts" suffix', () => {
+    const entry = makeEntry({
+      bids: { north: 'nil', east: 4, south: 5, west: 3 },
+      teamBids: { ns: 5, ew: 7 },
+      tricksWon: { north: 0, east: 4, south: 5, west: 3 },
+      scoreDelta: { ns: 100, ew: 70 },
+    })
+    const html = endOfHandSummaryHtml(entry, 'north')
+    assert.ok(html.includes('+50 pts'), 'made nil row should include "pts" suffix')
+  })
 })
 
 describe('endOfHandSummaryHtml — double nil (both players on a team bid nil)', () => {

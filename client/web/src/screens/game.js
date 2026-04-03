@@ -125,8 +125,37 @@ export function teamBidSummaryHtml(state) {
   return `<div class="bid-summary">${bars.join('')}</div>`
 }
 
-function seatInfoHtml(state, seat, label, isWinner = false) {
+/**
+ * Returns the bid to display for a seat, taking partnership bidding into account.
+ * For the second bidder in a numeric partnership, state.bids[seat] holds the team
+ * total, not the player's individual contribution. This function converts it back.
+ * @param {{ bids: object, biddingOrder: string[] }} state
+ * @param {string} seat
+ * @returns {number|string|null}
+ */
+export function getDisplayBid(state, seat) {
   const bid = state.bids[seat]
+  if (typeof bid !== 'number') return bid
+
+  const partner = PARTNER[seat]
+  const partnerBid = state.bids[partner]
+  if (typeof partnerBid !== 'number') return bid
+
+  const biddingOrder = state.biddingOrder || []
+  const teamPair = new Set([seat, partner])
+  const orderedTeam = biddingOrder.filter((s) => teamPair.has(s))
+
+  if (orderedTeam.length === 2 && orderedTeam[1] === seat) {
+    // Second bidder stores the team total as their bid value.
+    // Show individual contribution instead.
+    return bid - partnerBid
+  }
+
+  return bid
+}
+
+function seatInfoHtml(state, seat, label, isWinner = false) {
+  const bid = getDisplayBid(state, seat)
   const tricks = state.tricksWon[seat]
   const isActive = state.currentBidderSeat === seat || state.currentPlayerSeat === seat
   const activeCls = isActive ? ' seat-active' : ''

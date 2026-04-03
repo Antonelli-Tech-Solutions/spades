@@ -35,7 +35,7 @@
 - [x] `P0` Implement partnership bidding: first bidder bids individually, second bidder sets team total (first bidder's number is advisory only)
 - [x] `P0` Implement Nil bid (+50 / -50)
 - [x] `P0` Implement Blind Nil bid (+100 / -100): eligibility check (≥100 pts behind), one-per-team limit, card exchange after all bids but before opening lead
-- [ ] `P0` Blind Nil hand hiding — server-side enforcement: when a team is eligible for Blind Nil at deal time, omit `myHand` from `HAND_DEALT` for those players and set `blindNilEligible: true`; add `POST /api/tables/:tableId/reveal-hand` that validates bidding phase, player eligibility, and no bid yet placed — then emits `HAND_REVEALED` with `myHand` to that player only; bidding Blind Nil also triggers the hand reveal to the server's game state as normal
+- [x] `P0` Blind Nil hand hiding — server-side enforcement: when a team is eligible for Blind Nil at deal time, omit `myHand` from `HAND_DEALT` for those players and set `blindNilEligible: true`; add `POST /api/tables/:tableId/reveal-hand` that validates bidding phase, player eligibility, and no bid yet placed — then emits `HAND_REVEALED` with `myHand` to that player only; bidding Blind Nil also triggers the hand reveal to the server's game state as normal
 - [x] `P0` Implement team bid of 0: legal, not treated as Nil; every trick taken is a bag
 - [x] `P0` Enforce no Spade lead on first trick rule
 - [x] `P0` Implement Spades-breaking logic
@@ -64,8 +64,8 @@
 ### Testing
 
 - [x] `P0` End-to-end test: 4 players complete a full game from table creation to game over
-- [ ] `P0` Unit tests: blind nil eligible player does not receive `myHand` in `HAND_DEALT`; `HAND_REVEALED` is emitted only after `reveal-hand` is called; `reveal-hand` is rejected if the player has already placed a bid or is not eligible; ineligible team receives their full hand immediately
-- [ ] `P0` Integration test: blind nil eligible player's hand is withheld until reveal; both reveal-then-bid and bid-blind-nil-directly flows complete successfully
+- [x] `P0` Unit tests: blind nil eligible player does not receive `myHand` in `HAND_DEALT`; `HAND_REVEALED` is emitted only after `reveal-hand` is called; `reveal-hand` is rejected if the player has already placed a bid or is not eligible; ineligible team receives their full hand immediately
+- [x] `P0` Integration test: blind nil eligible player's hand is withheld until reveal; both reveal-then-bid and bid-blind-nil-directly flows complete successfully
 
 ---
 

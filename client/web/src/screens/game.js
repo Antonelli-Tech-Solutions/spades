@@ -219,7 +219,7 @@ export function renderGameScreen(container) {
   if (appEl) appEl.classList.add('app--game')
 
   let state = null
-  let handMode = 'spread'
+  let handMode = 'diagram'
   let selectedCards = []
   let showLastTrick = false
   let pollTimer = null
@@ -544,8 +544,8 @@ export function renderGameScreen(container) {
 
         <div class="game-hand-section">
           <div class="hand-mode-toggle">
-            <button class="mode-btn${handMode === 'spread' ? ' mode-btn-active' : ''}" data-mode="spread">Spread</button>
             <button class="mode-btn${handMode === 'diagram' ? ' mode-btn-active' : ''}" data-mode="diagram">Diagram</button>
+            <button class="mode-btn${handMode === 'spread' ? ' mode-btn-active' : ''}" data-mode="spread">Spread</button>
           </div>
           <div class="hand-cards" id="hand-cards">${handHtml}</div>
           <div class="form-error play-err" role="alert" aria-live="polite"></div>

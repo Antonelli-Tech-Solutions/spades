@@ -62,14 +62,18 @@ function teamColHtml(team, entry, colLabel) {
   if (!isDoubleNil) {
     const teamBid = entry.teamBids[team]
     const teamTricks = seats.reduce((sum, s) => sum + entry.tricksWon[s], 0)
-    const delta = entry.scoreDelta[team]
-    const sign = delta >= 0 ? '+' : ''
+    // Compute team bid scoring only — excludes nil bid points (those are shown in their own rows)
+    let teamBidDelta = 0
+    if (teamBid !== null && teamBid > 0) {
+      teamBidDelta = teamTricks >= teamBid ? teamBid * 10 : -(teamBid * 10)
+    }
+    const sign = teamBidDelta >= 0 ? '+' : ''
     const bagsEarned = entry.newBags[team]
     const bagsText = bagsEarned > 0 ? `, +${bagsEarned} bag${bagsEarned !== 1 ? 's' : ''}` : ''
     teamRowHtml = `
       <div class="summary-row team-row">
         <span class="summary-row-label">Bid ${esc(String(teamBid))}, Took ${teamTricks}</span>
-        <span class="summary-row-value">${sign}${delta} pts${esc(bagsText)}</span>
+        <span class="summary-row-value">${sign}${teamBidDelta} pts${esc(bagsText)}</span>
       </div>`
   }
 
@@ -85,15 +89,27 @@ function teamColHtml(team, entry, colLabel) {
       </div>`
   }
 
+  const scoreBefore = entry.scoresBefore[team]
   const scoreAfter = entry.scoresAfter[team]
   const bagsAfter = entry.bagsAfter[team]
+  const netChange = scoreAfter - scoreBefore
+  const netSign = netChange >= 0 ? '+' : ''
+  const netClass = netChange >= 0 ? 'net-positive' : 'net-negative'
 
   return `
     <div class="hand-summary-col">
       <h4 class="summary-col-title">${esc(colLabel)}</h4>
+      <div class="summary-row score-before-row">
+        <span class="summary-row-label">Score before</span>
+        <span class="summary-row-value">${scoreBefore} pts</span>
+      </div>
       ${teamRowHtml}
       ${nilRows}
       ${penaltyHtml}
+      <div class="summary-row net-change-row">
+        <span class="summary-row-label">Net change</span>
+        <span class="summary-row-value ${netClass}">${netSign}${netChange} pts</span>
+      </div>
       <div class="summary-total">
         <span class="summary-score">${scoreAfter} pts</span>
         <span class="summary-bags">${bagsAfter} bag${bagsAfter !== 1 ? 's' : ''}</span>

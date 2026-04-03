@@ -512,7 +512,7 @@ describe('bag tracking — state level', () => {
 
     assert.equal(state.bags.ns, 2, 'NS should have 2 bags from 2 overtricks')
     assert.equal(state.bags.ew, 0, 'EW missed bid — no bags')
-    assert.equal(state.scores.ns, 70, 'NS: bid 7 made 9 → +70')
+    assert.equal(state.scores.ns, 72, 'NS: bid 7 made 9 → +70 + 2 bags (+2 pts) = 72')
     assert.equal(state.scores.ew, -60, 'EW: bid 6 made 4 → -60')
   })
 
@@ -524,8 +524,8 @@ describe('bag tracking — state level', () => {
       { north: 4, east: 2, south: 5, west: 1 },
     )
 
-    // NS: 100 + 70 (bid made) - 100 (bag penalty) = 70; bags: (9+2) % 10 = 1
-    assert.equal(state.scores.ns, 70, 'NS score after bag penalty')
+    // NS: 100 + 72 (bid made + 2 bags) - 100 (bag penalty) = 72; bags: (9+2) % 10 = 1
+    assert.equal(state.scores.ns, 72, 'NS score after bag penalty')
     assert.equal(state.bags.ns, 1, 'NS bags reset to 1 after penalty')
     // EW: 100 - 60 = 40; bags unchanged
     assert.equal(state.scores.ew, 40, 'EW score unaffected by NS bag penalty')
@@ -545,7 +545,7 @@ describe('bag tracking — state level', () => {
 
     // Verify hand 1 results
     assert.equal(bagsAfterHand1.ns, 2)
-    assert.equal(scoresAfterHand1.ns, 70)
+    assert.equal(scoresAfterHand1.ns, 72)
 
     // Hand 2: same setup — NS gets 2 more bags, total 4 (no penalty yet)
     // Bidding order for hand 2: south (east was dealer), west, north, east
@@ -739,7 +739,7 @@ describe('game over — phase transition', () => {
   }
 
   it('transitions to game_over with winner=ns when NS score reaches 250', () => {
-    // After hand: NS=9 tricks (north:4+south:5) vs bid 7 → +70 → 200+70=270 ≥ 250
+    // After hand: NS=9 tricks (north:4+south:5) vs bid 7 → +70 + 2 bags (+2 pts) = 72 → 200+72=272 ≥ 250
     //             EW=4 tricks (east:3+west:1) vs bid 6 → -60 → 100-60=40
     const state = buildNearEndState({
       initialScores: { ns: 200, ew: 100 },
@@ -748,7 +748,7 @@ describe('game over — phase transition', () => {
     assert.equal(state.phase, 'game_over')
     assert.equal(state.winner, 'ns')
     assert.equal(state.gameOver, true)
-    assert.equal(state.scores.ns, 270)
+    assert.equal(state.scores.ns, 272)
   })
 
   it('starts next hand in bidding phase when neither team reaches a threshold', () => {

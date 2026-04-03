@@ -11,6 +11,7 @@ import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
 import { relSeats } from '../seatUtils.js'
 import { HOLD_DURATIONS, detectCompletedTrick, trickHoldHtml } from '../trickHold.js'
 import { createInputBlocker } from '../inputBlock.js'
+import { endOfHandSummaryHtml } from '../endOfHandSummary.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const RED_SUIT = new Set(['hearts', 'diamonds'])
@@ -223,6 +224,7 @@ export function renderGameScreen(container) {
   let holdTrick = null
   let holdTimer = null
   let queuedState = null
+  let dismissedHandCount = 0
   const inputBlocker = createInputBlocker()
 
   function cleanup() {
@@ -324,18 +326,36 @@ export function renderGameScreen(container) {
     })
   }
 
+  function renderHandSummary(seat) {
+    const entry = state.handHistory[state.handHistory.length - 1]
+    container.innerHTML = `<div class="game-screen">${endOfHandSummaryHtml(entry, seat)}</div>`
+    container.querySelector('#hand-summary-continue')?.addEventListener('click', () => {
+      dismissedHandCount++
+      render()
+    })
+  }
+
   function render() {
     if (!state) return
     if (state.status === 'waiting') {
       renderWaiting()
       return
     }
+
+    const seat = getSeatForPlayer(state.players, playerId)
+
+    // Show the end-of-hand summary overlay after each completed hand.
+    // The hold window (showing the last trick) finishes first; the summary appears
+    // after. Each client dismisses independently — no server round-trip needed.
+    if (!holdActive && (state.handHistory?.length ?? 0) > dismissedHandCount) {
+      renderHandSummary(seat || 'north')
+      return
+    }
+
     if (state.phase === 'game_over') {
       navigate(`#/game-over?tableId=${tableId}`)
       return
     }
-
-    const seat = getSeatForPlayer(state.players, playerId)
     if (!seat) {
       container.innerHTML = '<div class="game-screen"><p class="game-msg">You are not seated at this table.</p></div>'
       return
@@ -683,6 +703,8 @@ export function renderGameScreen(container) {
   getGameState({ tableId, sessionId, playerId }).then((s) => {
     if (!mounted) return
     state = s
+    // On (re)load, skip any summaries for hands already completed before this session
+    dismissedHandCount = s.handHistory?.length ?? 0
     render()
     schedulePoll()
   }).catch((err) => {

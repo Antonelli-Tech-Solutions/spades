@@ -79,17 +79,17 @@ export function bidContributionHint(teamTotal, partnerBid) {
  * Renders the post-bid team summary bar once both players on a team have bid.
  * Nil and Blind Nil bids are excluded from the combined team total.
  * Returns an empty string if bidding is not yet complete for either team.
- * @param {{ bids: object }} state
+ * @param {{ bids: object, teamBids: object, biddingOrder: string[] }} state
  * @returns {string}
  */
 export function teamBidSummaryHtml(state) {
   const teams = [
-    { label: 'N/S', seats: ['north', 'south'] },
-    { label: 'E/W', seats: ['east', 'west'] },
+    { label: 'N/S', seats: ['north', 'south'], teamKey: 'ns' },
+    { label: 'E/W', seats: ['east', 'west'], teamKey: 'ew' },
   ]
 
   const bars = []
-  for (const { label, seats } of teams) {
+  for (const { label, seats, teamKey } of teams) {
     const [a, b] = seats
     const bidA = state.bids[a]
     const bidB = state.bids[b]
@@ -102,8 +102,18 @@ export function teamBidSummaryHtml(state) {
 
     let summary
     if (!isSpecialA && !isSpecialB) {
-      const total = bidA + bidB
-      summary = `${esc(label)}: ${total} \u2014 ${esc(nameA)} ${bidA}, ${esc(nameB)} ${bidB}`
+      // Use the authoritative team total from the server; the second bidder's stored
+      // bid value is the team total, not their individual contribution.
+      const teamTotal = state.teamBids[teamKey]
+      const biddingOrder = state.biddingOrder || []
+      const [firstSeat, secondSeat] = biddingOrder.filter((s) => s === a || s === b)
+      const resolvedFirst = firstSeat ?? a
+      const resolvedSecond = secondSeat ?? b
+      const firstName = resolvedFirst.charAt(0).toUpperCase() + resolvedFirst.slice(1)
+      const secondName = resolvedSecond.charAt(0).toUpperCase() + resolvedSecond.slice(1)
+      const firstBid = state.bids[resolvedFirst]
+      const secondIndividual = teamTotal - firstBid
+      summary = `${esc(label)}: ${teamTotal} \u2014 ${esc(firstName)} ${firstBid}, ${esc(secondName)} ${secondIndividual}`
     } else {
       summary = `${esc(label)}: ${esc(nameA)} ${esc(bidLabel(bidA))}, ${esc(nameB)} ${esc(bidLabel(bidB))}`
     }
@@ -341,9 +351,7 @@ export function renderGameScreen(container) {
       statusMsg = isMyPlayTurn ? 'Your turn \u2014 click a card to play' : `Waiting for ${esc(state.currentPlayerSeat)} to play\u2026`
     }
 
-    const myTeam = TEAM[seat]
-    const oppTeam = myTeam === 'ns' ? 'ew' : 'ns'
-    const blindNilEligible = (state.scores[oppTeam] - state.scores[myTeam]) >= 100
+    const blindNilEligible = state.blindNilEligible === true
 
     const partnerSeat = PARTNER[seat]
     const partnerBid = state.bids[partnerSeat]

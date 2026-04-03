@@ -316,9 +316,28 @@ export function renderGameScreen(container) {
     const oppTeam = myTeam === 'ns' ? 'ew' : 'ns'
     const blindNilEligible = (state.scores[oppTeam] - state.scores[myTeam]) >= 100
 
+    const partnerSeat = PARTNER[seat]
+    const partnerBid = state.bids[partnerSeat]
+    const partnerHasBid = partnerBid !== null && partnerBid !== undefined
+    const partnerHasNumericBid = partnerHasBid && typeof partnerBid === 'number'
+
+    let bidPanelTitle = 'Choose your bid:'
+    let bidPartnerInfoHtml = ''
+    let bidHintHtml = ''
+    if (partnerHasBid) {
+      if (partnerHasNumericBid) {
+        bidPanelTitle = 'Team Total'
+        bidPartnerInfoHtml = `<p class="bid-partner-info">Partner bid ${partnerBid} \u2014 enter team total:</p>`
+        bidHintHtml = '<div class="bid-hint" id="bid-hint" aria-live="polite"></div>'
+      } else {
+        bidPartnerInfoHtml = `<p class="bid-partner-info">Partner: ${esc(bidLabel(partnerBid))}</p>`
+      }
+    }
+
     const bidPanelHtml = isMyBidTurn ? `
       <div class="bid-panel">
-        <p class="bid-title">Choose your bid:</p>
+        <p class="bid-title">${esc(bidPanelTitle)}</p>
+        ${bidPartnerInfoHtml}
         <div class="bid-grid">
           ${Array.from({ length: 14 }, (_, i) => `<button class="bid-num-btn" data-bid="${i}">${i}</button>`).join('')}
         </div>
@@ -326,6 +345,7 @@ export function renderGameScreen(container) {
           <button class="bid-special-btn" data-bid="nil">Nil</button>
           ${blindNilEligible ? '<button class="bid-special-btn bid-blind-nil-btn" data-bid="blind_nil">Blind Nil</button>' : ''}
         </div>
+        ${bidHintHtml}
         <div class="form-error bid-err" role="alert" aria-live="polite"></div>
       </div>` : ''
 
@@ -354,6 +374,7 @@ export function renderGameScreen(container) {
             <span class="score-bags">${state.bags.ew} bag${state.bags.ew !== 1 ? 's' : ''}</span>
           </div>
         </div>
+        ${teamBidSummaryHtml(state)}
 
         <div class="game-table">
           <div class="table-top">
@@ -446,6 +467,34 @@ export function renderGameScreen(container) {
           }
         })
       })
+    }
+
+    // Bid hint for second bidder with numeric partner bid
+    if (isMyBidTurn && partnerHasNumericBid) {
+      const hintEl = container.querySelector('#bid-hint')
+      if (hintEl) {
+        container.querySelectorAll('.bid-num-btn').forEach((btn) => {
+          const showHint = () => {
+            const teamTotal = Number(btn.dataset.bid)
+            const { yourBid, isWarning } = bidContributionHint(teamTotal, partnerBid)
+            if (isWarning) {
+              hintEl.className = 'bid-hint bid-hint--warning'
+              hintEl.textContent = `\u26a0 Team target (${teamTotal}) is below partner\u2019s bid (${partnerBid}) \u2014 every trick above ${teamTotal} is a bag`
+            } else {
+              hintEl.className = 'bid-hint'
+              hintEl.textContent = `You are bidding ${yourBid} (team total ${teamTotal} \u2212 partner\u2019s bid ${partnerBid})`
+            }
+          }
+          const clearHint = () => {
+            hintEl.textContent = ''
+            hintEl.className = 'bid-hint'
+          }
+          btn.addEventListener('mouseenter', showHint)
+          btn.addEventListener('focus', showHint)
+          btn.addEventListener('mouseleave', clearHint)
+          btn.addEventListener('blur', clearHint)
+        })
+      }
     }
 
     // Hand card interactions (play or exchange)

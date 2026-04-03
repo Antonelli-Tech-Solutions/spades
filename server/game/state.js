@@ -43,6 +43,7 @@ function dealHand(dealerSeat) {
     biddingOrder,
     currentBidderSeat: biddingOrder[0],
     blindNilExchange: null,
+    handRevealedSeats: [],
     currentTrick: [],
     completedTricks: [],
     tricksWon: { north: 0, east: 0, south: 0, west: 0 },
@@ -433,8 +434,36 @@ function scoreCompletedHand(state) {
 }
 
 /**
+ * Reveal the hand for a Blind Nil eligible player before they have bid.
+ * After calling this, getPlayerView will include myHand for this player.
+ *
+ * @param {object} state
+ * @param {string} seat
+ * @returns {object} New state
+ * @throws {Error} If ineligible, already bid, or wrong phase
+ */
+export function revealHand(state, seat) {
+  if (state.phase !== 'bidding') {
+    throw Object.assign(new Error('Game is not in bidding phase'), { code: 'INVALID_ACTION' })
+  }
+  if (!isEligibleForBlindNil(state.scores, seat)) {
+    throw Object.assign(new Error('Not eligible for Blind Nil'), { code: 'NOT_ELIGIBLE' })
+  }
+  if (state.bids[seat] !== null) {
+    throw Object.assign(new Error('Cannot reveal hand after placing a bid'), { code: 'BID_ALREADY_PLACED' })
+  }
+  return {
+    ...state,
+    handRevealedSeats: [...(state.handRevealedSeats || []), seat],
+  }
+}
+
+/**
  * Return a player-specific view of the game state that does not expose other
  * players' hands. This is what gets sent to the client.
+ *
+ * For Blind Nil eligible players who have not yet revealed their hand,
+ * myHand is omitted and blindNilEligible is set to true.
  *
  * @param {object} state - Full server game state
  * @param {string} seat - The requesting player's seat
@@ -442,6 +471,18 @@ function scoreCompletedHand(state) {
  */
 export function getPlayerView(state, seat) {
   const { hands, ...rest } = state
+  const isEligible = isEligibleForBlindNil(state.scores, seat)
+  const hasRevealed = (state.handRevealedSeats || []).includes(seat)
+
+  // Withhold hand from eligible players who have not yet revealed during bidding
+  if (state.phase === 'bidding' && isEligible && !hasRevealed) {
+    return {
+      ...rest,
+      blindNilEligible: true,
+      // myHand intentionally omitted until player calls reveal-hand or bids Blind Nil
+    }
+  }
+
   return {
     ...rest,
     myHand: hands[seat],

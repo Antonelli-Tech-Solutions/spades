@@ -19,7 +19,7 @@ import {
   addBotToTable,
   removePlayerFromTables,
 } from './lobby/table.js'
-import { createGame, placeBid, playCard, submitBlindNilExchange, getPlayerView } from './game/state.js'
+import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView } from './game/state.js'
 import { getPartnerSeat } from './game/bid.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
 import { isBot, botBid, botPlay, botBlindNilExchange } from './game/bot.js'
@@ -411,6 +411,34 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'INVALID_EXCHANGE') return sendJSON(res, 400, { error: err.message })
       if (err.code === 'CARD_NOT_IN_HAND') return sendJSON(res, 400, { error: err.message })
       console.error('Blind nil exchange error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/reveal-hand — reveal hand for a Blind Nil eligible player
+  app.post('/api/tables/:tableId/reveal-hand', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+
+      const seat = getSeatForPlayer(table.seats, session.playerId)
+      if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
+
+      const gameState = await getGameState(redisClient, tableId)
+      if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
+
+      const newState = revealHand(gameState, seat)
+      await saveGameState(redisClient, tableId, newState)
+      sendJSON(res, 200, getPlayerView(newState, seat))
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'INVALID_ACTION') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'NOT_ELIGIBLE') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'BID_ALREADY_PLACED') return sendJSON(res, 409, { error: err.message })
+      console.error('Reveal hand error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

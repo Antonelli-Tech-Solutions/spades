@@ -372,7 +372,10 @@ export function playCard(state, seat, card) {
 }
 
 /**
- * Score a completed hand and transition to the next hand or end the game.
+ * Score a completed hand and transition to the hand_complete phase.
+ *
+ * Pauses here so players can view the end-of-hand summary before the next hand
+ * is dealt. Call continueFromHandComplete() to advance.
  */
 function scoreCompletedHand(state) {
   const { scoreDelta, newBags } = scoreHand({
@@ -386,6 +389,14 @@ function scoreCompletedHand(state) {
     ew: state.scores.ew + scoreDelta.ew,
   }
 
+  // Compute bag penalty amounts before applying them (needed for the summary)
+  const bagPenalty = { ns: 0, ew: 0 }
+  for (const team of ['ns', 'ew']) {
+    const total = state.bags[team] + newBags[team]
+    const penalties = Math.floor(total / 10)
+    bagPenalty[team] = -penalties * 100
+  }
+
   const { scores, bags } = applyBagPenalties(rawScores, state.bags, newBags)
 
   console.log('Hand scored:', {
@@ -393,20 +404,65 @@ function scoreCompletedHand(state) {
     handNumber: state.handNumber,
     scoreDelta,
     newBags,
+    bagPenalty,
     scores,
     bags,
   })
 
   const winLoss = checkWinLoss(scores)
   if (winLoss) {
-    console.log('Game over:', { tableId: state.tableId, winner: winLoss.winner })
+    console.log('Game will end after summary:', { tableId: state.tableId, winner: winLoss.winner })
+  }
+
+  const handSummary = {
+    handNumber: state.handNumber,
+    bids: state.bids,
+    teamBids: state.teamBids,
+    tricksWon: state.tricksWon,
+    scoreDelta,
+    bagPenalty,
+    newBags,
+    scoresAfter: scores,
+    bagsAfter: bags,
+    winnerTeam: winLoss?.winner ?? null,
+  }
+
+  return {
+    ...state,
+    scores,
+    bags,
+    phase: 'hand_complete',
+    handSummary,
+  }
+}
+
+/**
+ * Advance from the hand_complete summary phase to the next hand or game_over.
+ *
+ * Called when a player dismisses the end-of-hand summary screen.
+ *
+ * @param {object} state
+ * @returns {object} New state in 'bidding' or 'game_over' phase
+ * @throws {Error} If state is not in hand_complete phase
+ */
+export function continueFromHandComplete(state) {
+  if (state.phase !== 'hand_complete') {
+    throw Object.assign(
+      new Error('Game is not in hand_complete phase'),
+      { code: 'INVALID_ACTION' },
+    )
+  }
+
+  const { winnerTeam } = state.handSummary
+
+  if (winnerTeam) {
+    console.log('Game over:', { tableId: state.tableId, winner: winnerTeam })
     return {
       ...state,
-      scores,
-      bags,
       phase: 'game_over',
       gameOver: true,
-      winner: winLoss.winner,
+      winner: winnerTeam,
+      handSummary: null,
     }
   }
 
@@ -425,11 +481,10 @@ function scoreCompletedHand(state) {
     ...nextHandState,
     handNumber: state.handNumber + 1,
     dealerSeat: nextDealer,
-    scores,
-    bags,
     phase: 'bidding',
     gameOver: false,
     winner: null,
+    handSummary: null,
   }
 }
 

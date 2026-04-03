@@ -245,6 +245,15 @@ describe('E2E: 4 players complete a full game from table creation to game over',
       return res.json()
     }
 
+    const continueHttp = async (seat) => {
+      const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/continue`, {
+        method: 'POST',
+        headers: authHdrs(seatMap[seat]),
+      })
+      assert.equal(res.status, 200, `continue failed for ${seat}`)
+      return res.json()
+    }
+
     const MAX_HANDS = 40 // safety limit — game should end in ~5-10 hands
     let handsPlayed = 0
 
@@ -287,7 +296,17 @@ describe('E2E: 4 players complete a full game from table creation to game over',
         state = await playCardHttp(playerSeat, card)
       }
 
-      // A hand just completed (phase is now 'game_over' or 'bidding')
+      // ── Hand complete — dismiss summary to proceed ─────────────────────────
+      if (state.phase === 'hand_complete') {
+        // handSummary should be present
+        assert.ok(state.handSummary, 'hand_complete state must include handSummary')
+        assert.ok(state.handSummary.bids, 'handSummary must have bids')
+        assert.ok('scoreDelta' in state.handSummary, 'handSummary must have scoreDelta')
+        // Any seated player can dismiss; use north
+        state = await continueHttp('north')
+      }
+
+      // A hand just completed — phase is now 'game_over' or 'bidding'
       handsPlayed++
     }
 

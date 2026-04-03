@@ -9,6 +9,8 @@
 
 ## ✅ Completed
 
+- [x] `P1` End-of-hand summary screen: after all 13 tricks are played the game pauses in a new `hand_complete` phase. Players see a two-column summary (Us / Them) showing bids, tricks taken, score earned, and bags acquired for the hand. Nil and Blind Nil bidders get their own row; the shared team row is omitted when both players bid nil (double nil). A "Continue" button advances to the next hand's bidding phase or to `game_over`. Backend: `continueFromHandComplete()` in `server/game/state.js`, `POST /api/tables/:tableId/continue` endpoint. Frontend: `client/web/src/endOfHandSummary.js` component, `continueHand()` in `api.js`.
+
 - [x] `BUG` Fix play/bid order appearing counterclockwise in the web UI: `relSeats()` in `client/web/src/screens/game.js` had `left` and `right` swapped, making each player's clockwise neighbour appear on the wrong side of the screen. Extracted `relSeats` and `CW` to `client/web/src/seatUtils.js` and added unit tests. Server engine was unaffected.
 
 - [x] `DEV` `DEV_AUTO_VERIFY` env var — when set to `true`, registration skips email verification and marks the player as verified immediately. Enables registering multiple test accounts without an email server. Never set in production.

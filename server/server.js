@@ -19,7 +19,7 @@ import {
   addBotToTable,
   removePlayerFromTables,
 } from './lobby/table.js'
-import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView } from './game/state.js'
+import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, continueFromHandComplete } from './game/state.js'
 import { getPartnerSeat } from './game/bid.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
 import { isBot, botBid, botPlay, botBlindNilExchange } from './game/bot.js'
@@ -59,6 +59,12 @@ function advanceBotTurns(state) {
       const cards = botBlindNilExchange(current.hands[partnerSeat])
       console.log('Bot blind nil exchange:', { seat: partnerSeat, cards, tableId: current.tableId })
       current = submitBlindNilExchange(current, partnerSeat, cards)
+    } else if (current.phase === 'hand_complete') {
+      // Auto-advance past the summary only when all seats are bots (no human can dismiss)
+      const allBots = Object.values(current.players).every((pid) => isBot(pid))
+      if (!allBots) break
+      console.log('All-bot table: auto-advancing past hand summary', { tableId: current.tableId })
+      current = continueFromHandComplete(current)
     } else {
       // game_over — nothing to auto-advance
       break
@@ -472,6 +478,34 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'CARD_NOT_IN_HAND') return sendJSON(res, 400, { error: err.message })
       if (err.code === 'ILLEGAL_PLAY') return sendJSON(res, 400, { error: err.message })
       console.error('Play card error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/continue — advance from hand_complete to next hand or game_over
+  app.post('/api/tables/:tableId/continue', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+
+      const seat = getSeatForPlayer(table.seats, session.playerId)
+      if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
+
+      const gameState = await getGameState(redisClient, tableId)
+      if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
+
+      let newState = continueFromHandComplete(gameState)
+      newState = advanceBotTurns(newState)
+      await saveGameState(redisClient, tableId, newState)
+      sendJSON(res, 200, getPlayerView(newState, seat))
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'INVALID_ACTION') return sendJSON(res, 409, { error: err.message })
+      console.error('Continue hand error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

@@ -165,6 +165,30 @@ export async function sitAtTable({ tableId, seat, sessionId, playerId }, fetchFn
 }
 
 /**
+ * Advance from the hand_complete summary phase to the next hand or game_over.
+ * @param {{ tableId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>} Updated player-specific game state
+ */
+export async function continueHand({ tableId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/continue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to continue to next hand.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Get the current game state for a table (filtered to the requesting player's view).
  * @param {{ tableId: string, sessionId: string, playerId: string }} data
  * @param {typeof fetch} [fetchFn]

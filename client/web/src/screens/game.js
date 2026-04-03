@@ -5,7 +5,9 @@ import {
   submitBlindNilExchange as apiExchange,
   addBotToTable as apiAddBot,
   revealHand as apiRevealHand,
+  continueHand as apiContinue,
 } from '../api.js'
+import { endOfHandSummaryHtml } from '../endOfHandSummary.js'
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
 import { relSeats } from '../seatUtils.js'
@@ -295,10 +297,41 @@ export function renderGameScreen(container) {
     })
   }
 
+  function renderHandSummary() {
+    const seat = getSeatForPlayer(state.players, playerId)
+    if (!seat) {
+      container.innerHTML = '<div class="game-screen"><p class="game-msg">You are not seated at this table.</p></div>'
+      return
+    }
+    container.innerHTML = `<div class="game-screen">${endOfHandSummaryHtml(state.handSummary, seat)}</div>`
+
+    container.querySelector('#summary-continue-btn')?.addEventListener('click', async () => {
+      if (acting) return
+      acting = true
+      clearTimeout(pollTimer)
+      try {
+        const s = await apiContinue({ tableId, sessionId, playerId })
+        if (!mounted) return
+        state = s
+        render()
+      } catch (err) {
+        if (!mounted) return
+        // Summary will re-render on next poll if continue fails
+      } finally {
+        acting = false
+        schedulePoll()
+      }
+    })
+  }
+
   function render() {
     if (!state) return
     if (state.status === 'waiting') {
       renderWaiting()
+      return
+    }
+    if (state.phase === 'hand_complete' && !holdActive) {
+      renderHandSummary()
       return
     }
     if (state.phase === 'game_over') {

@@ -76,11 +76,12 @@ function teamColHtml(team, entry, colLabel) {
   const nilRows = nilBidderRowsHtml(team, entry)
 
   let penaltyHtml = ''
-  if (entry.bagPenalty[team]) {
+  if (entry.bagPenalty[team] > 0) {
+    const penaltyPts = entry.bagPenalty[team] * 100
     penaltyHtml = `
       <div class="summary-row penalty-row">
-        <span class="summary-row-label">Bag penalty</span>
-        <span class="summary-row-value">\u2212100 pts</span>
+        <span class="summary-row-label">Bag penalty${entry.bagPenalty[team] > 1 ? ` \u00d7${entry.bagPenalty[team]}` : ''}</span>
+        <span class="summary-row-value">\u2212${penaltyPts} pts</span>
       </div>`
   }
 

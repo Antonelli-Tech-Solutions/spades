@@ -19,7 +19,7 @@ function makeEntry(overrides = {}) {
     tricksWon: { north: 4, east: 3, south: 3, west: 4 },
     scoreDelta: { ns: 70, ew: 70 },
     newBags: { ns: 0, ew: 0 },
-    bagPenalty: { ns: false, ew: false },
+    bagPenalty: { ns: 0, ew: 0 },
     scoresAfter: { ns: 70, ew: 70 },
     bagsAfter: { ns: 0, ew: 0 },
     ...overrides,
@@ -205,9 +205,9 @@ describe('endOfHandSummaryHtml — double nil (both players on a team bid nil)',
 })
 
 describe('endOfHandSummaryHtml — bag penalty', () => {
-  it('shows bag penalty notice when bagPenalty.ns is true for ns player', () => {
+  it('shows bag penalty notice when bagPenalty.ns is 1 for ns player', () => {
     const entry = makeEntry({
-      bagPenalty: { ns: true, ew: false },
+      bagPenalty: { ns: 1, ew: 0 },
       scoresAfter: { ns: -30, ew: 70 }, // 70 - 100 penalty = -30
     })
     const html = endOfHandSummaryHtml(entry, 'north')
@@ -218,7 +218,7 @@ describe('endOfHandSummaryHtml — bag penalty', () => {
   })
 
   it('does not show bag penalty notice when no penalty', () => {
-    const entry = makeEntry({ bagPenalty: { ns: false, ew: false } })
+    const entry = makeEntry({ bagPenalty: { ns: 0, ew: 0 } })
     const html = endOfHandSummaryHtml(entry, 'north')
     // "penalty" text should not appear
     assert.ok(
@@ -229,13 +229,26 @@ describe('endOfHandSummaryHtml — bag penalty', () => {
 
   it('shows bag penalty for the opponent team when they cross 10 bags', () => {
     const entry = makeEntry({
-      bagPenalty: { ns: false, ew: true },
+      bagPenalty: { ns: 0, ew: 1 },
       scoresAfter: { ns: 70, ew: -30 },
     })
     const html = endOfHandSummaryHtml(entry, 'north') // north is ns, ew is "them"
     assert.ok(
       html.toLowerCase().includes('penalty') || html.includes('100'),
       'should show bag penalty for ew team',
+    )
+  })
+
+  it('shows −200 pts when a team bags out twice in one hand', () => {
+    const entry = makeEntry({
+      bagPenalty: { ns: 2, ew: 0 },
+      scoresAfter: { ns: -130, ew: 70 }, // 70 - 200 = -130
+    })
+    const html = endOfHandSummaryHtml(entry, 'north')
+    assert.ok(html.includes('200'), 'should show 200 for double bag penalty')
+    assert.ok(
+      html.toLowerCase().includes('penalty'),
+      'should show penalty label',
     )
   })
 })

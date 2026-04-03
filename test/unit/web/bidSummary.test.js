@@ -165,6 +165,23 @@ describe('teamBidSummaryHtml', () => {
     assert.ok(!html.match(/E\/W: \d+ —/), 'should not show a combined numeric total')
   })
 
+  it('renders correctly when teamBids is null but both players on a team have bid (mid-bidding)', () => {
+    // E/W finished bidding but N/S has not, so state.teamBids.ew is still null.
+    // East bids 2 (first for EW), West enters 3 as team total (second for EW).
+    // state.bids.west = 3 (team total stored as second bidder's value).
+    // teamBids.ew is null because the server only populates it after all 4 players bid.
+    const state = makeState(
+      { north: null, south: null, east: 2, west: 3 },
+      // teamBids.ew stays null (default from makeState)
+    )
+    const html = teamBidSummaryHtml(state)
+    assert.ok(html.includes('E/W'), 'should include E/W label')
+    assert.ok(html.includes('E/W: 3'), 'should show team total 3 from fallback bids[resolvedSecond]')
+    assert.ok(html.includes('East 2'), 'should show first bidder East 2')
+    assert.ok(html.includes('West 1'), 'should show second bidder West individual (3 − 2 = 1)')
+    assert.ok(!html.includes('null'), 'must not render the word null')
+  })
+
   it('true partnership case: second bidder value is team total, not individual', () => {
     // This is the core partnership bug scenario.
     // North bids 4. South enters 7 meaning "our team bids 7 total".

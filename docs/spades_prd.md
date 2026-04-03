@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Version** | 1.4 — Visibility-Aware Lobby Events |
+| **Version** | 1.5 — Blind Nil Hand Visibility |
 | **Date** | April 2026 |
 | **Status** | For Review |
 | **Product** | Spades Online (Mobile & Web) |
@@ -149,6 +149,7 @@ v1.0 ships with a single standard ruleset. Rule customization is deferred to v1.
 | **Spades Breaking** | Spades are broken by the first Spade played (after the first trick). Once broken, Spades may be led. |
 | **Nil** | +50 if successful, -50 if failed. Available to any player at any time. |
 | **Blind Nil Eligibility** | A player may bid Blind Nil only if their team is at least 100 points behind the opposing team. |
+| **Blind Nil Hand Visibility** | When a team is eligible for Blind Nil at the start of a hand, the server withholds that team's cards from each eligible player until they explicitly act. Each eligible player is presented with two options: *Reveal Hand* — view cards and bid normally — or *Bid Blind Nil* — commit to a Blind Nil bid without viewing. The server must not transmit the player's cards in the initial `HAND_DEALT` event; cards are sent only after the player takes one of these two actions. This is a server-side enforcement and must not rely on client-side hiding alone. The ineligible team's players receive their hands immediately and may bid while eligible players are deciding. |
 | **Blind Nil Score** | +100 if successful, -100 if failed. |
 | **Blind Nil Limit** | Only one player per team may bid Blind Nil in a given hand. |
 | **Blind Nil Card Exchange** | The card exchange occurs after all four players have bid but before the opening lead. The Blind Nil player passes 2 cards face-down to their partner; the partner then passes 2 cards back. |
@@ -217,8 +218,9 @@ Events must not change shape in a backward-incompatible way without coordinating
 
 | Event | Audience | Key Payload Fields |
 |---|---|---|
-| `HAND_DEALT` | Per-player (4 individual sends) | `myHand`, `dealer`, `biddingOrder` |
+| `HAND_DEALT` | Per-player (4 individual sends) | `dealer`, `biddingOrder`, `blindNilEligible` (boolean); `myHand` is **omitted** when `blindNilEligible` is `true` — cards are withheld until the player reveals or bids Blind Nil |
 | `BID_PLACED` | All in room | `seat`, `bidType` (`nil` / `blindNil` / `number`); numeric value hidden until end-of-hand scoring |
+| `HAND_REVEALED` | Specific player | `myHand` — the player's full 13-card hand; sent only after the player calls *Reveal Hand* during the Blind Nil eligibility window |
 | `BLIND_NIL_EXCHANGE_PROMPT` | Specific player | `direction` (`send` / `receive`), `count` |
 | `CARD_PLAYED` | All in room | `seat`, `card` |
 | `TRICK_COMPLETE` | All in room | `winnerSeat`, `plays` |

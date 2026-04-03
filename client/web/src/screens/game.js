@@ -35,6 +35,29 @@ function bidLabel(bid) {
   return String(bid)
 }
 
+function teamBidSummaryHtml(state) {
+  function teamLine(seat1, seat2, label1, label2, teamLabel) {
+    const bid1 = state.bids[seat1]
+    const bid2 = state.bids[seat2]
+    if (bid1 === null || bid2 === null) return ''
+    const num1 = typeof bid1 === 'number' ? bid1 : null
+    const num2 = typeof bid2 === 'number' ? bid2 : null
+    const total = (num1 !== null && num2 !== null) ? num1 + num2 : null
+    const prefix = total !== null ? `${teamLabel}: ${total}` : teamLabel
+    return `<div class="bid-summary-team">${esc(prefix)} \u2014 ${esc(label1)} ${esc(bidLabel(bid1))}, ${esc(label2)} ${esc(bidLabel(bid2))}</div>`
+  }
+
+  const nsBoth = state.bids.north !== null && state.bids.south !== null
+  const ewBoth = state.bids.east !== null && state.bids.west !== null
+  if (!nsBoth && !ewBoth) return ''
+
+  const lines = [
+    nsBoth ? teamLine('north', 'south', 'North', 'South', 'N/S') : '',
+    ewBoth ? teamLine('east', 'west', 'East', 'West', 'E/W') : '',
+  ].filter(Boolean).join('')
+  return lines ? `<div class="bid-summary">${lines}</div>` : ''
+}
+
 function seatInfoHtml(state, seat, label, isWinner = false) {
   const bid = state.bids[seat]
   const tricks = state.tricksWon[seat]
@@ -257,13 +280,22 @@ export function renderGameScreen(container) {
     const myTeam = TEAM[seat]
     const oppTeam = myTeam === 'ns' ? 'ew' : 'ns'
     const blindNilEligible = (state.scores[oppTeam] - state.scores[myTeam]) >= 100
+    const partnerSeat = PARTNER[seat]
+    const partnerBid = state.bids[partnerSeat]
+    const isSecondBidder = isMyBidTurn && typeof partnerBid === 'number'
 
     const bidPanelHtml = isMyBidTurn ? `
       <div class="bid-panel">
-        <p class="bid-title">Choose your bid:</p>
+        ${isSecondBidder
+          ? `<p class="bid-title">Team Total</p>
+             <p class="bid-partner-info">Partner bid ${esc(String(partnerBid))} \u2014 enter team total:</p>`
+          : `<p class="bid-title">Choose your bid:</p>
+             ${partnerBid !== null ? `<p class="bid-partner-info">Partner bid ${esc(bidLabel(partnerBid))}</p>` : ''}`
+        }
         <div class="bid-grid">
           ${Array.from({ length: 14 }, (_, i) => `<button class="bid-num-btn" data-bid="${i}">${i}</button>`).join('')}
         </div>
+        ${isSecondBidder ? '<div class="bid-hint" id="bid-hint" aria-live="polite"></div>' : ''}
         <div class="bid-special-row">
           <button class="bid-special-btn" data-bid="nil">Nil</button>
           ${blindNilEligible ? '<button class="bid-special-btn bid-blind-nil-btn" data-bid="blind_nil">Blind Nil</button>' : ''}
@@ -296,6 +328,8 @@ export function renderGameScreen(container) {
             <span class="score-bags">${state.bags.ew} bag${state.bags.ew !== 1 ? 's' : ''}</span>
           </div>
         </div>
+
+        ${teamBidSummaryHtml(state)}
 
         <div class="game-table">
           <div class="table-top">
@@ -388,6 +422,33 @@ export function renderGameScreen(container) {
           }
         })
       })
+    }
+
+    // Live bid hint for second bidder (team-total mode)
+    if (isSecondBidder) {
+      const hintEl = container.querySelector('#bid-hint')
+      if (hintEl) {
+        const updateHint = (teamTotal) => {
+          if (teamTotal >= partnerBid) {
+            hintEl.textContent = `You are bidding ${teamTotal - partnerBid} (team total ${teamTotal} \u2212 partner\u2019s bid ${partnerBid})`
+            hintEl.className = 'bid-hint'
+          } else {
+            hintEl.textContent = `\u26a0 Team target (${teamTotal}) is below partner\u2019s bid (${partnerBid}) \u2014 every trick above ${teamTotal} is a bag`
+            hintEl.className = 'bid-hint bid-hint--warning'
+          }
+        }
+        const clearHint = () => {
+          hintEl.textContent = ''
+          hintEl.className = 'bid-hint'
+        }
+        container.querySelectorAll('.bid-num-btn').forEach((btn) => {
+          const teamTotal = Number(btn.dataset.bid)
+          btn.addEventListener('mouseenter', () => updateHint(teamTotal))
+          btn.addEventListener('mouseleave', clearHint)
+          btn.addEventListener('focus', () => updateHint(teamTotal))
+          btn.addEventListener('blur', clearHint)
+        })
+      }
     }
 
     // Hand card interactions (play or exchange)

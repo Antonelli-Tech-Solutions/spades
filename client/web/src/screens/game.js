@@ -105,7 +105,10 @@ export function teamBidSummaryHtml(state) {
     if (!isSpecialA && !isSpecialB) {
       // Use the authoritative team total from the server; the second bidder's stored
       // bid value is the team total, not their individual contribution.
-      const teamTotal = state.teamBids[teamKey]
+      // teamBids is only populated after all 4 players have bid. While bidding is
+      // still in progress (other team hasn't finished), fall back to the second
+      // bidder's stored bid, which equals the team total per partnership rules.
+      const teamTotal = state.teamBids[teamKey] ?? state.bids[resolvedSecond]
       const biddingOrder = state.biddingOrder || []
       const [firstSeat, secondSeat] = biddingOrder.filter((s) => s === a || s === b)
       const resolvedFirst = firstSeat ?? a

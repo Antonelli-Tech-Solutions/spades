@@ -32,6 +32,18 @@ export function botBid(hand) {
 }
 
 /**
+ * Choose 2 random cards for the bot to pass during a blind nil card exchange.
+ * Used when the bot is the partner of a blind nil bidder.
+ *
+ * @param {Array<{suit: string, rank: string}>} hand
+ * @returns {Array<{suit: string, rank: string}>} Exactly 2 cards
+ */
+export function botBlindNilExchange(hand) {
+  const shuffled = [...hand].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, 2)
+}
+
+/**
  * Choose a card for the bot to play.
  * Picks uniformly at random from the set of legal plays.
  *

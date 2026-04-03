@@ -20,8 +20,9 @@ import {
   removePlayerFromTables,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, getPlayerView } from './game/state.js'
+import { getPartnerSeat } from './game/bid.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
-import { isBot, botBid, botPlay } from './game/bot.js'
+import { isBot, botBid, botPlay, botBlindNilExchange } from './game/bot.js'
 
 function sendJSON(res, statusCode, data) {
   res.status(statusCode).json(data)
@@ -49,8 +50,17 @@ function advanceBotTurns(state) {
       const card = botPlay(current.hands[seat], current.currentTrick, current.spadesbroken, current.isFirstTrick)
       console.log('Bot play:', { seat, card, tableId: current.tableId })
       current = playCard(current, seat, card)
+    } else if (current.phase === 'blind_nil_exchange') {
+      const { currentBlindNilSeat, step } = current.blindNilExchange
+      // Bots never bid blind nil, so they can only act as the partner (step: partner_to_blind)
+      if (step !== 'partner_to_blind') break
+      const partnerSeat = getPartnerSeat(currentBlindNilSeat)
+      if (!isBot(current.players[partnerSeat])) break
+      const cards = botBlindNilExchange(current.hands[partnerSeat])
+      console.log('Bot blind nil exchange:', { seat: partnerSeat, cards, tableId: current.tableId })
+      current = submitBlindNilExchange(current, partnerSeat, cards)
     } else {
-      // blind_nil_exchange or game_over — bots never bid blind nil, nothing to auto-advance
+      // game_over — nothing to auto-advance
       break
     }
   }

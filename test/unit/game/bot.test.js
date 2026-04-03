@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { isBot, getBotPlayerId, botBid, botPlay } from '../../../server/game/bot.js'
+import { isBot, getBotPlayerId, botBid, botPlay, botBlindNilExchange } from '../../../server/game/bot.js'
 
 describe('isBot', () => {
   it('returns true for bot player IDs', () => {
@@ -112,5 +112,38 @@ describe('botPlay', () => {
     const card = botPlay(hand, [], false, false)
     assert.equal(card.suit, 'clubs')
     assert.equal(card.rank, '2')
+  })
+})
+
+describe('botBlindNilExchange', () => {
+  const hand = [
+    { suit: 'spades', rank: 'A' },
+    { suit: 'spades', rank: 'K' },
+    { suit: 'hearts', rank: 'Q' },
+    { suit: 'clubs', rank: '7' },
+    { suit: 'diamonds', rank: '3' },
+  ]
+
+  it('returns exactly 2 cards', () => {
+    const cards = botBlindNilExchange(hand)
+    assert.equal(cards.length, 2)
+  })
+
+  it('returns cards that are in the hand', () => {
+    const cards = botBlindNilExchange(hand)
+    for (const card of cards) {
+      assert.ok(hand.some((c) => c.suit === card.suit && c.rank === card.rank))
+    }
+  })
+
+  it('returns 2 distinct cards (no duplicate)', () => {
+    const cards = botBlindNilExchange(hand)
+    assert.notDeepEqual(cards[0], cards[1])
+  })
+
+  it('does not mutate the original hand', () => {
+    const originalLength = hand.length
+    botBlindNilExchange(hand)
+    assert.equal(hand.length, originalLength)
   })
 })

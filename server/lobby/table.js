@@ -201,6 +201,20 @@ export async function removePlayerFromTables(redis, playerId) {
 }
 
 /**
+ * Terminate a table and its associated game state, removing all Redis keys.
+ * Used by the host to forcibly end a game at any point (waiting or in progress).
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ */
+export async function terminateTable(redis, tableId) {
+  await redis.del(`table:${tableId}`)
+  await redis.del(`game:${tableId}`)
+  await redis.hDel('lobby:tables', tableId)
+  console.log('Table terminated:', { tableId })
+}
+
+/**
  * List all open (waiting) tables from the lobby index.
  * Fetches full table state for each waiting entry to include seat info.
  *

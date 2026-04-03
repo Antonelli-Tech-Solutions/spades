@@ -18,6 +18,7 @@ import {
   listTables,
   addBotToTable,
   removePlayerFromTables,
+  terminateTable,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView } from './game/state.js'
 import { getPartnerSeat } from './game/bid.js'
@@ -329,6 +330,27 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
+  // POST /api/tables/:tableId/terminate — host terminates the game (any phase)
+  app.post('/api/tables/:tableId/terminate', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+      if (table.hostPlayerId !== session.playerId) {
+        return sendJSON(res, 403, { error: 'Only the host can terminate the game' })
+      }
+      await terminateTable(redisClient, tableId)
+      console.log('Game terminated by host:', { tableId, playerId: session.playerId })
+      sendJSON(res, 200, { message: 'Game terminated.' })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Terminate game error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
   // GET /api/tables/:tableId/state — get game state (filtered for this player)
   app.get('/api/tables/:tableId/state', async (req, res) => {
     const { tableId } = req.params
@@ -344,7 +366,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const gameState = await getGameState(redisClient, tableId)
       if (!gameState) return sendJSON(res, 200, { status: 'waiting', seats: table.seats, isHost: table.hostPlayerId === session.playerId })
 
-      sendJSON(res, 200, getPlayerView(gameState, seat))
+      sendJSON(res, 200, { ...getPlayerView(gameState, seat), isHost: table.hostPlayerId === session.playerId })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Get game state error:', { tableId, error: err.message })

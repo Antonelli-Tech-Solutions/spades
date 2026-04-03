@@ -21,6 +21,7 @@
 - [x] `P0` Apply rate limiting on all authentication endpoints
 - [x] `P1` Build player profile page (username, avatar, career win/loss record, recent 20 games, cosmetics)
 - [x] `P1` Add logout button to the lobby screen (`client/web/src/screens/lobby.js`): calls `POST /api/auth/logout`, clears `sessionStorage`, and redirects to the login screen
+- [x] `DEV` Host terminate game — `POST /api/tables/:tableId/terminate` lets the table host immediately end a game at any point (waiting or in progress). Deletes the table and game state from Redis. All seated players are redirected to the lobby on their next poll (404 from state endpoint). A "Terminate Game" button with a browser confirm prompt is shown to the host on both the waiting screen and during active play (`server/lobby/table.js`, `server/server.js`, `client/web/src/api.js`, `client/web/src/screens/game.js`).
 
 ---
 

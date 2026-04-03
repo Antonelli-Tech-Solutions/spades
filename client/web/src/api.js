@@ -311,6 +311,30 @@ export async function addBotToTable({ tableId, seat, sessionId, playerId }, fetc
 }
 
 /**
+ * Terminate a game (host only). Works in both waiting and playing phases.
+ * @param {{ tableId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ message: string }>}
+ */
+export async function terminateGame({ tableId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/terminate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to terminate game.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Log out the current session.
  * @param {{ sessionId: string }} data
  * @param {typeof fetch} [fetchFn]

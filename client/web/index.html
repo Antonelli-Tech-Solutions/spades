@@ -1153,13 +1153,14 @@
 
       .summary-total {
         display: flex;
-        flex-direction: column;
-        align-items: center;
+        flex-direction: row;
+        align-items: baseline;
+        justify-content: center;
         text-align: center;
         margin-top: 0.75rem;
         padding-top: 0.6rem;
         border-top: 1px solid #2e4a2e;
-        gap: 0.1rem;
+        gap: 0.4rem;
       }
 
       .summary-score {
@@ -1172,6 +1173,12 @@
       .summary-bags {
         font-size: 0.72rem;
         color: #777;
+      }
+
+      .scores-before-bags {
+        font-size: 0.72rem;
+        color: #777;
+        font-weight: 400;
       }
 
       .hand-summary-continue {

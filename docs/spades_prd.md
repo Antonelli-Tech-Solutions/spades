@@ -168,6 +168,26 @@ The bidding sequence follows a partnership model designed to allow informed team
 
 > **Example:** North bids 4. South (second bidder) sees the 4 and bids a team total of 7. The team target is 7 (South has effectively bid 3 for themselves). If North had instead bid Nil, North's Nil bid stands and South bids only their own hand.
 
+### 5.3 Bidding UI Requirements
+
+The UI must make the partnership bidding model unambiguous to all players. The following requirements apply to both the web and mobile clients.
+
+**Second bidder input labelling**
+
+The bid input shown to the second bidder on a team must be labelled **"Team Total"**, not "Your Bid". The label must be visible before the player begins adjusting the value.
+
+**Partner's bid visibility**
+
+The second bidder must be shown their partner's already-placed bid adjacent to the input at all times during their bidding turn. The display must make clear that this is the partner's number and that the second bidder is setting the team's combined target. Example rendering: *"Partner bid 4 — enter team total:"*.
+
+**Live individual-contribution hint**
+
+As the second bidder adjusts their team total value, a hint label must update live below the input to show their implied individual contribution (team total minus partner's bid). When the team total is equal to or greater than the partner's bid, the hint reads: *"You are bidding X (team total Y − partner's Z)"*. When the team total is **below** the partner's bid, the hint switches to a warning message instead: *"⚠ Team target (X) is below partner's pledge (Y) — every trick above X is a bag"*. The hint must never be absent when the second bidder's input is active.
+
+**Post-bid team total display**
+
+After both bids on a team are placed, the bid summary visible to all players must show the team's combined total alongside the individual bids. Example: *"N/S: 7 — North 4, South 3"*. Individual Nil and Blind Nil bids are shown individually (e.g. *"N/S: North Nil, South 5"*) since Nil bids do not contribute to a combined team target.
+
 ---
 
 ## 6. Technical Requirements

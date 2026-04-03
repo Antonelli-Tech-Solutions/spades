@@ -54,6 +54,7 @@
 - [x] `P0` Create table screen: name only (no visibility/join policy yet)
 - [x] `P0` Join table screen: list of open tables, click to join and choose a seat
 - [x] `P0` Game screen: display hand, bid input, card play, current trick, scoreboard
+- [ ] `P0` Bidding UI — partnership clarity: label second bidder's input as "Team Total", show partner's bid adjacent to the input, display a live individual-contribution hint that switches to a bag warning (e.g. *"⚠ Team target (2) is below partner's pledge (4) — every trick above 2 is a bag"*) when the team total falls below the partner's pledge, and show the team's combined bid in the post-bid summary (see PRD Section 5.3)
 - [ ] `P0` Blind Nil hand hiding — web UI: when `HAND_DEALT` arrives with `blindNilEligible: true` and no `myHand`, render face-down card backs in the hand area and show "Reveal Hand" and "Bid Blind Nil" action buttons in place of the normal bid input; on "Reveal Hand", call `POST /api/tables/:tableId/reveal-hand` and display cards when `HAND_REVEALED` arrives; on "Bid Blind Nil", submit the bid directly — the hand is never displayed to the player
 - [x] `P0` Build hand display in Spread (fan) and Hand Diagram modes
 - [x] `P0` Game over screen: show final score and winner

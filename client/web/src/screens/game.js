@@ -12,6 +12,7 @@ import { relSeats } from '../seatUtils.js'
 import { HOLD_DURATIONS, detectCompletedTrick, trickHoldHtml } from '../trickHold.js'
 import { createInputBlocker } from '../inputBlock.js'
 import { endOfHandSummaryHtml } from '../endOfHandSummary.js'
+import { BAG_ICON } from '../icons.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const RED_SUIT = new Set(['hearts', 'diamonds'])
@@ -473,13 +474,13 @@ export function renderGameScreen(container) {
           <div class="score-team score-ns">
             <span class="score-team-label">N/S</span>
             <span class="score-pts">${state.scores.ns}</span>
-            <span class="score-bags">\u{1F45D} ${state.bags.ns} bag${state.bags.ns !== 1 ? 's' : ''}</span>
+            <span class="score-bags">${BAG_ICON} ${state.bags.ns} bag${state.bags.ns !== 1 ? 's' : ''}</span>
           </div>
           <div class="score-meta">Hand #${state.handNumber}${state.spadesbroken ? ' \u00b7 \u2660 broken' : ''}</div>
           <div class="score-team score-ew">
             <span class="score-team-label">E/W</span>
             <span class="score-pts">${state.scores.ew}</span>
-            <span class="score-bags">\u{1F45D} ${state.bags.ew} bag${state.bags.ew !== 1 ? 's' : ''}</span>
+            <span class="score-bags">${BAG_ICON} ${state.bags.ew} bag${state.bags.ew !== 1 ? 's' : ''}</span>
           </div>
         </div>
         ${teamBidSummaryHtml(state)}

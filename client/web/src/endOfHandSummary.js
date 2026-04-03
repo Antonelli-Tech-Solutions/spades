@@ -12,6 +12,8 @@
  * The caller renders this as an overlay and wires up the Continue button.
  */
 
+import { BAG_ICON } from './icons.js'
+
 const TEAM = { north: 'ns', south: 'ns', east: 'ew', west: 'ew' }
 const TEAM_SEATS = { ns: ['north', 'south'], ew: ['east', 'west'] }
 const TEAM_LABEL = { ns: 'N/S', ew: 'E/W' }
@@ -65,11 +67,11 @@ function teamColHtml(team, entry, colLabel) {
     const delta = entry.scoreDelta[team]
     const sign = delta >= 0 ? '+' : ''
     const bagsEarned = entry.newBags[team]
-    const bagsText = bagsEarned > 0 ? `, +${bagsEarned}\u{1F45D}` : ''
+    const bagsSuffix = bagsEarned > 0 ? `, +${bagsEarned}${BAG_ICON}` : ''
     teamRowHtml = `
       <div class="summary-row team-row">
         <span class="summary-row-label">Bid ${esc(String(teamBid))}, Took ${teamTricks}</span>
-        <span class="summary-row-value">${sign}${delta} pts${esc(bagsText)}</span>
+        <span class="summary-row-value">${sign}${delta} pts${bagsSuffix}</span>
       </div>`
   }
 
@@ -95,7 +97,7 @@ function teamColHtml(team, entry, colLabel) {
       ${nilRows}
       ${penaltyHtml}
       <div class="summary-total">
-        <span class="summary-score">${scoreAfter} pts</span> <span class="summary-bags">${bagsAfter}\u{1F45D}</span>
+        <span class="summary-score">${scoreAfter} pts</span> <span class="summary-bags">${bagsAfter}${BAG_ICON}</span>
       </div>
     </div>`
 }
@@ -146,12 +148,12 @@ export function endOfHandSummaryHtml(entry, mySeat, gameOverInfo = null) {
         <div class="hand-summary-scores-before">
           <div class="scores-before-team">
             <span class="scores-before-label">${esc(usLabel)}</span>
-            <span class="scores-before-value">${myScoreBefore} <span class="scores-before-bags">${myBagsBefore}\u{1F45D}</span></span>
+            <span class="scores-before-value">${myScoreBefore} <span class="scores-before-bags">${myBagsBefore}${BAG_ICON}</span></span>
           </div>
           <div class="scores-before-sep">vs</div>
           <div class="scores-before-team">
             <span class="scores-before-label">${esc(themLabel)}</span>
-            <span class="scores-before-value">${theirScoreBefore} <span class="scores-before-bags">${theirBagsBefore}\u{1F45D}</span></span>
+            <span class="scores-before-value">${theirScoreBefore} <span class="scores-before-bags">${theirBagsBefore}${BAG_ICON}</span></span>
           </div>
         </div>
         <div class="hand-summary-cols">

@@ -274,8 +274,16 @@ export function renderGameScreen(container) {
           // Queue the update — apply it after the hold window expires
           queuedState = s
         } else {
+          const prevState = state
+          const completedTrick = detectCompletedTrick(prevState, s)
           state = s
-          render()
+          if (completedTrick) {
+            // A trick completed while we were polling — trigger the hold so all
+            // players (not just the one who played the last card) see the result.
+            startHold(completedTrick)
+          } else {
+            render()
+          }
         }
       } catch (err) {
         if (err.status === 404) {
@@ -411,9 +419,12 @@ export function renderGameScreen(container) {
       return
     }
 
-    if (state.phase === 'game_over') {
+    if (state.phase === 'game_over' && !holdActive) {
       // Final hand summary was already dismissed (e.g. page reload after game ended).
       // Navigate directly to lobby — there is nothing left to show.
+      // Guard on !holdActive: if the last trick is still being displayed in the hold
+      // window we must not navigate yet — the hold timer will call render() again
+      // after expiry, at which point the game-over hand summary will be shown first.
       navigate('#/lobby')
       return
     }

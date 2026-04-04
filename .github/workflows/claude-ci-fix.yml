@@ -1,0 +1,32 @@
+name: Claude CI Fixer
+on:
+  workflow_run:
+    workflows: ["CI"]   # ← change to match your CI workflow name exactly
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  fix:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          additional_permissions: |
+            actions: read
+          prompt: |
+            The CI checks failed on this branch. Download the failure logs,
+            diagnose what went wrong, and push a fix.
+            Once all checks pass, merge the PR with:
+              gh pr merge --squash --delete-branch

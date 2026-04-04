@@ -390,7 +390,7 @@ All game routes require the caller to be seated at the table. Game state respons
 |---|---|---|---|
 | `GET` | `/api/tables/:tableId/state` | Required | Get the current game state filtered for the authenticated player. |
 | `POST` | `/api/tables/:tableId/bid` | Required | Place a bid during the bidding phase. |
-| `POST` | `/api/tables/:tableId/reveal-hand` | Required | Reveal hand before bidding (required to bid Blind Nil). |
+| `POST` | `/api/tables/:tableId/reveal-hand` | Required | Reveal hand before bidding (forfeits Blind Nil eligibility). |
 | `POST` | `/api/tables/:tableId/blind-nil-exchange` | Required | Submit cards for the Blind Nil card exchange. |
 | `POST` | `/api/tables/:tableId/play` | Required | Play a card during the playing phase. |
 

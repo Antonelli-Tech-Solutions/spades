@@ -44,13 +44,22 @@ export async function registerPlayer(db, { email, username, password }, sendVeri
   const trimmedUsername = username.trim()
   const passwordHash = await hashPassword(password)
 
+  // DEV_AUTO_VERIFY=true skips email verification entirely — for local testing only.
+  // Blocked unconditionally in production even if the env var is set, so it can
+  // never accidentally reach a production deployment.
+  if (process.env.DEV_AUTO_VERIFY === 'true' && process.env.NODE_ENV === 'production') {
+    console.warn('DEV_AUTO_VERIFY is set but has no effect in NODE_ENV=production')
+  }
+  const autoVerify =
+    process.env.NODE_ENV !== 'production' && process.env.DEV_AUTO_VERIFY === 'true'
+
   let player
   try {
     const result = await db.query(
       `INSERT INTO players (email, username, password_hash, is_verified)
-       VALUES ($1, $2, $3, FALSE)
+       VALUES ($1, $2, $3, $4)
        RETURNING id`,
-      [normalizedEmail, trimmedUsername, passwordHash],
+      [normalizedEmail, trimmedUsername, passwordHash, autoVerify],
     )
     player = result.rows[0]
   } catch (err) {
@@ -64,6 +73,11 @@ export async function registerPlayer(db, { email, username, password }, sendVeri
       }
     }
     throw err
+  }
+
+  if (autoVerify) {
+    console.log('DEV_AUTO_VERIFY: skipped email verification for player', player.id)
+    return { playerId: player.id, email: normalizedEmail, username: trimmedUsername, autoVerified: true }
   }
 
   const token = generateVerificationToken()
@@ -114,6 +128,45 @@ export async function verifyEmailToken(db, token) {
   await db.query(`DELETE FROM email_verification_tokens WHERE token = $1`, [token])
 
   return { playerId: player_id }
+}
+
+/**
+ * Resend the verification email for an unverified account.
+ *
+ * Silently succeeds when the email is not found or already verified to
+ * prevent account enumeration. Deletes any existing token and issues a
+ * fresh one before sending.
+ *
+ * @param {object} db - pg Pool (or compatible query interface)
+ * @param {string} email
+ * @param {(email: string, token: string) => Promise<void>} sendVerificationEmail
+ */
+export async function resendVerificationEmail(db, email, sendVerificationEmail) {
+  const normalizedEmail = email.toLowerCase().trim()
+
+  const result = await db.query(
+    `SELECT id, is_verified FROM players WHERE email = $1`,
+    [normalizedEmail],
+  )
+
+  if (result.rows.length === 0 || result.rows[0].is_verified) {
+    return
+  }
+
+  const playerId = result.rows[0].id
+
+  await db.query(`DELETE FROM email_verification_tokens WHERE player_id = $1`, [playerId])
+
+  const token = generateVerificationToken()
+  const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000)
+
+  await db.query(
+    `INSERT INTO email_verification_tokens (token, player_id, expires_at)
+     VALUES ($1, $2, $3)`,
+    [token, playerId, expiresAt],
+  )
+
+  await sendVerificationEmail(normalizedEmail, token)
 }
 
 /**

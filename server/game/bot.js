@@ -1,0 +1,68 @@
+import { getLegalPlays } from './trick.js'
+
+/**
+ * Return true if a player ID belongs to a bot seat.
+ * Bot IDs follow the pattern "bot:<seat>".
+ *
+ * @param {*} playerId
+ * @returns {boolean}
+ */
+export function isBot(playerId) {
+  return typeof playerId === 'string' && playerId.startsWith('bot:')
+}
+
+/**
+ * Return the canonical bot player ID for a given seat.
+ * @param {string} seat
+ * @returns {string}
+ */
+export function getBotPlayerId(seat) {
+  return `bot:${seat}`
+}
+
+/**
+ * Compute the bot's bid.
+ *
+ * When bidding first (partnerBid is null), bids its spades count.
+ * When bidding second (partnerBid is a number), bids partner's bid + spades count
+ * so the team total equals partner's contribution plus the bot's individual spades.
+ * If the partner bid nil or blind_nil (individual bids), falls back to spades count only.
+ *
+ * @param {Array<{suit: string, rank: string}>} hand
+ * @param {number|'nil'|'blind_nil'|null} [partnerBid] - Partner's bid if bot is bidding second
+ * @returns {number}
+ */
+export function botBid(hand, partnerBid = null) {
+  const spades = hand.filter((c) => c.suit === 'spades').length
+  if (typeof partnerBid === 'number') {
+    return partnerBid + spades
+  }
+  return spades
+}
+
+/**
+ * Choose 2 random cards for the bot to pass during a blind nil card exchange.
+ * Used when the bot is the partner of a blind nil bidder.
+ *
+ * @param {Array<{suit: string, rank: string}>} hand
+ * @returns {Array<{suit: string, rank: string}>} Exactly 2 cards
+ */
+export function botBlindNilExchange(hand) {
+  const shuffled = [...hand].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, 2)
+}
+
+/**
+ * Choose a card for the bot to play.
+ * Picks uniformly at random from the set of legal plays.
+ *
+ * @param {Array<{suit: string, rank: string}>} hand
+ * @param {Array<{seat: string, card: {suit: string, rank: string}}>} currentTrick
+ * @param {boolean} spadesbroken
+ * @param {boolean} isFirstTrick
+ * @returns {{suit: string, rank: string}}
+ */
+export function botPlay(hand, currentTrick, spadesbroken, isFirstTrick) {
+  const legal = getLegalPlays(hand, currentTrick, spadesbroken, isFirstTrick)
+  return legal[Math.floor(Math.random() * legal.length)]
+}

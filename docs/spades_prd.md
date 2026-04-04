@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| **Version** | 1.2 — Rules Clarifications |
-| **Date** | March 2026 |
+| **Version** | 1.5 — Blind Nil Hand Visibility |
+| **Date** | April 2026 |
 | **Status** | For Review |
 | **Product** | Spades Online (Mobile & Web) |
 
@@ -127,7 +127,9 @@ Players may personalize their experience through the following visual settings, 
 
 - Hands are always sorted by suit and rank. This is not configurable.
 - **Confirm plays:** toggle a confirmation prompt before playing a card (off by default).
-- **Animation speed:** slow / normal / fast for card animations.
+- **Animation speed:** slow / normal / fast for card animations. The speed setting governs both card play animations and the end-of-trick hold duration. Hold durations by speed: slow = 2500 ms, normal = 1500 ms, fast = 800 ms. Defaults to normal until the setting is configurable.
+- **End-of-trick hold:** when the fourth card of a trick is played, the client keeps the completed trick visible for the configured hold duration and highlights the winning seat before clearing the trick area. State updates (e.g. `TURN_CHANGED`) that arrive during the hold window are queued and applied only after the hold expires.
+- **Input blocking during animations and hold:** card play input is disabled for the active player from the moment they play a card until both the card play animation *and* any subsequent end-of-trick hold have fully completed. A `TURN_CHANGED` event arriving during this window does not re-enable input early — it is applied to the UI only after the hold clears. This prevents a player from clicking their next card before the current trick has been visually resolved.
 - **Previous trick:** players may tap/click to view the previous trick at any time until they have played a card to the current trick, at which point it is no longer accessible.
 - **Notifications:** configure push notification preferences for friend activity and game invitations.
 
@@ -149,6 +151,7 @@ v1.0 ships with a single standard ruleset. Rule customization is deferred to v1.
 | **Spades Breaking** | Spades are broken by the first Spade played (after the first trick). Once broken, Spades may be led. |
 | **Nil** | +50 if successful, -50 if failed. Available to any player at any time. |
 | **Blind Nil Eligibility** | A player may bid Blind Nil only if their team is at least 100 points behind the opposing team. |
+| **Blind Nil Hand Visibility** | When a team is eligible for Blind Nil at the start of a hand, the server withholds that team's cards from each eligible player until they explicitly act. Each eligible player is presented with two options: *Reveal Hand* — view cards and bid normally — or *Bid Blind Nil* — commit to a Blind Nil bid without viewing. The server must not transmit the player's cards in the initial `HAND_DEALT` event; cards are sent only after the player takes one of these two actions. This is a server-side enforcement and must not rely on client-side hiding alone. The ineligible team's players receive their hands immediately and may bid while eligible players are deciding. |
 | **Blind Nil Score** | +100 if successful, -100 if failed. |
 | **Blind Nil Limit** | Only one player per team may bid Blind Nil in a given hand. |
 | **Blind Nil Card Exchange** | The card exchange occurs after all four players have bid but before the opening lead. The Blind Nil player passes 2 cards face-down to their partner; the partner then passes 2 cards back. |
@@ -164,6 +167,20 @@ The bidding sequence follows a partnership model designed to allow informed team
 - The team's combined bid may be lower than the first bidder's individual bid (the second bidder has more information and may wish to set a lower team target to avoid bags).
 
 > **Example:** North bids 4. South (second bidder) sees the 4 and bids a team total of 7. The team target is 7 (South has effectively bid 3 for themselves). If North had instead bid Nil, North's Nil bid stands and South bids only their own hand.
+
+### 5.3 Bidding UI Requirements
+
+The second-bidder's role as team-total setter must be made explicit in the UI. The following requirements apply to all clients (web and mobile).
+
+1. **"Team Total" label** — the second bidder's input must be labelled **"Team Total"**, not "Your Bid", so it is immediately clear they are setting the combined team target.
+
+2. **Partner's bid visible** — the first bidder's already-placed bid must be shown adjacent to the second bidder's input (e.g. *"Partner bid 4 — enter team total:"*).
+
+3. **Live individual-contribution hint** — as the second bidder adjusts the input, show a live hint below it:
+   - When team total ≥ partner's bid: *"You are bidding X (team total Y − partner's bid Z)"*
+   - When team total < partner's bid: *"⚠ Team target (Y) is below partner's bid (Z) — every trick above Y is a bag"* — this surfaces the bag consequence of setting a target lower than the partner's individual bid, which is a valid strategic choice.
+
+4. **Post-bid team summary** — once both bids are placed, the bid summary shows the team's combined total alongside individual bids (e.g. *"N/S: 7 — North 4, South 3"*). Nil and Blind Nil bids are shown individually and are not combined into the team total.
 
 ---
 
@@ -190,6 +207,90 @@ The bidding sequence follows a partnership model designed to allow informed team
 - **Anti-cheat:** server enforces legal move validation; clients cannot play out-of-turn or play cards not in their hand.
 - **Account security:** email/password with required email verification; optional 2FA via authenticator app.
 - Rate limiting on all authentication and social endpoints to prevent abuse.
+
+### 6.4 Real-Time Architecture
+
+All in-game state updates and lobby changes are delivered to clients via a persistent WebSocket connection rather than polling. The REST API remains the **action** mechanism (clients POST bids, card plays, etc.); WebSockets are the **notification** mechanism (the server pushes authoritative state updates to all interested clients immediately after each state change).
+
+#### 6.4.1 Connection Lifecycle
+
+- Clients establish an authenticated WebSocket connection on game screen mount (or lobby screen mount for lobby events).
+- Authentication occurs on the connection upgrade handshake using the player's session token (`x-session-id` header). Unauthenticated upgrade requests are rejected with HTTP 401.
+- Clients join a **room** corresponding to `table:{tableId}` upon seating or spectating. Lobby subscribers join a `lobby` channel. Each authenticated client also subscribes to their own **personal notification channel** `player:{playerId}:notify` on connect — this is the delivery rail for Friends-Only table events and Slice 4 social notifications (friend requests, in-app invites).
+- The server emits a heartbeat ping every 30 seconds; clients must respond with a pong within 10 seconds or the connection is considered dead.
+- On reconnect, clients call `GET /api/tables/:tableId/state` to re-hydrate from authoritative server state, then resume listening for WebSocket events.
+
+#### 6.4.2 Event Shape
+
+All WebSocket events follow the envelope:
+
+```json
+{ "type": "EVENT_NAME", "payload": { ... } }
+```
+
+Events must not change shape in a backward-incompatible way without coordinating a client release.
+
+#### 6.4.3 In-Game Events
+
+| Event | Audience | Key Payload Fields |
+|---|---|---|
+| `HAND_DEALT` | Per-player (4 individual sends) | `dealer`, `biddingOrder`, `blindNilEligible` (boolean); `myHand` is **omitted** when `blindNilEligible` is `true` — cards are withheld until the player reveals or bids Blind Nil |
+| `BID_PLACED` | All in room | `seat`, `bidType` (`nil` / `blindNil` / `number`); numeric value hidden until end-of-hand scoring |
+| `HAND_REVEALED` | Specific player | `myHand` — the player's full 13-card hand; sent only after the player calls *Reveal Hand* during the Blind Nil eligibility window |
+| `BLIND_NIL_EXCHANGE_PROMPT` | Specific player | `direction` (`send` / `receive`), `count` |
+| `CARD_PLAYED` | All in room | `seat`, `card` |
+| `TRICK_COMPLETE` | All in room | `winnerSeat`, `plays` |
+| `HAND_SCORED` | All in room | `scoreDelta`, `newTotals`, `bags` |
+| `GAME_OVER` | All in room | `winningTeam`, `finalScores` |
+| `TURN_CHANGED` | All in room | `activeSeat`, `phase` |
+| `PLAYER_DISCONNECTED` | All in room | `seat`, `reconnectWindowSeconds` |
+| `PLAYER_RECONNECTED` | All in room | `seat` |
+
+#### 6.4.4 Lobby Events
+
+Lobby events are routed by visibility so that Friends-Only and Private table information is never broadcast to players who should not know the table exists.
+
+| Event | Channel | Key Payload Fields |
+|---|---|---|
+| `TABLE_CREATED` | `lobby` (Public tables) · `player:{friendId}:notify` per friend of host (Friends-Only) · *(no broadcast)* (Private) | `tableId`, `name`, `host`, `seats`, `ruleset`, `visibility`, `joinPolicy` |
+| `TABLE_UPDATED` | Same routing as `TABLE_CREATED` for the table's *current* visibility. When visibility changes, the server sends `TABLE_REMOVED` on the old audience's channel and `TABLE_CREATED` on the new audience's channel (see transitions below). | `tableId`, changed fields — always includes `visibility` |
+| `TABLE_REMOVED` | `lobby` (was Public) · `player:{friendId}:notify` per friend of host (was Friends-Only) · *(no broadcast)* (was Private) | `tableId` |
+
+The `visibility` field is included in every `TABLE_CREATED` and `TABLE_UPDATED` payload so clients can route the event to the correct UI surface (lobby browser for Public; friends/notifications panel for Friends-Only).
+
+##### Visibility Transitions
+
+When a host changes a table's visibility setting, the server must close out the old audience and open the new one atomically to prevent ghost entries or leaks:
+
+| Old → New | Server action |
+|---|---|
+| Public → Friends-Only | Send `TABLE_REMOVED` to `lobby`; send `TABLE_CREATED` to each friend's `player:{id}:notify` |
+| Public → Private | Send `TABLE_REMOVED` to `lobby` |
+| Friends-Only → Public | Send `TABLE_REMOVED` to each friend's `player:{id}:notify`; send `TABLE_CREATED` to `lobby` |
+| Friends-Only → Private | Send `TABLE_REMOVED` to each friend's `player:{id}:notify` |
+| Private → Public | Send `TABLE_CREATED` to `lobby` |
+| Private → Friends-Only | Send `TABLE_CREATED` to each friend's `player:{id}:notify` |
+
+##### Friend List Changes While a Table Is Live
+
+When a Friends-Only table is active, changes to the host's friend list require immediate side-effect events:
+
+- **Host removes or blocks a player:** send `TABLE_REMOVED` to that player's `player:{id}:notify` so the table disappears from their view immediately.
+- **Host accepts a new friend request:** send `TABLE_CREATED` (with current state) to the new friend's `player:{id}:notify` so the table appears in their friends list.
+
+#### 6.4.5 Fan-Out Architecture
+
+The WebSocket server uses Redis pub/sub as its broadcast bus. Each room (`table:{tableId}`, `lobby`) maps to a Redis pub/sub channel. This allows multiple server instances to fan out events to all connected clients in a room, ensuring horizontal scalability without sticky sessions.
+
+#### 6.4.6 Player Disconnect & Reconnect
+
+1. When a WebSocket connection drops (ping failure or clean close), the server emits `PLAYER_DISCONNECTED` to the room with a countdown (default 60 seconds).
+2. If the player reconnects and re-authenticates within the window, they re-join the room and receive a full state re-hydration via `GET /api/tables/:tableId/state`.
+3. If the reconnect window expires: the v1.1 disconnect-fill bot (see [Section 9](#9-post-launch-roadmap)) immediately takes over the disconnected player's seat so the current hand can continue. If the player reconnects mid-hand, they are placed in spectator mode and may rejoin as an active player at the start of the next hand once this infrastructure is in place.
+
+#### 6.4.7 Player-Initiated Leave During In-Progress Game
+
+**Decision (recorded April 2026):** When a seated player calls `POST /api/tables/:tableId/leave` while a game is in progress, the server immediately replaces the vacated seat with a bot (`bot:<seat>`). The bot takes over from the current game state and plays automatically for the remainder of the game using the existing bot logic. This is distinct from the v1.1 disconnect-fill, which applies only on network disconnect: the bot fills immediately when the reconnect window expires so the current hand can continue; if the player reconnects mid-hand they are placed in spectator mode and may rejoin as an active player at the start of the next hand. The voluntary-leave bot-fill is in scope for v1.0.
 
 ---
 
@@ -244,9 +345,11 @@ Default to be decided before v1.1 ships.
 A rule-based AI opponent that plays legal, competent Spades. Serves two purposes:
 
 - **Casual play opponent** — players may sit down against bots intentionally.
-- **Disconnect fill** — when a player disconnects and does not reconnect by the start of the next hand, a bot takes their seat for that hand. The player may rejoin at the start of any subsequent hand.
+- **Disconnect fill** — when a player disconnects and the reconnect window expires, a bot immediately takes their seat so the current hand can continue. If the player reconnects mid-hand, they are placed in spectator mode and may rejoin as an active player at the start of any subsequent hand.
 
 Table host may configure: bot fill on disconnect only, always allow bots, or no bots.
+
+> **Note:** Voluntary-leave bot-fill (player presses "Leave Table" during an in-progress game) was promoted to v1.0 scope (see Section 6.4.7). This v1.1 item covers disconnect-fill and the full casual-bot experience only.
 
 ---
 
@@ -326,4 +429,4 @@ Variants may introduce separate casual lobbies.
 
 ---
 
-*End of Document — Spades Online PRD v1.2*
+*End of Document — Spades Online PRD v1.4*

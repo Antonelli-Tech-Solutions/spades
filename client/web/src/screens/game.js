@@ -11,7 +11,7 @@ import {
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
 import { relSeats } from '../seatUtils.js'
-import { HOLD_DURATIONS, detectCompletedTrick, trickHoldHtml } from '../trickHold.js'
+import { HOLD_DURATIONS, detectCompletedTrick, isHandTransition, trickHoldHtml } from '../trickHold.js'
 import { createInputBlocker } from '../inputBlock.js'
 import { endOfHandSummaryHtml } from '../endOfHandSummary.js'
 import { BAG_ICON } from '../icons.js'
@@ -276,12 +276,27 @@ export function renderGameScreen(container) {
         } else {
           const prevState = state
           const completedTrick = detectCompletedTrick(prevState, s)
-          state = s
           if (completedTrick) {
             // A trick completed while we were polling — trigger the hold so all
             // players (not just the one who played the last card) see the result.
+            //
+            // If this was the 13th trick of a non-final hand (handHistory grew
+            // and state advanced to the next hand's bidding phase), keep rendering
+            // prevState during the hold so the player sees the 13th trick in its
+            // original hand context rather than the new hand's bidding screen.
+            // For game_over the 13th trick is detected via completedTricks growth
+            // (not reset), so state = s is safe there.
+            if (!isHandTransition(prevState, s)) {
+              state = s
+            }
             startHold(completedTrick)
+            if (isHandTransition(prevState, s)) {
+              // startHold clears queuedState; override it with the new state so
+              // the hold timer applies it after expiry.
+              queuedState = s
+            }
           } else {
+            state = s
             render()
           }
         }
@@ -669,11 +684,23 @@ export function renderGameScreen(container) {
               const s = await apiPlay({ tableId, card, sessionId, playerId })
               if (!mounted) return
               const completedTrick = detectCompletedTrick(prevState, s)
-              state = s
               if (completedTrick) {
+                // If this was the 13th trick of a non-final hand (state already
+                // advanced to the next hand's bidding phase), keep rendering
+                // prevState during the hold so the player sees the 13th trick in
+                // context, not the new hand's bidding screen.
+                if (!isHandTransition(prevState, s)) {
+                  state = s
+                }
                 startHold(completedTrick)
+                if (isHandTransition(prevState, s)) {
+                  // startHold clears queuedState; override with new-hand state so
+                  // the hold timer applies it after expiry.
+                  queuedState = s
+                }
                 // inputBlocker stays blocked until the hold timer fires
               } else {
+                state = s
                 inputBlocker.unblock()
                 render()
               }

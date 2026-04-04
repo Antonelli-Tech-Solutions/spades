@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { HOLD_DURATIONS, detectCompletedTrick, trickHoldHtml } from '../../../client/web/src/trickHold.js'
+import { HOLD_DURATIONS, detectCompletedTrick, isHandTransition, trickHoldHtml } from '../../../client/web/src/trickHold.js'
 
 // ---------------------------------------------------------------------------
 // HOLD_DURATIONS
@@ -17,6 +17,54 @@ describe('HOLD_DURATIONS', () => {
 
   it('exports fast duration of 800 ms', () => {
     assert.equal(HOLD_DURATIONS.fast, 800)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isHandTransition
+// ---------------------------------------------------------------------------
+
+describe('isHandTransition', () => {
+  it('returns false when prevState is null', () => {
+    const next = { handHistory: [{}], phase: 'bidding' }
+    assert.equal(isHandTransition(null, next), false)
+  })
+
+  it('returns false when nextState is null', () => {
+    assert.equal(isHandTransition({ handHistory: [] }, null), false)
+  })
+
+  it('returns false when handHistory length is unchanged', () => {
+    const prev = { handHistory: [{}], phase: 'playing' }
+    const next = { handHistory: [{}], phase: 'playing' }
+    assert.equal(isHandTransition(prev, next), false)
+  })
+
+  it('returns false when game_over even if handHistory grew', () => {
+    // game_over: completedTricks preserved, state is safe to render during hold
+    const prev = { handHistory: [], phase: 'playing' }
+    const next = { handHistory: [{}], phase: 'game_over' }
+    assert.equal(isHandTransition(prev, next), false)
+  })
+
+  it('returns true when handHistory grew and phase is bidding (non-final hand transition)', () => {
+    // 13th trick scored: server moved to next hand's bidding phase;
+    // client must keep prevState during hold to avoid showing next hand context
+    const prev = { handHistory: [], phase: 'playing' }
+    const next = { handHistory: [{}], phase: 'bidding' }
+    assert.equal(isHandTransition(prev, next), true)
+  })
+
+  it('returns true when handHistory grew and phase is playing (bots already played tricks of new hand)', () => {
+    const prev = { handHistory: [{}], phase: 'playing' }
+    const next = { handHistory: [{}, {}], phase: 'playing' }
+    assert.equal(isHandTransition(prev, next), true)
+  })
+
+  it('handles missing handHistory arrays gracefully', () => {
+    const prev = {}
+    const next = { phase: 'bidding' }
+    assert.equal(isHandTransition(prev, next), false)
   })
 })
 

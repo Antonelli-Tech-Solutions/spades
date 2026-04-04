@@ -1,0 +1,42 @@
+name: Create Issues from Claude Code Review
+
+on:
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  create-issue:
+    if: github.event.review.user.login == 'claude-bot-dom'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract severity and create issue
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          FILE="${{ github.event.comment.path }}"
+          LINE="${{ github.event.comment.line }}"
+          PR="${{ github.event.pull_request.number }}"
+          
+          # Detect severity from comment
+          LABELS="code-review"
+          if echo "$COMMENT" | grep -qi "security"; then
+            LABELS="$LABELS,severity:critical"
+          elif echo "$COMMENT" | grep -qi "bug"; then
+            LABELS="$LABELS,severity:high"
+          elif echo "$COMMENT" | grep -qi "performance\|memory"; then
+            LABELS="$LABELS,severity:medium"
+          elif echo "$COMMENT" | grep -qi "style\|convention\|naming"; then
+            LABELS="$LABELS,severity:low"
+          fi
+          
+          gh issue create \
+            --title "Code Review Finding: $(echo "$COMMENT" | head -1)" \
+            --body "**From PR #$PR, $FILE:$LINE**\n\n$COMMENT" \
+            --label "$LABELS" \
+            --assignee "dantonel"
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -5,12 +5,15 @@ on:
   pull_request_review_comment:
     types: [created]
   issues:
-    types: [opened, assigned]  # ← added "assigned"
+    types: [opened, assigned]
   pull_request_review:
     types: [submitted]
 
 jobs:
   claude:
+    concurrency:
+      group: claude-issue-handler
+      cancel-in-progress: false
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -18,7 +21,7 @@ jobs:
       (github.event_name == 'issues' && (github.event.action == 'assigned' || contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ steps.app-token.outputs.token }}  # ← added, uses app token not GITHUB_TOKEN
+      GH_TOKEN: ${{ steps.app-token.outputs.token }}
     permissions:
       contents: write
       pull-requests: write

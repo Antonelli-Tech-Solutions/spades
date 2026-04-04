@@ -22,7 +22,7 @@
 - [x] `P1` Build player profile page (username, avatar, career win/loss record, recent 20 games, cosmetics)
 - [x] `P1` Add logout button to the lobby screen (`client/web/src/screens/lobby.js`): calls `POST /api/auth/logout`, clears `sessionStorage`, and redirects to the login screen
 - [x] `DEV` Host terminate game — `POST /api/tables/:tableId/terminate` lets the table host immediately end a game at any point (waiting or in progress). Deletes the table and game state from Redis. All seated players are redirected to the lobby on their next poll (404 from state endpoint). A "Terminate Game" button with a browser confirm prompt is shown to the host on both the waiting screen and during active play (`server/lobby/table.js`, `server/server.js`, `client/web/src/api.js`, `client/web/src/screens/game.js`).
-- [x] `P1` Leave table — `POST /api/tables/:tableId/leave` removes the requesting player from their seat at a waiting table. Only allowed while the table status is 'waiting'; returns 409 if a game is in progress. A "Leave Table" button on the waiting screen calls this endpoint and redirects the player to the lobby on success (`server/lobby/table.js`, `server/server.js`, `client/web/src/api.js`, `client/web/src/screens/game.js`).
+- [x] `P1` Leave table — `POST /api/tables/:tableId/leave` removes the requesting player from their seat. If the table is 'waiting', the seat is vacated. If a game is in progress, the vacated seat is immediately filled by a bot (`bot:<seat>`) and the game continues uninterrupted (see PRD Section 6.4.7). A "Leave Table" button on the waiting screen calls this endpoint and redirects the player to the lobby on success (`server/lobby/table.js`, `server/server.js`, `client/web/src/api.js`, `client/web/src/screens/game.js`).
 
 ---
 
@@ -184,7 +184,7 @@
 > Do not implement. Scope defined in `docs/spades_prd.md` Section 9.
 
 - `v1.1` Spectator chat settings (no chat / separate channel / shared)
-- `v1.1` Standard bot + disconnect fill
+- `v1.1` Standard bot + disconnect fill (voluntary-leave bot-fill is already in v1.0 — see PRD Section 6.4.7; this covers network-disconnect fill and full casual-bot experience)
 - `v1.2` Solo ranked queue + MMR system
 - `v1.2` Duo ranked queue
 - `v1.3` Premium cosmetics & billing

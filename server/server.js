@@ -367,19 +367,30 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
-  // POST /api/tables/:tableId/leave — leave a waiting table (removes player from their seat)
+  // POST /api/tables/:tableId/leave — leave a table (bot fills seat if game is in progress)
   app.post('/api/tables/:tableId/leave', async (req, res) => {
     const { tableId } = req.params
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
-      await leaveTable(redisClient, tableId, session.playerId)
-      console.log('Player left table:', { tableId, playerId: session.playerId })
+      const { seat, wasPlaying } = await leaveTable(redisClient, tableId, session.playerId)
+
+      if (wasPlaying) {
+        // Replace player with bot in the game state and advance any consecutive bot turns
+        let gameState = await getGameState(redisClient, tableId)
+        if (gameState && gameState.phase !== 'game_over') {
+          gameState = { ...gameState, players: { ...gameState.players, [seat]: `bot:${seat}` } }
+          gameState = advanceBotTurns(gameState)
+          await saveGameState(redisClient, tableId, gameState)
+          console.log('Bot filled vacated seat and advanced turns:', { tableId, seat })
+        }
+      }
+
+      console.log('Player left table:', { tableId, playerId: session.playerId, seat, wasPlaying })
       sendJSON(res, 200, { message: 'Left table.' })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
-      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
       console.error('Leave table error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })

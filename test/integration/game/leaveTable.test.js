@@ -209,7 +209,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     assert.equal(res.status, 401)
   })
 
-  it('returns 409 if game is in progress', async () => {
+  it('player leaving an in-progress game is replaced by a bot and game continues', async () => {
     const host = players[0]
     const p2 = players[1]
     const p3 = players[2]
@@ -249,7 +249,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
       body: JSON.stringify({ seat: 'west' }),
     })
 
-    // Game should now be in progress — try to leave
+    // Game should now be in progress — p2 (east seat) leaves
     const leaveRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/leave`, {
       method: 'POST',
       headers: {
@@ -258,6 +258,26 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
         'x-player-id': p2.playerId,
       },
     })
-    assert.equal(leaveRes.status, 409)
+    assert.equal(leaveRes.status, 200)
+
+    // The vacated seat should now be occupied by a bot
+    const stateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: {
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+    })
+    assert.equal(stateRes.status, 200)
+    const stateBody = await stateRes.json()
+    assert.equal(stateBody.seats.east, 'bot:east', 'east seat should be occupied by bot:east')
+
+    // p2 should no longer be able to get state (not seated)
+    const p2StateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: {
+        'x-session-id': p2.sessionId,
+        'x-player-id': p2.playerId,
+      },
+    })
+    assert.equal(p2StateRes.status, 403)
   })
 })

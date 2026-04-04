@@ -75,7 +75,7 @@ describe('WebSocket server', { skip }, () => {
   })
 
   after(async () => {
-    wss.close()
+    await new Promise((resolve) => wss.close(resolve))
     await new Promise((resolve) => httpServer.close(resolve))
 
     await redis.del('session:valid-session-1')
@@ -219,7 +219,7 @@ describe('WebSocket server', { skip }, () => {
     })
 
     after(async () => {
-      wss2.close()
+      await new Promise((resolve) => wss2.close(resolve))
       await new Promise((resolve) => httpServer2.close(resolve))
 
       await redis.del('session:session-p1')

@@ -363,13 +363,19 @@ export function createWsServer(httpServer, opts = {}) {
     }
   }
 
-  // Override close() to also disconnect the Redis subscriber connection
+  // Override close() to also disconnect the Redis subscriber connection.
+  // subscriber.quit() must complete before originalClose() is called so that the
+  // subscriber's TCP connection is fully torn down — otherwise the open handle
+  // prevents the Node.js event loop from exiting (causes hanging tests / processes).
   const originalClose = wss.close.bind(wss)
   wss.close = (callback) => {
     if (subscriber) {
-      subscriber.quit().catch((err) => console.error('Redis subscriber quit error:', err))
+      subscriber.quit()
+        .catch((err) => console.error('Redis subscriber quit error:', err))
+        .finally(() => originalClose(callback))
+    } else {
+      originalClose(callback)
     }
-    originalClose(callback)
   }
 
   return wss

@@ -78,8 +78,10 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
   })
 
   after(async () => {
-    wss1.close()
-    wss2.close()
+    await Promise.all([
+      new Promise((resolve) => wss1.close(resolve)),
+      new Promise((resolve) => wss2.close(resolve)),
+    ])
     await Promise.all([
       new Promise((resolve) => httpServer1.close(resolve)),
       new Promise((resolve) => httpServer2.close(resolve)),

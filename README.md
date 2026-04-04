@@ -496,7 +496,7 @@ Card format: rank + suit initial (e.g. `AS` = Ace of Spades, `KH` = King of Hear
 
 ## Real-Time (WebSocket)
 
-The WebSocket server shares the same HTTP server as the REST API (configurable via `WS_PORT`, default `3001`).
+The WebSocket server runs on its own port (configurable via `WS_PORT`, default `3001`). Set `WS_PORT` to the same value as `PORT` to share the HTTP server instead.
 
 ### Connection & Authentication
 

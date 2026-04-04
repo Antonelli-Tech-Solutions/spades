@@ -50,6 +50,19 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     try {
       const db = getDb()
       const result = await registerPlayer(db, { email, username, password }, emailer)
+      if (result.autoVerified) {
+        const redis = await getRedis()
+        const sessionId = await createSession(redis, {
+          playerId: result.playerId,
+          email: result.email,
+          username: result.username,
+        })
+        return sendJSON(res, 201, {
+          sessionId,
+          playerId: result.playerId,
+          username: result.username,
+        })
+      }
       sendJSON(res, 201, {
         message: 'Registration successful. Please check your email to verify your account.',
         playerId: result.playerId,

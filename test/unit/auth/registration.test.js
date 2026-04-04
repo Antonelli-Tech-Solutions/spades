@@ -195,6 +195,9 @@ describe('registerPlayer — DEV_AUTO_VERIFY', () => {
     delete process.env.DEV_AUTO_VERIFY
 
     assert.equal(result.playerId, 'auto-id')
+    assert.equal(result.autoVerified, true, 'should return autoVerified: true')
+    assert.equal(result.email, 'dev@example.com', 'should return normalised email')
+    assert.equal(result.username, 'devuser', 'should return username')
     assert.equal(emailsSent.length, 0, 'should not send verification email')
     const tokenInsert = queries.find((q) => q.sql.includes('email_verification_tokens'))
     assert.ok(!tokenInsert, 'should not insert a verification token')

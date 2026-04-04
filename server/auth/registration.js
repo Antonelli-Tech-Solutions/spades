@@ -77,7 +77,7 @@ export async function registerPlayer(db, { email, username, password }, sendVeri
 
   if (autoVerify) {
     console.log('DEV_AUTO_VERIFY: skipped email verification for player', player.id)
-    return { playerId: player.id }
+    return { playerId: player.id, email: normalizedEmail, username: trimmedUsername, autoVerified: true }
   }
 
   const token = generateVerificationToken()

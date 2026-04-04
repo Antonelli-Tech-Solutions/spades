@@ -6,6 +6,8 @@ import {
   playCard,
   submitBlindNilExchange,
   getPlayerView,
+  advanceBotTurns,
+  substitutePlayerWithBot,
   CLOCKWISE_SEATS,
 } from '../../../server/game/state.js'
 
@@ -788,5 +790,67 @@ describe('game over — phase transition', () => {
     assert.ok('bags' in view, 'view should include bags')
     assert.ok(!('hands' in view), 'view must not expose the full hands object')
     assert.ok('myHand' in view, 'view must expose myHand for the requesting player')
+  })
+})
+
+const HUMAN_PLAYERS = {
+  north: 'player-north',
+  east: 'player-east',
+  south: 'player-south',
+  west: 'player-west',
+}
+
+describe('substitutePlayerWithBot', () => {
+  it('replaces the human player with a bot at the given seat', () => {
+    const state = createGame('table-1', HUMAN_PLAYERS)
+    const updated = substitutePlayerWithBot(state, 'east')
+    assert.equal(updated.players.east, 'bot:east')
+    assert.equal(updated.players.north, 'player-north')
+    assert.equal(updated.players.south, 'player-south')
+    assert.equal(updated.players.west, 'player-west')
+  })
+
+  it('does not mutate the original state', () => {
+    const state = createGame('table-1', HUMAN_PLAYERS)
+    substitutePlayerWithBot(state, 'east')
+    assert.equal(state.players.east, 'player-east', 'original state must not be mutated')
+  })
+
+  it('advances bot turns immediately after substitution when all remaining bidders are bots', () => {
+    const allBotsExceptNorth = {
+      north: 'player-north',
+      east: 'bot:east',
+      south: 'bot:south',
+      west: 'bot:west',
+    }
+    const state = createGame('table-1', allBotsExceptNorth)
+    assert.equal(state.phase, 'bidding')
+    assert.equal(state.currentBidderSeat, 'east')
+
+    const updated = substitutePlayerWithBot(state, 'north')
+    assert.notEqual(updated.phase, 'bidding', 'bidding should complete when all seats are bots')
+  })
+})
+
+describe('advanceBotTurns', () => {
+  it('returns state unchanged when current bidder is human', () => {
+    const state = createGame('table-1', HUMAN_PLAYERS)
+    assert.equal(state.phase, 'bidding')
+    const result = advanceBotTurns(state)
+    assert.equal(result.phase, 'bidding')
+    assert.equal(result.currentBidderSeat, state.currentBidderSeat)
+  })
+
+  it('advances past bot bidders automatically after a human bids', () => {
+    const players = {
+      north: 'player-north',
+      east: 'bot:east',
+      south: 'bot:south',
+      west: 'bot:west',
+    }
+    let state = createGame('table-1', players)
+    state = placeBid(state, 'north', 3)
+    const result = advanceBotTurns(state)
+    assert.notEqual(result.phase, 'bidding', 'all bot bids should be resolved')
   })
 })

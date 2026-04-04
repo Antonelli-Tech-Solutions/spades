@@ -209,7 +209,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     assert.equal(res.status, 401)
   })
 
-  it('player leaving an in-progress game is replaced by a bot and game continues', async () => {
+  it('human can leave an in-progress game — bot takes their seat', async () => {
     const host = players[0]
     const p2 = players[1]
     const p3 = players[2]
@@ -238,7 +238,6 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
         body: JSON.stringify({ seat: seats[i] }),
       })
     }
-    // Add a bot to fill the last seat and start the game
     await fetch(`${server.baseUrl}/api/tables/${tableId}/add-bot`, {
       method: 'POST',
       headers: {
@@ -249,7 +248,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
       body: JSON.stringify({ seat: 'west' }),
     })
 
-    // Game should now be in progress — p2 (east seat) leaves
+    // p2 (east) leaves the in-progress game
     const leaveRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/leave`, {
       method: 'POST',
       headers: {
@@ -259,8 +258,10 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
       },
     })
     assert.equal(leaveRes.status, 200)
+    const body = await leaveRes.json()
+    assert.ok(body.message)
 
-    // The vacated seat should now be occupied by a bot
+    // Host should still be able to get game state (east seat is now a bot)
     const stateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
       headers: {
         'x-session-id': host.sessionId,
@@ -269,15 +270,125 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     })
     assert.equal(stateRes.status, 200)
     const stateBody = await stateRes.json()
-    assert.equal(stateBody.seats.east, 'bot:east', 'east seat should be occupied by bot:east')
+    assert.equal(stateBody.players.east, 'bot:east', 'east seat should be occupied by a bot')
+  })
 
-    // p2 should no longer be able to get state (not seated)
-    const p2StateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+  it('host leaving in-progress game reassigns host to remaining human', async () => {
+    const host = players[0]
+    const p2 = players[1]
+    const p3 = players[2]
+
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+    })
+    const { tableId } = await createRes.json()
+
+    const seats = ['north', 'east', 'south']
+    const seated = [host, p2, p3]
+    for (let i = 0; i < 3; i++) {
+      await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': seated[i].sessionId,
+          'x-player-id': seated[i].playerId,
+        },
+        body: JSON.stringify({ seat: seats[i] }),
+      })
+    }
+    await fetch(`${server.baseUrl}/api/tables/${tableId}/add-bot`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+      body: JSON.stringify({ seat: 'west' }),
+    })
+
+    // Host (north) leaves — host should be reassigned
+    const leaveRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+    })
+    assert.equal(leaveRes.status, 200)
+
+    // p2 (east) should now be the host — they can terminate the game
+    const terminateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/terminate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
         'x-session-id': p2.sessionId,
         'x-player-id': p2.playerId,
       },
     })
-    assert.equal(p2StateRes.status, 403)
+    assert.equal(terminateRes.status, 200, 'new host should be able to terminate the game')
+  })
+
+  it('last human leaving in-progress game terminates the table', async () => {
+    const host = players[0]
+
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+    })
+    const { tableId } = await createRes.json()
+
+    // Seat host at north, fill remaining 3 seats with bots
+    await fetch(`${server.baseUrl}/api/tables/${tableId}/sit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+      body: JSON.stringify({ seat: 'north' }),
+    })
+    for (const seat of ['east', 'south', 'west']) {
+      await fetch(`${server.baseUrl}/api/tables/${tableId}/add-bot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': host.sessionId,
+          'x-player-id': host.playerId,
+        },
+        body: JSON.stringify({ seat }),
+      })
+    }
+
+    // Host (only human) leaves — table should be terminated
+    const leaveRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+    })
+    assert.equal(leaveRes.status, 200)
+    const body = await leaveRes.json()
+    assert.ok(body.message.includes('terminated'), 'response should mention termination')
+
+    // Table should no longer exist
+    const stateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
+      headers: {
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+    })
+    assert.equal(stateRes.status, 404, 'table should be gone after last human leaves')
   })
 })

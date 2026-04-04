@@ -21,55 +21,13 @@ import {
   terminateTable,
   findTableForPlayer,
   leaveTable,
+  leaveInProgressGame,
 } from './lobby/table.js'
-import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView } from './game/state.js'
-import { getPartnerSeat } from './game/bid.js'
+import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, advanceBotTurns, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
-import { isBot, botBid, botPlay, botBlindNilExchange } from './game/bot.js'
 
 function sendJSON(res, statusCode, data) {
   res.status(statusCode).json(data)
-}
-
-/**
- * Automatically advance the game state through any consecutive bot turns.
- * Loops until it is a human player's turn or the game is over.
- *
- * @param {object} state - Current game state
- * @returns {object} Updated game state after all bot actions are applied
- */
-function advanceBotTurns(state) {
-  let current = state
-  while (true) {
-    if (current.phase === 'bidding') {
-      const seat = current.currentBidderSeat
-      if (!seat || !isBot(current.players[seat])) break
-      const partnerSeat = getPartnerSeat(seat)
-      const partnerBid = current.bids[partnerSeat]
-      const bid = botBid(current.hands[seat], partnerBid)
-      console.log('Bot bid:', { seat, bid, tableId: current.tableId })
-      current = placeBid(current, seat, bid)
-    } else if (current.phase === 'playing') {
-      const seat = current.currentPlayerSeat
-      if (!seat || !isBot(current.players[seat])) break
-      const card = botPlay(current.hands[seat], current.currentTrick, current.spadesbroken, current.isFirstTrick)
-      console.log('Bot play:', { seat, card, tableId: current.tableId })
-      current = playCard(current, seat, card)
-    } else if (current.phase === 'blind_nil_exchange') {
-      const { currentBlindNilSeat, step } = current.blindNilExchange
-      // Bots never bid blind nil, so they can only act as the partner (step: partner_to_blind)
-      if (step !== 'partner_to_blind') break
-      const partnerSeat = getPartnerSeat(currentBlindNilSeat)
-      if (!isBot(current.players[partnerSeat])) break
-      const cards = botBlindNilExchange(current.hands[partnerSeat])
-      console.log('Bot blind nil exchange:', { seat: partnerSeat, cards, tableId: current.tableId })
-      current = submitBlindNilExchange(current, partnerSeat, cards)
-    } else {
-      // game_over — nothing to auto-advance
-      break
-    }
-  }
-  return current
 }
 
 /**
@@ -367,26 +325,32 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
-  // POST /api/tables/:tableId/leave — leave a table (bot fills seat if game is in progress)
+  // POST /api/tables/:tableId/leave — leave a table (waiting: removes seat; in-progress: replaces with bot)
   app.post('/api/tables/:tableId/leave', async (req, res) => {
     const { tableId } = req.params
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
-      const { seat, wasPlaying } = await leaveTable(redisClient, tableId, session.playerId)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found.' })
 
-      if (wasPlaying) {
-        // Replace player with bot in the game state and advance any consecutive bot turns
-        let gameState = await getGameState(redisClient, tableId)
-        if (gameState && gameState.phase !== 'game_over') {
-          gameState = { ...gameState, players: { ...gameState.players, [seat]: `bot:${seat}` } }
-          gameState = advanceBotTurns(gameState)
-          await saveGameState(redisClient, tableId, gameState)
-          console.log('Bot filled vacated seat and advanced turns:', { tableId, seat })
+      if (table.status === 'playing') {
+        const result = await leaveInProgressGame(redisClient, tableId, session.playerId)
+        if (result.terminated) {
+          console.log('Player left in-progress game, table terminated:', { tableId, playerId: session.playerId })
+          return sendJSON(res, 200, { message: 'Left game. No human players remain — table terminated.' })
         }
+        const gameState = await getGameState(redisClient, tableId)
+        if (gameState) {
+          const newState = substitutePlayerWithBot(gameState, result.seat)
+          await saveGameState(redisClient, tableId, newState)
+        }
+        console.log('Player left in-progress game:', { tableId, playerId: session.playerId, seat: result.seat })
+        return sendJSON(res, 200, { message: 'Left game. A bot has taken your place.' })
       }
 
-      console.log('Player left table:', { tableId, playerId: session.playerId, seat, wasPlaying })
+      await leaveTable(redisClient, tableId, session.playerId)
+      console.log('Player left table:', { tableId, playerId: session.playerId })
       sendJSON(res, 200, { message: 'Left table.' })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })

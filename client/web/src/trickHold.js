@@ -17,6 +17,27 @@ function esc(s) {
 export const HOLD_DURATIONS = { slow: 2500, normal: 1500, fast: 800 }
 
 /**
+ * Returns true when nextState has transitioned to a new (non-final) hand.
+ * In this case completedTricks was reset to [] for the new hand, meaning the
+ * caller should keep prevState visible during the trick-hold window instead of
+ * immediately rendering the new hand's bidding screen.
+ *
+ * Returns false for game_over because completedTricks is NOT reset there —
+ * the final state is safe to render during the hold.
+ *
+ * @param {object|null} prevState
+ * @param {object} nextState
+ * @returns {boolean}
+ */
+export function isHandTransition(prevState, nextState) {
+  if (!prevState || !nextState) return false
+  if (nextState.phase === 'game_over') return false
+  const prevHistoryLen = Array.isArray(prevState.handHistory) ? prevState.handHistory.length : 0
+  const nextHistoryLen = Array.isArray(nextState.handHistory) ? nextState.handHistory.length : 0
+  return nextHistoryLen > prevHistoryLen
+}
+
+/**
  * Compare two successive game states and return the trick that was just
  * completed, or null if no new trick completed between the two states.
  *

@@ -843,13 +843,13 @@ describe('advanceBotTurns', () => {
 
   it('advances past bot bidders automatically after a human bids', () => {
     const players = {
-      north: 'player-north',
-      east: 'bot:east',
+      north: 'bot:north',
+      east: 'player-east',
       south: 'bot:south',
       west: 'bot:west',
     }
     let state = createGame('table-1', players)
-    state = placeBid(state, 'north', 3)
+    state = placeBid(state, 'east', 3)
     const result = advanceBotTurns(state)
     assert.notEqual(result.phase, 'bidding', 'all bot bids should be resolved')
   })

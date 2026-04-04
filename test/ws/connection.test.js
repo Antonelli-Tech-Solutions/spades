@@ -152,8 +152,7 @@ describe('WebSocket server', { skip }, () => {
 
       ws1.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-bcast' } }))
       ws2.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-bcast' } }))
-      await nextMessage(ws1) // JOINED
-      await nextMessage(ws2) // JOINED
+      await Promise.all([nextMessage(ws1), nextMessage(ws2)]) // both JOINED
 
       const p1 = nextMessage(ws1)
       const p2 = nextMessage(ws2)

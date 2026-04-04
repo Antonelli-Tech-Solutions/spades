@@ -1,13 +1,16 @@
 import express from 'express'
+import { createServer } from 'http'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { handler } from './server.js'
 import { getRedis } from './redis.js'
+import { createWsServer } from './ws/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const app = express()
-const PORT = process.env.PORT || 3000
+const PORT = parseInt(process.env.PORT || '3000', 10)
+const WS_PORT = parseInt(process.env.WS_PORT || '3001', 10)
 
 app.use(express.json())
 
@@ -31,7 +34,22 @@ handler(app, { redis })
 // Serve the web client as static files
 app.use(express.static(join(__dirname, '..', 'client', 'web')))
 
-app.listen(PORT, () => {
+const httpServer = createServer(app)
+
+if (WS_PORT === PORT) {
+  // Share the HTTP server when ports match
+  createWsServer(httpServer, { redis })
+  console.log(`WebSocket server sharing HTTP server on port ${PORT}`)
+} else {
+  // Run WebSocket on its own dedicated server
+  const wsHttpServer = createServer()
+  createWsServer(wsHttpServer, { redis })
+  wsHttpServer.listen(WS_PORT, () => {
+    console.log(`WebSocket server listening on port ${WS_PORT}`)
+  })
+}
+
+httpServer.listen(PORT, () => {
   console.log(`Spades Online server listening on port ${PORT}`)
 })
 

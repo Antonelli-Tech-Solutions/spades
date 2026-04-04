@@ -17,10 +17,10 @@ function makeFakeRedis(sessions = {}) {
 }
 
 // --- Helpers ---------------------------------------------------------------------
-function wsConnect(server, headers = {}) {
+function wsConnect(server, headers = {}, wsOpts = {}) {
   const { port } = server.address()
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers })
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers, ...wsOpts })
     ws.once('open', () => resolve(ws))
     ws.once('error', reject)
     ws.once('unexpected-response', (_req, res) => {
@@ -197,10 +197,8 @@ describe('WebSocket server', () => {
     })
 
     it('server terminates connection when pong is not received within pongTimeoutMs', async () => {
-      const ws = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
-
-      // Disable automatic pong response
-      ws.on('ping', () => { /* do nothing */ })
+      // autoPong: false prevents the ws library from automatically replying to pings
+      const ws = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' }, { autoPong: false })
 
       const code = await waitClose(ws)
       // Any close is fine — terminated connections may emit code 1006 or similar

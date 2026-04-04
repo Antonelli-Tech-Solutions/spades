@@ -34,6 +34,9 @@ Spades Online is a real-time multiplayer card game (web + mobile) built with a N
 - Keep PRs small and focused — one feature or fix per PR
 - Write a clear PR description explaining what changed and why
 - Mark the corresponding task complete in `docs/TASKS.md` in the same PR as the code change
+- Once a PR is open, poll CI status with `gh pr checks <PR_NUMBER> --watch`
+- If checks fail, download the logs, diagnose the failure, push a fix, and wait for checks to pass again
+- Once all checks pass, merge with: `gh pr merge <PR_NUMBER> --squash --delete-branch`
 
 ## Code Style
 

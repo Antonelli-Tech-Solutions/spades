@@ -77,6 +77,46 @@ describe('detectCompletedTrick', () => {
     const result = detectCompletedTrick({}, next)
     assert.deepEqual(result, baseTrick)
   })
+
+  it('returns lastTrick from handHistory when the 13th trick resets completedTricks for a new hand', () => {
+    const lastTrick = {
+      winner: 'east',
+      plays: [
+        { seat: 'north', card: { suit: 'spades',   rank: 'A' } },
+        { seat: 'east',  card: { suit: 'spades',   rank: 'K' } },
+        { seat: 'south', card: { suit: 'clubs',    rank: '2' } },
+        { seat: 'west',  card: { suit: 'diamonds', rank: '3' } },
+      ],
+    }
+    const prev = { completedTricks: Array(12).fill(baseTrick), handHistory: [] }
+    const next = {
+      completedTricks: [],  // reset for new hand
+      handHistory: [{ lastTrick }],
+    }
+    const result = detectCompletedTrick(prev, next)
+    assert.deepEqual(result, lastTrick)
+  })
+
+  it('returns null when handHistory grew but lastTrick is absent from the new entry', () => {
+    const prev = { completedTricks: Array(12).fill(baseTrick), handHistory: [] }
+    const next = {
+      completedTricks: [],
+      handHistory: [{ handNumber: 1 }],
+    }
+    assert.equal(detectCompletedTrick(prev, next), null)
+  })
+
+  it('still detects via completedTricks for game_over (completedTricks preserved)', () => {
+    const lastTrick = { winner: 'west', plays: baseTrick.plays }
+    const prev = { completedTricks: Array(12).fill(baseTrick), handHistory: [] }
+    const next = {
+      completedTricks: [...Array(12).fill(baseTrick), lastTrick],  // 13 tricks, not reset
+      handHistory: [{ lastTrick }],
+      phase: 'game_over',
+    }
+    const result = detectCompletedTrick(prev, next)
+    assert.deepEqual(result, lastTrick)
+  })
 })
 
 // ---------------------------------------------------------------------------

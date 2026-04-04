@@ -407,12 +407,15 @@ function scoreCompletedHand(state) {
     bags,
   })
 
-  // Build the hand history entry for this completed hand
+  // Build the hand history entry for this completed hand.
+  // lastTrick is included so the client can trigger the end-of-trick hold on the
+  // 13th trick even when completedTricks has been reset for the new hand.
   const handEntry = {
     handNumber: state.handNumber,
     bids: { ...state.bids },
     teamBids: { ...state.teamBids },
     tricksWon: { ...state.tricksWon },
+    lastTrick: state.completedTricks[state.completedTricks.length - 1],
     scoreDelta,
     newBags,
     bagPenalty,

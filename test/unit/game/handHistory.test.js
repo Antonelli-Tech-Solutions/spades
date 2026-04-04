@@ -247,6 +247,35 @@ describe('handHistory — bagsBefore field', () => {
   })
 })
 
+describe('handHistory — lastTrick field', () => {
+  it('entry contains a lastTrick field with winner and plays after a completed hand', () => {
+    const initial = createGame('table-1', PLAYER_IDS)
+    const state = completeOneHand(initial)
+    const entry = state.handHistory[0]
+    assert.ok(entry.lastTrick, 'lastTrick should be present')
+    assert.ok(typeof entry.lastTrick.winner === 'string', 'lastTrick.winner should be a string')
+    assert.ok(Array.isArray(entry.lastTrick.plays), 'lastTrick.plays should be an array')
+    assert.equal(entry.lastTrick.plays.length, 4, 'lastTrick.plays should have 4 cards')
+  })
+
+  it('lastTrick.winner is one of the four seats', () => {
+    const initial = createGame('table-1', PLAYER_IDS)
+    const state = completeOneHand(initial)
+    const { lastTrick } = state.handHistory[0]
+    assert.ok(CLOCKWISE_SEATS.includes(lastTrick.winner), 'lastTrick.winner should be a valid seat')
+  })
+
+  it('lastTrick.plays has one card per seat', () => {
+    const initial = createGame('table-1', PLAYER_IDS)
+    const state = completeOneHand(initial)
+    const { lastTrick } = state.handHistory[0]
+    const seats = lastTrick.plays.map((p) => p.seat)
+    for (const seat of CLOCKWISE_SEATS) {
+      assert.ok(seats.includes(seat), `lastTrick.plays should include a card from ${seat}`)
+    }
+  })
+})
+
 describe('handHistory — bag penalty detection', () => {
   it('bagPenalty.ns is 1 when ns crosses 10 bags in a hand', () => {
     // Construct a state with 9 bags for ns and force another bag this hand

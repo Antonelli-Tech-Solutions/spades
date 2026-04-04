@@ -494,6 +494,43 @@ Card format: rank + suit initial (e.g. `AS` = Ace of Spades, `KH` = King of Hear
 | `404` | Table not found |
 | `409` | Not the player's turn, or game not in playing phase |
 
+## Real-Time (WebSocket)
+
+The WebSocket server shares the same HTTP server as the REST API (configurable via `WS_PORT`, default `3001`).
+
+### Connection & Authentication
+
+Clients must authenticate on the WebSocket upgrade request by including the session token as a header:
+
+```
+GET ws://localhost:3001/
+x-session-id: <sessionId>
+```
+
+If the header is missing or the session is invalid the server responds with `HTTP 401` and closes the socket. No anonymous connections are accepted.
+
+### Client → Server Messages
+
+All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
+
+| Type | Payload | Description |
+|---|---|---|
+| `JOIN` | `{ "tableId": "<uuid>" }` | Subscribe to real-time events for a table. Acknowledged with `JOINED`. |
+| `LEAVE` | `{ "tableId": "<uuid>" }` | Unsubscribe from a table's events. Acknowledged with `LEFT`. |
+
+### Server → Client Events
+
+| Type | Payload | Description |
+|---|---|---|
+| `JOINED` | `{ "tableId": "<uuid>" }` | Confirms the client has joined the table room. |
+| `LEFT` | `{ "tableId": "<uuid>" }` | Confirms the client has left the table room. |
+
+Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+
+### Heartbeat
+
+The server sends a WebSocket ping every **30 seconds**. Clients must respond with a pong (handled automatically by standard WebSocket implementations). If no pong is received within **10 seconds** of the ping, the connection is terminated.
+
 ## Web UI
 
 The web client is served as static files from `client/web/` by the Express server. Open `http://localhost:3000` in a browser after starting the server.
@@ -559,6 +596,8 @@ server/
     bot.js          — Bot player logic (bid and card selection)
   lobby/
     table.js        — Table creation, seat management, lobby index
+  ws/
+    index.js        — WebSocket server (auth upgrade, JOIN/LEAVE rooms, heartbeat, broadcast helpers)
   anticheat/
     validate.js     — Server-side move validation (turn, card legality)
   middleware/

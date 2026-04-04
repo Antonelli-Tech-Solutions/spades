@@ -10,6 +10,7 @@ import {
 } from './bid.js'
 import { getLegalPlays, determineTrickWinner, isCardLegal } from './trick.js'
 import { scoreHand, applyBagPenalties, checkWinLoss } from './score.js'
+import { isBot, getBotPlayerId, botBid, botPlay, botBlindNilExchange } from './bot.js'
 
 /** Seats in clockwise order starting from north. */
 export const CLOCKWISE_SEATS = ['north', 'east', 'south', 'west']
@@ -517,4 +518,59 @@ export function getPlayerView(state, seat) {
     // Include played cards from the current trick (visible to all)
     // Do NOT include other players' unplayed hands
   }
+}
+
+/**
+ * Automatically advance the game state through any consecutive bot turns.
+ * Loops until it is a human player's turn or the game is over.
+ *
+ * @param {object} state - Current game state
+ * @returns {object} Updated game state after all bot actions are applied
+ */
+export function advanceBotTurns(state) {
+  let current = state
+  while (true) {
+    if (current.phase === 'bidding') {
+      const seat = current.currentBidderSeat
+      if (!seat || !isBot(current.players[seat])) break
+      const partnerSeat = getPartnerSeat(seat)
+      const partnerBid = current.bids[partnerSeat]
+      const bid = botBid(current.hands[seat], partnerBid)
+      console.log('Bot bid:', { seat, bid, tableId: current.tableId })
+      current = placeBid(current, seat, bid)
+    } else if (current.phase === 'playing') {
+      const seat = current.currentPlayerSeat
+      if (!seat || !isBot(current.players[seat])) break
+      const card = botPlay(current.hands[seat], current.currentTrick, current.spadesbroken, current.isFirstTrick)
+      console.log('Bot play:', { seat, card, tableId: current.tableId })
+      current = playCard(current, seat, card)
+    } else if (current.phase === 'blind_nil_exchange') {
+      const { currentBlindNilSeat, step } = current.blindNilExchange
+      // Bots never bid blind nil, so they can only act as the partner (step: partner_to_blind)
+      if (step !== 'partner_to_blind') break
+      const partnerSeat = getPartnerSeat(currentBlindNilSeat)
+      if (!isBot(current.players[partnerSeat])) break
+      const cards = botBlindNilExchange(current.hands[partnerSeat])
+      console.log('Bot blind nil exchange:', { seat: partnerSeat, cards, tableId: current.tableId })
+      current = submitBlindNilExchange(current, partnerSeat, cards)
+    } else {
+      // game_over — nothing to auto-advance
+      break
+    }
+  }
+  return current
+}
+
+/**
+ * Replace a human player at the given seat with a bot and advance any bot turns.
+ * Called when a human leaves an in-progress game.
+ *
+ * @param {object} gameState - Current game state
+ * @param {string} seat - The seat being vacated
+ * @returns {object} Updated game state with the bot seated and all immediate bot turns applied
+ */
+export function substitutePlayerWithBot(gameState, seat) {
+  const botId = getBotPlayerId(seat)
+  const withBot = { ...gameState, players: { ...gameState.players, [seat]: botId } }
+  return advanceBotTurns(withBot)
 }

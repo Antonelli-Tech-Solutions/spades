@@ -231,6 +231,49 @@ export async function leaveTable(redis, tableId, playerId) {
 }
 
 /**
+ * Remove a human player from an in-progress game by replacing them with a bot.
+ * If the departing player is the host, reassigns host to the next seated human.
+ * If no human players remain after substitution, the table is terminated.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @returns {Promise<{ terminated: true, seat: string } | { table: TableState, seat: string, botId: string, wasPlaying: true }>}
+ * @throws {Error} If the table is not found, game is not in progress, or player is not seated
+ */
+export async function leaveInProgressGame(redis, tableId, playerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.status !== 'playing') {
+    throw Object.assign(new Error('Game is not in progress'), { code: 'NOT_IN_PROGRESS' })
+  }
+  const seatEntry = Object.entries(table.seats).find(([, id]) => id === playerId)
+  if (!seatEntry) {
+    throw Object.assign(new Error('You are not seated at this table'), { code: 'NOT_SEATED' })
+  }
+  const [seat] = seatEntry
+  const botId = `bot:${seat}`
+  const updatedSeats = { ...table.seats, [seat]: botId }
+
+  // If no humans remain after substitution, terminate the table
+  const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
+  if (!remainingHuman) {
+    await terminateTable(redis, tableId)
+    console.log('Table terminated — no human players remain:', { tableId, playerId, seat })
+    return { terminated: true, seat }
+  }
+
+  // Reassign host to a remaining human if the departing player was the host
+  const newHostId = table.hostPlayerId === playerId ? remainingHuman : table.hostPlayerId
+  const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId }
+  await saveTable(redis, updated)
+  console.log('Player left in-progress game, replaced by bot:', { tableId, playerId, seat, botId })
+  return { table: updated, seat, botId, wasPlaying: true }
+}
+
+/**
  * Terminate a table and its associated game state, removing all Redis keys.
  * Used by the host to forcibly end a game at any point (waiting or in progress).
  *

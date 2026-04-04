@@ -75,6 +75,9 @@ describe('WebSocket server', { skip }, () => {
   })
 
   after(async () => {
+    // Force-terminate any connections left open by failed tests; wss.close()
+    // waits for all clients to drain, so orphaned sockets cause an infinite hang.
+    for (const client of wss.clients) client.terminate()
     await new Promise((resolve) => wss.close(resolve))
     await new Promise((resolve) => httpServer.close(resolve))
 
@@ -218,6 +221,7 @@ describe('WebSocket server', { skip }, () => {
     })
 
     after(async () => {
+      for (const client of wss2.clients) client.terminate()
       await new Promise((resolve) => wss2.close(resolve))
       await new Promise((resolve) => httpServer2.close(resolve))
 

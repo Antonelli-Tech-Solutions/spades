@@ -65,7 +65,8 @@ describe('app.js WS_PORT startup branching', { skip }, () => {
     })
 
     after(async () => {
-      wss.close()
+      for (const client of wss.clients) client.terminate()
+      await new Promise((resolve) => wss.close(resolve))
       await new Promise((resolve) => httpServer.close(resolve))
     })
 
@@ -105,7 +106,8 @@ describe('app.js WS_PORT startup branching', { skip }, () => {
     })
 
     after(async () => {
-      wss.close()
+      for (const client of wss.clients) client.terminate()
+      await new Promise((resolve) => wss.close(resolve))
       await Promise.all([
         new Promise((resolve) => httpServer.close(resolve)),
         new Promise((resolve) => wsHttpServer.close(resolve)),

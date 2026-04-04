@@ -14,8 +14,8 @@ import { relSeats } from '../../../client/web/src/seatUtils.js'
 //
 // CW order: north → east → south → west → north
 
-describe('relSeats', () => {
-  it('south: left=west (clockwise), right=east, across=north', () => {
+describe('relSeats', { timeout: 2000 }, () => {
+  it('south: left=west (clockwise), right=east, across=north', { timeout: 2000 }, () => {
     const rel = relSeats('south')
     assert.equal(rel.me, 'south')
     assert.equal(rel.left, 'west',  'clockwise from south is west — to south\'s left')
@@ -23,7 +23,7 @@ describe('relSeats', () => {
     assert.equal(rel.right, 'east', 'counter-clockwise from south is east — to south\'s right')
   })
 
-  it('north: left=east (clockwise), right=west, across=south', () => {
+  it('north: left=east (clockwise), right=west, across=south', { timeout: 2000 }, () => {
     const rel = relSeats('north')
     assert.equal(rel.me, 'north')
     assert.equal(rel.left, 'east',  'clockwise from north is east — to north\'s left')
@@ -31,7 +31,7 @@ describe('relSeats', () => {
     assert.equal(rel.right, 'west', 'counter-clockwise from north is west — to north\'s right')
   })
 
-  it('east: left=south (clockwise), right=north, across=west', () => {
+  it('east: left=south (clockwise), right=north, across=west', { timeout: 2000 }, () => {
     const rel = relSeats('east')
     assert.equal(rel.me, 'east')
     assert.equal(rel.left, 'south', 'clockwise from east is south — to east\'s left')
@@ -39,7 +39,7 @@ describe('relSeats', () => {
     assert.equal(rel.right, 'north', 'counter-clockwise from east is north — to east\'s right')
   })
 
-  it('west: left=north (clockwise), right=south, across=east', () => {
+  it('west: left=north (clockwise), right=south, across=east', { timeout: 2000 }, () => {
     const rel = relSeats('west')
     assert.equal(rel.me, 'west')
     assert.equal(rel.left, 'north', 'clockwise from west is north — to west\'s left')
@@ -47,7 +47,7 @@ describe('relSeats', () => {
     assert.equal(rel.right, 'south', 'counter-clockwise from west is south — to west\'s right')
   })
 
-  it('play order passes left: me → left → across → right → me', () => {
+  it('play order passes left: me → left → across → right → me', { timeout: 2000 }, () => {
     // Starting from each seat, four left-turns should return to the same seat
     for (const start of ['north', 'east', 'south', 'west']) {
       let seat = start

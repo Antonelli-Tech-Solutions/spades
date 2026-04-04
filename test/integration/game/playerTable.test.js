@@ -104,12 +104,12 @@ describe('GET /api/player/table', { skip }, () => {
     await closeRedis()
   })
 
-  it('returns 401 without auth headers', async () => {
+  it('returns 401 without auth headers', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/player/table`)
     assert.equal(res.status, 401)
   })
 
-  it('returns { tableId: null } when player is not seated at any table', async () => {
+  it('returns { tableId: null } when player is not seated at any table', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = await loginPlayer(
       server.baseUrl,
       'pt_player1@pttest.spades.invalid',
@@ -123,7 +123,7 @@ describe('GET /api/player/table', { skip }, () => {
     assert.equal(body.tableId, null)
   })
 
-  it('returns the tableId when player is seated at a waiting table', async () => {
+  it('returns the tableId when player is seated at a waiting table', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = await loginPlayer(
       server.baseUrl,
       'pt_player1@pttest.spades.invalid',
@@ -144,7 +144,7 @@ describe('GET /api/player/table', { skip }, () => {
     await redis.hDel('lobby:tables', tableId)
   })
 
-  it('returns the tableId when player is seated at a playing table (game not over)', async () => {
+  it('returns the tableId when player is seated at a playing table (game not over)', { timeout: 10000 }, async () => {
     // Log in 4 players
     const players = []
     for (let i = 1; i <= 4; i++) {
@@ -177,7 +177,7 @@ describe('GET /api/player/table', { skip }, () => {
     await redis.hDel('lobby:tables', tableId)
   })
 
-  it('returns { tableId: null } when player is seated at a game_over table', async () => {
+  it('returns { tableId: null } when player is seated at a game_over table', { timeout: 10000 }, async () => {
     // Log in 4 players
     const players = []
     for (let i = 1; i <= 4; i++) {

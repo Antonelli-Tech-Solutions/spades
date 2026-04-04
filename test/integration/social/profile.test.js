@@ -113,7 +113,7 @@ describe('GET /api/profile/:playerId', { skip }, () => {
     await closeDb()
   })
 
-  it('returns 200 with profile data for a known player', async () => {
+  it('returns 200 with profile data for a known player', { timeout: 10000 }, async () => {
     const playerId = await insertTestPlayer(db, {
       email: 'profile_basic@test.spades.invalid',
       username: 'profile_basic',
@@ -131,7 +131,7 @@ describe('GET /api/profile/:playerId', { skip }, () => {
     assert.ok(Array.isArray(body.recentGames), 'recentGames should be an array')
   })
 
-  it('returns default avatar and cosmetics for a player with no profile record', async () => {
+  it('returns default avatar and cosmetics for a player with no profile record', { timeout: 10000 }, async () => {
     const playerId = await insertTestPlayer(db, {
       email: 'profile_defaults@test.spades.invalid',
       username: 'profile_defaults',
@@ -145,7 +145,7 @@ describe('GET /api/profile/:playerId', { skip }, () => {
     assert.equal(body.cosmetics.cardBack, 'standard-red')
   })
 
-  it('returns custom avatar and cosmetics when a profile record exists', async () => {
+  it('returns custom avatar and cosmetics when a profile record exists', { timeout: 10000 }, async () => {
     const playerId = await insertTestPlayer(db, {
       email: 'profile_custom@test.spades.invalid',
       username: 'profile_custom',
@@ -164,7 +164,7 @@ describe('GET /api/profile/:playerId', { skip }, () => {
     assert.equal(body.cosmetics.cardBack, 'minimal')
   })
 
-  it('returns correct career win/loss counts', async () => {
+  it('returns correct career win/loss counts', { timeout: 10000 }, async () => {
     const playerId = await insertTestPlayer(db, {
       email: 'profile_career@test.spades.invalid',
       username: 'profile_career',
@@ -180,7 +180,7 @@ describe('GET /api/profile/:playerId', { skip }, () => {
     assert.equal(body.career.losses, 1)
   })
 
-  it('returns zero wins and losses for a player with no games', async () => {
+  it('returns zero wins and losses for a player with no games', { timeout: 10000 }, async () => {
     const playerId = await insertTestPlayer(db, {
       email: 'profile_nogames@test.spades.invalid',
       username: 'profile_nogames',
@@ -194,7 +194,7 @@ describe('GET /api/profile/:playerId', { skip }, () => {
     assert.deepEqual(body.recentGames, [])
   })
 
-  it('returns at most 20 recent games ordered most recent first', async () => {
+  it('returns at most 20 recent games ordered most recent first', { timeout: 10000 }, async () => {
     const playerId = await insertTestPlayer(db, {
       email: 'profile_history@test.spades.invalid',
       username: 'profile_history',
@@ -223,7 +223,7 @@ describe('GET /api/profile/:playerId', { skip }, () => {
     }
   })
 
-  it('recent games include gameId, playedAt, won, scoreNs, scoreEw, seat', async () => {
+  it('recent games include gameId, playedAt, won, scoreNs, scoreEw, seat', { timeout: 10000 }, async () => {
     const playerId = await insertTestPlayer(db, {
       email: 'profile_gamefields@test.spades.invalid',
       username: 'profile_gamefields',
@@ -243,14 +243,14 @@ describe('GET /api/profile/:playerId', { skip }, () => {
     assert.equal(game.seat, 'east')
   })
 
-  it('returns 404 for an unknown playerId', async () => {
+  it('returns 404 for an unknown playerId', { timeout: 10000 }, async () => {
     const res = await fetch(
       `${server.baseUrl}/api/profile/00000000-0000-4000-8000-000000000000`,
     )
     assert.equal(res.status, 404)
   })
 
-  it('returns 400 for a non-UUID playerId', async () => {
+  it('returns 400 for a non-UUID playerId', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/profile/not-a-uuid`)
     assert.equal(res.status, 400)
   })

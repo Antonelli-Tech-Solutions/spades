@@ -75,6 +75,9 @@ describe('WebSocket server', { skip }, () => {
   })
 
   after(async () => {
+    // Force-terminate any connections left open by failed tests; wss.close()
+    // waits for all clients to drain, so orphaned sockets cause an infinite hang.
+    for (const client of wss.clients) client.terminate()
     await new Promise((resolve) => wss.close(resolve))
     await new Promise((resolve) => httpServer.close(resolve))
 
@@ -89,8 +92,8 @@ describe('WebSocket server', { skip }, () => {
 
   // ── Authentication ──────────────────────────────────────────────────────────
 
-  describe('authentication', () => {
-    it('rejects upgrade when x-session-id header is missing', async () => {
+  describe('authentication', { timeout: 15000 }, () => {
+    it('rejects upgrade when x-session-id header is missing', { timeout: 15000 }, async () => {
       const err = await wsConnect(httpServer).then(
         () => { throw new Error('expected rejection') },
         (e) => e,
@@ -98,7 +101,7 @@ describe('WebSocket server', { skip }, () => {
       assert.ok(err.statusCode === 401 || err.message.includes('401'), `got: ${err.message}`)
     })
 
-    it('rejects upgrade when x-session-id is invalid', async () => {
+    it('rejects upgrade when x-session-id is invalid', { timeout: 15000 }, async () => {
       const err = await wsConnect(httpServer, { 'x-session-id': 'bad-session' }).then(
         () => { throw new Error('expected rejection') },
         (e) => e,
@@ -106,7 +109,7 @@ describe('WebSocket server', { skip }, () => {
       assert.ok(err.statusCode === 401 || err.message.includes('401'), `got: ${err.message}`)
     })
 
-    it('accepts upgrade with a valid x-session-id', async () => {
+    it('accepts upgrade with a valid x-session-id', { timeout: 15000 }, async () => {
       const ws = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
       assert.equal(ws.readyState, WebSocket.OPEN)
       ws.close()
@@ -116,8 +119,8 @@ describe('WebSocket server', { skip }, () => {
 
   // ── Room management ─────────────────────────────────────────────────────────
 
-  describe('room management', () => {
-    it('sends JOINED ack when client sends JOIN with a tableId', async () => {
+  describe('room management', { timeout: 15000 }, () => {
+    it('sends JOINED ack when client sends JOIN with a tableId', { timeout: 15000 }, async () => {
       const ws = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
 
       ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-abc' } }))
@@ -130,7 +133,7 @@ describe('WebSocket server', { skip }, () => {
       await waitClose(ws)
     })
 
-    it('sends LEFT ack when client sends LEAVE', async () => {
+    it('sends LEFT ack when client sends LEAVE', { timeout: 15000 }, async () => {
       const ws = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
 
       ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-xyz' } }))
@@ -146,7 +149,7 @@ describe('WebSocket server', { skip }, () => {
       await waitClose(ws)
     })
 
-    it('broadcast() delivers an event to all clients in a table room', async () => {
+    it('broadcast() delivers an event to all clients in a table room', { timeout: 15000 }, async () => {
       const ws1 = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
       const ws2 = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
 
@@ -166,7 +169,7 @@ describe('WebSocket server', { skip }, () => {
       await Promise.all([waitClose(ws1), waitClose(ws2)])
     })
 
-    it('broadcast() does NOT deliver to clients not in that room', async () => {
+    it('broadcast() does NOT deliver to clients not in that room', { timeout: 15000 }, async () => {
       const wsIn = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
       const wsOut = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
 
@@ -187,7 +190,7 @@ describe('WebSocket server', { skip }, () => {
       await Promise.all([waitClose(wsIn), waitClose(wsOut)])
     })
 
-    it('sendToPlayer() delivers only to the target player', async () => {
+    it('sendToPlayer() delivers only to the target player', { timeout: 15000 }, async () => {
       const ws = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
 
       const msgPromise = nextMessage(ws)
@@ -203,7 +206,7 @@ describe('WebSocket server', { skip }, () => {
 
   // ── JOIN authorization ──────────────────────────────────────────────────────
 
-  describe('JOIN authorization', () => {
+  describe('JOIN authorization', { timeout: 15000 }, () => {
     let httpServer2, wss2
 
     before(async () => {
@@ -218,6 +221,7 @@ describe('WebSocket server', { skip }, () => {
     })
 
     after(async () => {
+      for (const client of wss2.clients) client.terminate()
       await new Promise((resolve) => wss2.close(resolve))
       await new Promise((resolve) => httpServer2.close(resolve))
 
@@ -226,7 +230,7 @@ describe('WebSocket server', { skip }, () => {
       await redis.del('table:table-private')
     })
 
-    it('sends JOIN_DENIED when player is not seated at the table', async () => {
+    it('sends JOIN_DENIED when player is not seated at the table', { timeout: 15000 }, async () => {
       const ws = await wsConnect(httpServer2, { 'x-session-id': 'session-p2' })
       ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-private' } }))
       const msg = await nextMessage(ws)
@@ -236,7 +240,7 @@ describe('WebSocket server', { skip }, () => {
       await waitClose(ws)
     })
 
-    it('sends JOIN_DENIED when table does not exist in Redis', async () => {
+    it('sends JOIN_DENIED when table does not exist in Redis', { timeout: 15000 }, async () => {
       const ws = await wsConnect(httpServer2, { 'x-session-id': 'session-p1' })
       ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'nonexistent-table' } }))
       const msg = await nextMessage(ws)
@@ -246,7 +250,7 @@ describe('WebSocket server', { skip }, () => {
       await waitClose(ws)
     })
 
-    it('sends JOINED when player is seated at the table', async () => {
+    it('sends JOINED when player is seated at the table', { timeout: 15000 }, async () => {
       const ws = await wsConnect(httpServer2, { 'x-session-id': 'session-p1' })
       ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-private' } }))
       const msg = await nextMessage(ws)
@@ -259,8 +263,8 @@ describe('WebSocket server', { skip }, () => {
 
   // ── Heartbeat ───────────────────────────────────────────────────────────────
 
-  describe('heartbeat', () => {
-    it('server sends a ping to connected clients', async () => {
+  describe('heartbeat', { timeout: 15000 }, () => {
+    it('server sends a ping to connected clients', { timeout: 15000 }, async () => {
       const ws = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' })
 
       const pingReceived = await new Promise((resolve) => {
@@ -273,7 +277,7 @@ describe('WebSocket server', { skip }, () => {
       await waitClose(ws)
     })
 
-    it('server terminates connection when pong is not received within pongTimeoutMs', async () => {
+    it('server terminates connection when pong is not received within pongTimeoutMs', { timeout: 15000 }, async () => {
       // autoPong: false prevents the ws library from automatically replying to pings
       const ws = await wsConnect(httpServer, { 'x-session-id': 'valid-session-1' }, { autoPong: false })
 

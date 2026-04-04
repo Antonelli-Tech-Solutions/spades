@@ -7,7 +7,7 @@ import { getRedis, closeRedis } from '../../server/redis.js'
 
 const skip = !process.env.REDIS_URL ? 'REDIS_URL must be set' : false
 
-const TEST_TIMEOUT_MS = 5000
+const TEST_TIMEOUT_MS = 15000
 
 function wsConnect(server, headers = {}, timeoutMs = TEST_TIMEOUT_MS) {
   const { port } = server.address()
@@ -65,7 +65,8 @@ describe('app.js WS_PORT startup branching', { skip }, () => {
     })
 
     after(async () => {
-      wss.close()
+      for (const client of wss.clients) client.terminate()
+      await new Promise((resolve) => wss.close(resolve))
       await new Promise((resolve) => httpServer.close(resolve))
     })
 
@@ -105,7 +106,8 @@ describe('app.js WS_PORT startup branching', { skip }, () => {
     })
 
     after(async () => {
-      wss.close()
+      for (const client of wss.clients) client.terminate()
+      await new Promise((resolve) => wss.close(resolve))
       await Promise.all([
         new Promise((resolve) => httpServer.close(resolve)),
         new Promise((resolve) => wsHttpServer.close(resolve)),

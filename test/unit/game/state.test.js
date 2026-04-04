@@ -35,20 +35,20 @@ const PLAYER_IDS = {
   west: 'player-west',
 }
 
-describe('createGame', () => {
-  it('creates a game in bidding phase', () => {
+describe('createGame', { timeout: 2000 }, () => {
+  it('creates a game in bidding phase', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     assert.equal(state.phase, 'bidding')
   })
 
-  it('deals 13 cards to each player', () => {
+  it('deals 13 cards to each player', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     for (const seat of CLOCKWISE_SEATS) {
       assert.equal(state.hands[seat].length, 13)
     }
   })
 
-  it('hands are sorted by suit then rank', () => {
+  it('hands are sorted by suit then rank', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     for (const seat of CLOCKWISE_SEATS) {
       const hand = state.hands[seat]
@@ -72,44 +72,44 @@ describe('createGame', () => {
     }
   })
 
-  it('north is the dealer on the first hand', () => {
+  it('north is the dealer on the first hand', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     assert.equal(state.dealerSeat, 'north')
   })
 
-  it('first bidder is east (left of north dealer)', () => {
+  it('first bidder is east (left of north dealer)', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     assert.equal(state.currentBidderSeat, 'east')
   })
 
-  it('initialises scores and bags to zero', () => {
+  it('initialises scores and bags to zero', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     assert.deepEqual(state.scores, { ns: 0, ew: 0 })
     assert.deepEqual(state.bags, { ns: 0, ew: 0 })
   })
 })
 
-describe('placeBid', () => {
-  it('throws if not in bidding phase', () => {
+describe('placeBid', { timeout: 2000 }, () => {
+  it('throws if not in bidding phase', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     // Manually set phase
     const badState = { ...state, phase: 'playing' }
     assert.throws(() => placeBid(badState, 'east', 3), /not in bidding phase/i)
   })
 
-  it('throws if wrong player bids', () => {
+  it('throws if wrong player bids', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     assert.throws(() => placeBid(state, 'north', 3), /not your turn/i)
   })
 
-  it('records the bid and advances to next bidder', () => {
+  it('records the bid and advances to next bidder', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     state = placeBid(state, 'east', 3)
     assert.equal(state.bids.east, 3)
     assert.equal(state.currentBidderSeat, 'south')
   })
 
-  it('transitions to playing phase after all 4 bids', () => {
+  it('transitions to playing phase after all 4 bids', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     state = bidAll(state, [
       ['east', 3],
@@ -120,7 +120,7 @@ describe('placeBid', () => {
     assert.equal(state.phase, 'playing')
   })
 
-  it('second bidder number becomes the team bid — first bidder is advisory only', () => {
+  it('second bidder number becomes the team bid — first bidder is advisory only', { timeout: 2000 }, () => {
     // North deals → bidding order: east, south, west, north
     // EW: east bids first (advisory 4), west bids second (sets team total to 7)
     // NS: south bids first (advisory 3), north bids second (sets team total to 5)
@@ -136,7 +136,7 @@ describe('placeBid', () => {
     assert.equal(state.teamBids.ns, 5)
   })
 
-  it('second bidder can set team total lower than first bidder advisory number', () => {
+  it('second bidder can set team total lower than first bidder advisory number', { timeout: 2000 }, () => {
     // PRD §5.2: "The team's combined bid may be lower than the first bidder's individual bid."
     let state = createGame('table-1', PLAYER_IDS)
     state = bidAll(state, [
@@ -148,7 +148,7 @@ describe('placeBid', () => {
     assert.equal(state.teamBids.ew, 4) // team bid is 4, not east's advisory 6
   })
 
-  it('when first bidder bids nil, second bidder number is the team target and nil stands', () => {
+  it('when first bidder bids nil, second bidder number is the team target and nil stands', { timeout: 2000 }, () => {
     // East bids nil (individual bid stands), west sets team total to 5
     let state = createGame('table-1', PLAYER_IDS)
     state = bidAll(state, [
@@ -161,7 +161,7 @@ describe('placeBid', () => {
     assert.equal(state.teamBids.ew, 5)
   })
 
-  it('transitions to blind_nil_exchange when a player bids blind nil', () => {
+  it('transitions to blind_nil_exchange when a player bids blind nil', { timeout: 2000 }, () => {
     // Make NS far behind so blind nil is eligible
     let state = createGame('table-1', PLAYER_IDS)
     state = { ...state, scores: { ns: 0, ew: 100 } }
@@ -172,17 +172,17 @@ describe('placeBid', () => {
     assert.equal(state.phase, 'blind_nil_exchange')
   })
 
-  it('rejects invalid bid value', () => {
+  it('rejects invalid bid value', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     assert.throws(() => placeBid(state, 'east', 14), /invalid bid/i)
   })
 
-  it('rejects blind nil when team is not 100+ behind', () => {
+  it('rejects blind nil when team is not 100+ behind', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     assert.throws(() => placeBid(state, 'east', 'blind_nil'), /not eligible/i)
   })
 
-  it('rejects second blind nil for same team', () => {
+  it('rejects second blind nil for same team', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     // NS must be 100+ behind EW for NS players to bid blind nil
     state = { ...state, scores: { ns: 0, ew: 100 } }
@@ -195,7 +195,7 @@ describe('placeBid', () => {
   })
 })
 
-describe('playCard', () => {
+describe('playCard', { timeout: 2000 }, () => {
   function getToPlayingPhase() {
     let state = createGame('table-1', PLAYER_IDS)
     state = bidAll(state, [
@@ -207,20 +207,20 @@ describe('playCard', () => {
     return state
   }
 
-  it('throws if not in playing phase', () => {
+  it('throws if not in playing phase', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     const card = state.hands.east[0]
     assert.throws(() => playCard(state, 'east', card), /not in playing phase/i)
   })
 
-  it('throws if wrong player plays', () => {
+  it('throws if wrong player plays', { timeout: 2000 }, () => {
     let state = getToPlayingPhase()
     const wrongCard = state.hands.north[0]
     // East leads the first trick after north deals
     assert.throws(() => playCard(state, 'north', wrongCard), /not your turn/i)
   })
 
-  it('throws if card not in hand', () => {
+  it('throws if card not in hand', { timeout: 2000 }, () => {
     let state = getToPlayingPhase()
     // Use a card from north's hand — since all 52 cards are dealt to exactly one
     // player, any card in north's hand is guaranteed not to be in east's hand.
@@ -234,7 +234,7 @@ describe('playCard', () => {
     )
   })
 
-  it('removes played card from hand', () => {
+  it('removes played card from hand', { timeout: 2000 }, () => {
     let state = getToPlayingPhase()
     // east[0] may be a spade (illegal on trick 1); pick first non-spade card instead
     const card = state.hands.east.find((c) => c.suit !== 'spades')
@@ -243,7 +243,7 @@ describe('playCard', () => {
     assert.ok(!state.hands.east.some((c) => c.suit === card.suit && c.rank === card.rank))
   })
 
-  it('spades are broken when first spade is played (after the first trick)', () => {
+  it('spades are broken when first spade is played (after the first trick)', { timeout: 2000 }, () => {
     let state = getToPlayingPhase()
     assert.equal(state.spadesbroken, false)
 
@@ -261,7 +261,7 @@ describe('playCard', () => {
   })
 })
 
-describe('Spades-breaking', () => {
+describe('Spades-breaking', { timeout: 2000 }, () => {
   function getPlayingState() {
     let state = createGame('table-1', PLAYER_IDS)
     return bidAll(state, [
@@ -272,7 +272,7 @@ describe('Spades-breaking', () => {
     ])
   }
 
-  it('playing a spade on the first trick does not break spades', () => {
+  it('playing a spade on the first trick does not break spades', { timeout: 2000 }, () => {
     // PRD §5.1: "Spades are broken by the first Spade played (after the first trick)"
     let state = getPlayingState()
     // East has only spades — legal to lead on trick 1 when player holds nothing else
@@ -287,7 +287,7 @@ describe('Spades-breaking', () => {
     assert.equal(state.spadesbroken, false)
   })
 
-  it('playing a spade as a discard (void in led suit) breaks spades', () => {
+  it('playing a spade as a discard (void in led suit) breaks spades', { timeout: 2000 }, () => {
     let state = getPlayingState()
     // East has led clubs; south is void in clubs and must play their only card (a spade)
     state = {
@@ -301,7 +301,7 @@ describe('Spades-breaking', () => {
     assert.equal(state.spadesbroken, true)
   })
 
-  it('attempting to lead spades before they are broken is rejected', () => {
+  it('attempting to lead spades before they are broken is rejected', { timeout: 2000 }, () => {
     let state = getPlayingState()
     state = {
       ...state,
@@ -320,7 +320,7 @@ describe('Spades-breaking', () => {
     )
   })
 
-  it('can lead spades once they are broken', () => {
+  it('can lead spades once they are broken', { timeout: 2000 }, () => {
     let state = getPlayingState()
     state = {
       ...state,
@@ -336,7 +336,7 @@ describe('Spades-breaking', () => {
     assert.doesNotThrow(() => playCard(state, 'east', { suit: 'spades', rank: 'A' }))
   })
 
-  it('spadesbroken resets to false at the start of the next hand', () => {
+  it('spadesbroken resets to false at the start of the next hand', { timeout: 2000 }, () => {
     let state = getPlayingState()
     // Fast-forward to the final trick of a hand with spades already broken
     state = {
@@ -367,8 +367,8 @@ describe('Spades-breaking', () => {
   })
 })
 
-describe('getPlayerView', () => {
-  it('includes only the requesting player\'s hand', () => {
+describe('getPlayerView', { timeout: 2000 }, () => {
+  it('includes only the requesting player\'s hand', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     const view = getPlayerView(state, 'north')
     assert.ok(view.myHand)
@@ -376,13 +376,13 @@ describe('getPlayerView', () => {
     assert.ok(!view.hands, 'should not expose all hands')
   })
 
-  it('does not expose other players\' hands', () => {
+  it('does not expose other players\' hands', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     const view = getPlayerView(state, 'north')
     assert.ok(!view.hands || !view.hands.east, 'should not expose other players hands')
   })
 
-  it('strictly excludes the hands key for all 4 seats', () => {
+  it('strictly excludes the hands key for all 4 seats', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     for (const seat of ['north', 'east', 'south', 'west']) {
       const view = getPlayerView(state, seat)
@@ -390,7 +390,7 @@ describe('getPlayerView', () => {
     }
   })
 
-  it('myHand exactly matches the dealt cards for each seat', () => {
+  it('myHand exactly matches the dealt cards for each seat', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     for (const seat of ['north', 'east', 'south', 'west']) {
       const view = getPlayerView(state, seat)
@@ -398,7 +398,7 @@ describe('getPlayerView', () => {
     }
   })
 
-  it('each seat receives a unique hand (no two myHands share any card)', () => {
+  it('each seat receives a unique hand (no two myHands share any card)', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     const seats = ['north', 'east', 'south', 'west']
     const hands = seats.map((seat) => getPlayerView(state, seat).myHand)
@@ -416,7 +416,7 @@ describe('getPlayerView', () => {
     }
   })
 
-  it('includes currentTrick in the view (public info)', () => {
+  it('includes currentTrick in the view (public info)', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     // currentTrick is public — it must be present in the player view
     const view = getPlayerView(state, 'north')
@@ -424,7 +424,7 @@ describe('getPlayerView', () => {
     assert.ok(Array.isArray(view.currentTrick))
   })
 
-  it('does not expose opponent card identity through any top-level key', () => {
+  it('does not expose opponent card identity through any top-level key', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     const northView = getPlayerView(state, 'north')
     const northHandKeys = new Set(northView.myHand.map((c) => `${c.suit}:${c.rank}`))
@@ -444,13 +444,13 @@ describe('getPlayerView', () => {
   })
 })
 
-describe('CLOCKWISE_SEATS', () => {
-  it('lists seats in clockwise order starting from north', () => {
+describe('CLOCKWISE_SEATS', { timeout: 2000 }, () => {
+  it('lists seats in clockwise order starting from north', { timeout: 2000 }, () => {
     assert.deepEqual(CLOCKWISE_SEATS, ['north', 'east', 'south', 'west'])
   })
 })
 
-describe('bag tracking — state level', () => {
+describe('bag tracking — state level', { timeout: 2000 }, () => {
   const SEATS = ['north', 'east', 'south', 'west']
 
   /**
@@ -502,7 +502,7 @@ describe('bag tracking — state level', () => {
     return state
   }
 
-  it('bags accumulate in state after a hand with overtricks', () => {
+  it('bags accumulate in state after a hand with overtricks', { timeout: 2000 }, () => {
     // After 12 tricks: NS has 9, EW has 3 (east wins 13th → EW ends at 4)
     // NS bid 7 → 9 tricks → 2 overtricks → 2 bags
     // EW bid 6 → 4 tricks → missed bid (-60), 0 bags
@@ -518,7 +518,7 @@ describe('bag tracking — state level', () => {
     assert.equal(state.scores.ew, -60, 'EW: bid 6 made 4 → -60')
   })
 
-  it('applies -100 penalty and resets bag count when bags reach 10', () => {
+  it('applies -100 penalty and resets bag count when bags reach 10', { timeout: 2000 }, () => {
     // Start with NS at 9 bags. Hand produces 2 more overtricks → total 11 → penalty fires
     const state = buildFinalTrickState(
       { ns: 100, ew: 100 },
@@ -534,7 +534,7 @@ describe('bag tracking — state level', () => {
     assert.equal(state.bags.ew, 0, 'EW bags remain 0')
   })
 
-  it('bags carry over correctly across two hands with no double-deduction', () => {
+  it('bags carry over correctly across two hands with no double-deduction', { timeout: 2000 }, () => {
     // Hand 1: NS gets 2 bags, EW gets 0
     let state = buildFinalTrickState(
       { ns: 0, ew: 0 },
@@ -599,7 +599,7 @@ describe('bag tracking — state level', () => {
   })
 })
 
-describe('dealer rotation', () => {
+describe('dealer rotation', { timeout: 2000 }, () => {
   const SEATS = ['north', 'east', 'south', 'west']
 
   function nextSeatClockwise(seat) {
@@ -660,7 +660,7 @@ describe('dealer rotation', () => {
     return s
   }
 
-  it('dealer rotates clockwise after each hand', () => {
+  it('dealer rotates clockwise after each hand', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     const expectedDealers = ['north', 'east', 'south', 'west', 'north']
 
@@ -677,7 +677,7 @@ describe('dealer rotation', () => {
     assert.equal(state.dealerSeat, expectedDealers[4], 'dealer wraps back to north after 4 hands')
   })
 
-  it('first bidder is always to the left of the dealer', () => {
+  it('first bidder is always to the left of the dealer', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
 
     // Hand 1: north deals → east bids first
@@ -697,7 +697,7 @@ describe('dealer rotation', () => {
   })
 })
 
-describe('game over — phase transition', () => {
+describe('game over — phase transition', { timeout: 2000 }, () => {
   /**
    * Build a state one trick from hand completion with fixed bids.
    * Bidding order: east, south, west, north
@@ -740,7 +740,7 @@ describe('game over — phase transition', () => {
     return state
   }
 
-  it('transitions to game_over with winner=ns when NS score reaches 250', () => {
+  it('transitions to game_over with winner=ns when NS score reaches 250', { timeout: 2000 }, () => {
     // After hand: NS=9 tricks (north:4+south:5) vs bid 7 → +70 + 2 bags (+2 pts) = 72 → 200+72=272 ≥ 250
     //             EW=4 tricks (east:3+west:1) vs bid 6 → -60 → 100-60=40
     const state = buildNearEndState({
@@ -753,7 +753,7 @@ describe('game over — phase transition', () => {
     assert.equal(state.scores.ns, 272)
   })
 
-  it('starts next hand in bidding phase when neither team reaches a threshold', () => {
+  it('starts next hand in bidding phase when neither team reaches a threshold', { timeout: 2000 }, () => {
     // After hand: NS=9 vs bid 7 → +70 → 0+70=70 (< 250); EW=4 vs bid 6 → -60 (> -250)
     const state = buildNearEndState({
       initialScores: { ns: 0, ew: 0 },
@@ -765,7 +765,7 @@ describe('game over — phase transition', () => {
     assert.equal(state.handNumber, 2)
   })
 
-  it('transitions to game_over with winner=ew when NS score drops to -250 or below', () => {
+  it('transitions to game_over with winner=ew when NS score drops to -250 or below', { timeout: 2000 }, () => {
     // After hand: NS=3 tricks (north:1+south:2) vs bid 7 → -70 → -200-70=-270 ≤ -250
     //             EW=10 tricks (east:6+west:4) vs bid 6 → +60 + 4 bags → 100+60=160
     const state = buildNearEndState({
@@ -778,7 +778,7 @@ describe('game over — phase transition', () => {
     assert.equal(state.scores.ns, -270)
   })
 
-  it('getPlayerView in game_over state exposes winner and scores but not all hands', () => {
+  it('getPlayerView in game_over state exposes winner and scores but not all hands', { timeout: 2000 }, () => {
     const state = buildNearEndState({
       initialScores: { ns: 200, ew: 100 },
       tricksWon12: { north: 4, east: 2, south: 5, west: 1 },
@@ -800,8 +800,8 @@ const HUMAN_PLAYERS = {
   west: 'player-west',
 }
 
-describe('substitutePlayerWithBot', () => {
-  it('replaces the human player with a bot at the given seat', () => {
+describe('substitutePlayerWithBot', { timeout: 2000 }, () => {
+  it('replaces the human player with a bot at the given seat', { timeout: 2000 }, () => {
     const state = createGame('table-1', HUMAN_PLAYERS)
     const updated = substitutePlayerWithBot(state, 'east')
     assert.equal(updated.players.east, 'bot:east')
@@ -810,13 +810,13 @@ describe('substitutePlayerWithBot', () => {
     assert.equal(updated.players.west, 'player-west')
   })
 
-  it('does not mutate the original state', () => {
+  it('does not mutate the original state', { timeout: 2000 }, () => {
     const state = createGame('table-1', HUMAN_PLAYERS)
     substitutePlayerWithBot(state, 'east')
     assert.equal(state.players.east, 'player-east', 'original state must not be mutated')
   })
 
-  it('advances bot turns immediately after substitution when all remaining bidders are bots', () => {
+  it('advances bot turns immediately after substitution when all remaining bidders are bots', { timeout: 2000 }, () => {
     const allBotsExceptNorth = {
       north: 'player-north',
       east: 'bot:east',
@@ -832,8 +832,8 @@ describe('substitutePlayerWithBot', () => {
   })
 })
 
-describe('advanceBotTurns', () => {
-  it('returns state unchanged when current bidder is human', () => {
+describe('advanceBotTurns', { timeout: 2000 }, () => {
+  it('returns state unchanged when current bidder is human', { timeout: 2000 }, () => {
     const state = createGame('table-1', HUMAN_PLAYERS)
     assert.equal(state.phase, 'bidding')
     const result = advanceBotTurns(state)
@@ -841,7 +841,7 @@ describe('advanceBotTurns', () => {
     assert.equal(result.currentBidderSeat, state.currentBidderSeat)
   })
 
-  it('advances past bot bidders automatically after a human bids', () => {
+  it('advances past bot bidders automatically after a human bids', { timeout: 2000 }, () => {
     const players = {
       north: 'bot:north',
       east: 'player-east',

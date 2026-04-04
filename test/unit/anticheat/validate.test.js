@@ -24,8 +24,8 @@ function makeState(overrides = {}) {
   }
 }
 
-describe('validateCardPlay — phase and turn checks', () => {
-  it('throws INVALID_ACTION when game is not in playing phase', () => {
+describe('validateCardPlay — phase and turn checks', { timeout: 2000 }, () => {
+  it('throws INVALID_ACTION when game is not in playing phase', { timeout: 2000 }, () => {
     const state = makeState({ phase: 'bidding' })
     const err = assert.throws(
       () => validateCardPlay(state, 'east', { suit: 'clubs', rank: 'A' }),
@@ -33,7 +33,7 @@ describe('validateCardPlay — phase and turn checks', () => {
     )
   })
 
-  it('throws NOT_YOUR_TURN when it is not the player\'s turn', () => {
+  it('throws NOT_YOUR_TURN when it is not the player\'s turn', { timeout: 2000 }, () => {
     const state = makeState({ currentPlayerSeat: 'north' })
     assert.throws(
       () => validateCardPlay(state, 'east', { suit: 'clubs', rank: 'A' }),
@@ -41,7 +41,7 @@ describe('validateCardPlay — phase and turn checks', () => {
     )
   })
 
-  it('throws CARD_NOT_IN_HAND when player tries to play a card they do not hold', () => {
+  it('throws CARD_NOT_IN_HAND when player tries to play a card they do not hold', { timeout: 2000 }, () => {
     const state = makeState()
     assert.throws(
       () => validateCardPlay(state, 'east', { suit: 'diamonds', rank: '2' }),
@@ -50,15 +50,15 @@ describe('validateCardPlay — phase and turn checks', () => {
   })
 })
 
-describe('validateCardPlay — no Spade lead on first trick', () => {
-  it('allows leading a non-spade on the first trick', () => {
+describe('validateCardPlay — no Spade lead on first trick', { timeout: 2000 }, () => {
+  it('allows leading a non-spade on the first trick', { timeout: 2000 }, () => {
     const state = makeState()
     assert.doesNotThrow(() =>
       validateCardPlay(state, 'east', { suit: 'clubs', rank: 'A' }),
     )
   })
 
-  it('rejects leading a spade on the first trick when non-spades are available', () => {
+  it('rejects leading a spade on the first trick when non-spades are available', { timeout: 2000 }, () => {
     const state = makeState()
     // East has clubs, hearts, and spades — leading spades is illegal
     assert.throws(
@@ -67,7 +67,7 @@ describe('validateCardPlay — no Spade lead on first trick', () => {
     )
   })
 
-  it('allows leading a spade on the first trick when hand contains only spades', () => {
+  it('allows leading a spade on the first trick when hand contains only spades', { timeout: 2000 }, () => {
     const state = makeState({
       hands: {
         east: [
@@ -81,7 +81,7 @@ describe('validateCardPlay — no Spade lead on first trick', () => {
     )
   })
 
-  it('rejects playing a spade on the first trick when following (void in led suit) and non-spades exist', () => {
+  it('rejects playing a spade on the first trick when following (void in led suit) and non-spades exist', { timeout: 2000 }, () => {
     // A heart was led; east has no hearts but has clubs and spades
     const state = makeState({
       currentTrick: [{ seat: 'north', card: { suit: 'hearts', rank: 'Q' } }],
@@ -98,7 +98,7 @@ describe('validateCardPlay — no Spade lead on first trick', () => {
     )
   })
 
-  it('allows playing a spade on the first trick when following and only spades remain after exhausting led suit', () => {
+  it('allows playing a spade on the first trick when following and only spades remain after exhausting led suit', { timeout: 2000 }, () => {
     // A heart was led; east has only spades left — must play spades
     const state = makeState({
       currentTrick: [{ seat: 'north', card: { suit: 'hearts', rank: 'Q' } }],
@@ -111,7 +111,7 @@ describe('validateCardPlay — no Spade lead on first trick', () => {
     )
   })
 
-  it('enforces suit-following on the first trick (must follow led suit if able)', () => {
+  it('enforces suit-following on the first trick (must follow led suit if able)', { timeout: 2000 }, () => {
     // A clubs was led; east has a clubs — must follow suit, cannot play hearts
     const state = makeState({
       currentTrick: [{ seat: 'north', card: { suit: 'clubs', rank: '2' } }],
@@ -129,7 +129,7 @@ describe('validateCardPlay — no Spade lead on first trick', () => {
   })
 })
 
-describe('validateBidTurn — phase and turn checks', () => {
+describe('validateBidTurn — phase and turn checks', { timeout: 2000 }, () => {
   function makeBidState(overrides = {}) {
     return {
       phase: 'bidding',
@@ -138,7 +138,7 @@ describe('validateBidTurn — phase and turn checks', () => {
     }
   }
 
-  it('throws INVALID_ACTION when game is not in bidding phase', () => {
+  it('throws INVALID_ACTION when game is not in bidding phase', { timeout: 2000 }, () => {
     const state = makeBidState({ phase: 'playing' })
     assert.throws(
       () => validateBidTurn(state, 'north'),
@@ -146,7 +146,7 @@ describe('validateBidTurn — phase and turn checks', () => {
     )
   })
 
-  it('throws NOT_YOUR_TURN when it is not the player\'s turn to bid', () => {
+  it('throws NOT_YOUR_TURN when it is not the player\'s turn to bid', { timeout: 2000 }, () => {
     const state = makeBidState({ currentBidderSeat: 'east' })
     assert.throws(
       () => validateBidTurn(state, 'north'),
@@ -154,14 +154,14 @@ describe('validateBidTurn — phase and turn checks', () => {
     )
   })
 
-  it('does not throw when phase is bidding and it is the player\'s turn', () => {
+  it('does not throw when phase is bidding and it is the player\'s turn', { timeout: 2000 }, () => {
     const state = makeBidState()
     assert.doesNotThrow(() => validateBidTurn(state, 'north'))
   })
 })
 
-describe('validateCardPlay — Spades breaking (subsequent tricks)', () => {
-  it('rejects leading a spade before spades are broken when non-spades are available', () => {
+describe('validateCardPlay — Spades breaking (subsequent tricks)', { timeout: 2000 }, () => {
+  it('rejects leading a spade before spades are broken when non-spades are available', { timeout: 2000 }, () => {
     const state = makeState({
       isFirstTrick: false,
       spadesbroken: false,
@@ -179,7 +179,7 @@ describe('validateCardPlay — Spades breaking (subsequent tricks)', () => {
     )
   })
 
-  it('allows leading a spade after spades are broken', () => {
+  it('allows leading a spade after spades are broken', { timeout: 2000 }, () => {
     const state = makeState({
       isFirstTrick: false,
       spadesbroken: true,
@@ -196,7 +196,7 @@ describe('validateCardPlay — Spades breaking (subsequent tricks)', () => {
     )
   })
 
-  it('allows playing any card on non-first trick when void in led suit', () => {
+  it('allows playing any card on non-first trick when void in led suit', { timeout: 2000 }, () => {
     const state = makeState({
       isFirstTrick: false,
       spadesbroken: false,

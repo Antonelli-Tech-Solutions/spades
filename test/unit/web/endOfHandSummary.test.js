@@ -30,38 +30,38 @@ function makeEntry(overrides = {}) {
 
 // ── Basic rendering ───────────────────────────────────────────────────────────
 
-describe('endOfHandSummaryHtml — basic rendering', () => {
-  it('returns a non-empty string', () => {
+describe('endOfHandSummaryHtml — basic rendering', { timeout: 2000 }, () => {
+  it('returns a non-empty string', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north')
     assert.ok(typeof html === 'string' && html.length > 0)
   })
 
-  it('includes the hand number', () => {
+  it('includes the hand number', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry({ handNumber: 3 }), 'north')
     assert.ok(html.includes('3'), 'should include hand number 3')
   })
 
-  it('includes "Us" label for the viewing player\'s team', () => {
+  it('includes "Us" label for the viewing player\'s team', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north')
     assert.ok(html.includes('Us'), 'should include "Us" label')
   })
 
-  it('includes "Them" label for the opponent team', () => {
+  it('includes "Them" label for the opponent team', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north')
     assert.ok(html.includes('Them'), 'should include "Them" label')
   })
 
-  it('includes N/S label for north/south team', () => {
+  it('includes N/S label for north/south team', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north')
     assert.ok(html.includes('N/S'), 'should include N/S team label')
   })
 
-  it('includes E/W label for east/west team', () => {
+  it('includes E/W label for east/west team', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north')
     assert.ok(html.includes('E/W'), 'should include E/W team label')
   })
 
-  it('includes a continue button', () => {
+  it('includes a continue button', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north')
     assert.ok(
       html.includes('hand-summary-continue') || html.toLowerCase().includes('continue'),
@@ -69,36 +69,36 @@ describe('endOfHandSummaryHtml — basic rendering', () => {
     )
   })
 
-  it('includes scores after the hand', () => {
+  it('includes scores after the hand', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry({ scoresAfter: { ns: 70, ew: 70 } }), 'north')
     assert.ok(html.includes('70'), 'should include the score value 70')
   })
 })
 
-describe('endOfHandSummaryHtml — Us/Them column orientation', () => {
-  it('Us (N/S) appears before Them (E/W) for a north player', () => {
+describe('endOfHandSummaryHtml — Us/Them column orientation', { timeout: 2000 }, () => {
+  it('Us (N/S) appears before Them (E/W) for a north player', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north')
     assert.ok(html.indexOf('N/S') < html.indexOf('E/W'), 'N/S should come before E/W for north player')
   })
 
-  it('Us (E/W) appears before Them (N/S) for an east player', () => {
+  it('Us (E/W) appears before Them (N/S) for an east player', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'east')
     assert.ok(html.indexOf('E/W') < html.indexOf('N/S'), 'E/W should come before N/S for east player')
   })
 
-  it('Us (N/S) appears before Them (E/W) for a south player', () => {
+  it('Us (N/S) appears before Them (E/W) for a south player', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'south')
     assert.ok(html.indexOf('N/S') < html.indexOf('E/W'), 'N/S should come before E/W for south player')
   })
 
-  it('Us (E/W) appears before Them (N/S) for a west player', () => {
+  it('Us (E/W) appears before Them (N/S) for a west player', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'west')
     assert.ok(html.indexOf('E/W') < html.indexOf('N/S'), 'E/W should come before N/S for west player')
   })
 })
 
-describe('endOfHandSummaryHtml — normal hand (no nil bids)', () => {
-  it('shows bid and tricks taken for each team', () => {
+describe('endOfHandSummaryHtml — normal hand (no nil bids)', { timeout: 2000 }, () => {
+  it('shows bid and tricks taken for each team', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 3, east: 4, south: 4, west: 3 },
       teamBids: { ns: 7, ew: 7 },
@@ -108,13 +108,13 @@ describe('endOfHandSummaryHtml — normal hand (no nil bids)', () => {
     assert.ok(html.includes('7'), 'should include team bid of 7')
   })
 
-  it('shows positive score delta as +N', () => {
+  it('shows positive score delta as +N', { timeout: 2000 }, () => {
     const entry = makeEntry({ scoreDelta: { ns: 70, ew: 70 } })
     const html = endOfHandSummaryHtml(entry, 'north')
     assert.ok(html.includes('+70') || html.includes('+70'), 'should show +70')
   })
 
-  it('shows negative score delta for missed bid', () => {
+  it('shows negative score delta for missed bid', { timeout: 2000 }, () => {
     const entry = makeEntry({
       scoreDelta: { ns: -80, ew: 70 },
       scoresAfter: { ns: -80, ew: 70 },
@@ -123,7 +123,7 @@ describe('endOfHandSummaryHtml — normal hand (no nil bids)', () => {
     assert.ok(html.includes('-80') || html.includes('−80'), 'should show negative delta')
   })
 
-  it('shows bags earned when nonzero', () => {
+  it('shows bags earned when nonzero', { timeout: 2000 }, () => {
     const entry = makeEntry({
       newBags: { ns: 2, ew: 0 },
       bagsAfter: { ns: 2, ew: 0 },
@@ -133,8 +133,8 @@ describe('endOfHandSummaryHtml — normal hand (no nil bids)', () => {
   })
 })
 
-describe('endOfHandSummaryHtml — nil bid', () => {
-  it('shows nil result for a nil bidder on the ns team', () => {
+describe('endOfHandSummaryHtml — nil bid', { timeout: 2000 }, () => {
+  it('shows nil result for a nil bidder on the ns team', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 'nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -145,7 +145,7 @@ describe('endOfHandSummaryHtml — nil bid', () => {
     assert.ok(html.toLowerCase().includes('nil'), 'should include "nil" in output')
   })
 
-  it('shows "Made" when nil bidder took 0 tricks', () => {
+  it('shows "Made" when nil bidder took 0 tricks', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 'nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -155,7 +155,7 @@ describe('endOfHandSummaryHtml — nil bid', () => {
     assert.ok(html.includes('Made') || html.includes('+50'), 'should show nil made result')
   })
 
-  it('shows "Failed" when nil bidder took tricks', () => {
+  it('shows "Failed" when nil bidder took tricks', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 'nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -165,7 +165,7 @@ describe('endOfHandSummaryHtml — nil bid', () => {
     assert.ok(html.includes('Failed') || html.includes('-50') || html.includes('−50'), 'should show nil failed result')
   })
 
-  it('shows blind nil with ±100 points', () => {
+  it('shows blind nil with ±100 points', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 'blind_nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -178,7 +178,7 @@ describe('endOfHandSummaryHtml — nil bid', () => {
     )
   })
 
-  it('shows tricks-only score in "Bid X, Took Y" row when team has a failed nil bidder', () => {
+  it('shows tricks-only score in "Bid X, Took Y" row when team has a failed nil bidder', { timeout: 2000 }, () => {
     // Bid 3, Took 3 → +30 pts from tricks. Failed nil → -50. scoreDelta = -20.
     // The "Bid X, Took Y" row must show +30, not the net -20.
     const entry = makeEntry({
@@ -192,7 +192,7 @@ describe('endOfHandSummaryHtml — nil bid', () => {
     assert.ok(!html.includes('-20'), 'should not show the net score -20 in the team row')
   })
 
-  it('shows tricks-only score in "Bid X, Took Y" row when team has a made nil bidder', () => {
+  it('shows tricks-only score in "Bid X, Took Y" row when team has a made nil bidder', { timeout: 2000 }, () => {
     // Bid 5, Took 5 → +50 pts from tricks. Made nil → +50. scoreDelta = 100.
     // The "Bid X, Took Y" row must show +50, not +100.
     const entry = makeEntry({
@@ -205,7 +205,7 @@ describe('endOfHandSummaryHtml — nil bid', () => {
     assert.ok(html.includes('+50 pts'), 'Bid X, Took Y row should show +50 pts (tricks only)')
   })
 
-  it('nil result rows include "pts" suffix', () => {
+  it('nil result rows include "pts" suffix', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 'nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -216,7 +216,7 @@ describe('endOfHandSummaryHtml — nil bid', () => {
     assert.ok(html.includes('−50 pts') || html.includes('-50 pts'), 'failed nil row should include "pts" suffix')
   })
 
-  it('made nil result rows include "pts" suffix', () => {
+  it('made nil result rows include "pts" suffix', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 'nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -228,8 +228,8 @@ describe('endOfHandSummaryHtml — nil bid', () => {
   })
 })
 
-describe('endOfHandSummaryHtml — double nil (both players on a team bid nil)', () => {
-  it('omits team total row when both ns players bid nil', () => {
+describe('endOfHandSummaryHtml — double nil (both players on a team bid nil)', { timeout: 2000 }, () => {
+  it('omits team total row when both ns players bid nil', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 'nil', east: 4, south: 'nil', west: 3 },
       teamBids: { ns: null, ew: 7 },
@@ -242,7 +242,7 @@ describe('endOfHandSummaryHtml — double nil (both players on a team bid nil)',
     assert.ok(html.toLowerCase().includes('nil'), 'should include nil label')
   })
 
-  it('still shows individual nil rows for each double-nil bidder', () => {
+  it('still shows individual nil rows for each double-nil bidder', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bids: { north: 'nil', east: 4, south: 'nil', west: 3 },
       teamBids: { ns: null, ew: 7 },
@@ -255,8 +255,8 @@ describe('endOfHandSummaryHtml — double nil (both players on a team bid nil)',
   })
 })
 
-describe('endOfHandSummaryHtml — bag penalty', () => {
-  it('shows bag penalty notice when bagPenalty.ns is 1 for ns player', () => {
+describe('endOfHandSummaryHtml — bag penalty', { timeout: 2000 }, () => {
+  it('shows bag penalty notice when bagPenalty.ns is 1 for ns player', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bagPenalty: { ns: 1, ew: 0 },
       scoresAfter: { ns: -30, ew: 70 }, // 70 - 100 penalty = -30
@@ -268,7 +268,7 @@ describe('endOfHandSummaryHtml — bag penalty', () => {
     )
   })
 
-  it('does not show bag penalty notice when no penalty', () => {
+  it('does not show bag penalty notice when no penalty', { timeout: 2000 }, () => {
     const entry = makeEntry({ bagPenalty: { ns: 0, ew: 0 } })
     const html = endOfHandSummaryHtml(entry, 'north')
     // "penalty" text should not appear
@@ -278,7 +278,7 @@ describe('endOfHandSummaryHtml — bag penalty', () => {
     )
   })
 
-  it('shows bag penalty for the opponent team when they cross 10 bags', () => {
+  it('shows bag penalty for the opponent team when they cross 10 bags', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bagPenalty: { ns: 0, ew: 1 },
       scoresAfter: { ns: 70, ew: -30 },
@@ -290,7 +290,7 @@ describe('endOfHandSummaryHtml — bag penalty', () => {
     )
   })
 
-  it('shows −200 pts when a team bags out twice in one hand', () => {
+  it('shows −200 pts when a team bags out twice in one hand', { timeout: 2000 }, () => {
     const entry = makeEntry({
       bagPenalty: { ns: 2, ew: 0 },
       scoresAfter: { ns: -130, ew: 70 }, // 70 - 200 = -130
@@ -304,21 +304,21 @@ describe('endOfHandSummaryHtml — bag penalty', () => {
   })
 })
 
-describe('endOfHandSummaryHtml — running totals', () => {
-  it('shows scoresAfter for both teams', () => {
+describe('endOfHandSummaryHtml — running totals', { timeout: 2000 }, () => {
+  it('shows scoresAfter for both teams', { timeout: 2000 }, () => {
     const entry = makeEntry({ scoresAfter: { ns: 140, ew: 70 } })
     const html = endOfHandSummaryHtml(entry, 'north')
     assert.ok(html.includes('140'), 'should show ns score 140')
     assert.ok(html.includes('70'), 'should show ew score 70')
   })
 
-  it('shows bagsAfter for both teams', () => {
+  it('shows bagsAfter for both teams', { timeout: 2000 }, () => {
     const entry = makeEntry({ bagsAfter: { ns: 3, ew: 1 } })
     const html = endOfHandSummaryHtml(entry, 'north')
     assert.ok(html.includes('3'), 'should show ns bags 3')
   })
 
-  it('shows bagsBefore next to the scores at the top', () => {
+  it('shows bagsBefore next to the scores at the top', { timeout: 2000 }, () => {
     const entry = makeEntry({
       scoresBefore: { ns: 100, ew: 50 },
       bagsBefore: { ns: 4, ew: 2 },
@@ -330,7 +330,7 @@ describe('endOfHandSummaryHtml — running totals', () => {
     assert.ok(scoresBefore.includes('2') || html.includes('2'), 'should display them bags before (2)')
   })
 
-  it('bagsAfter appear on the same line as the final score (not below)', () => {
+  it('bagsAfter appear on the same line as the final score (not below)', { timeout: 2000 }, () => {
     const entry = makeEntry({ bagsAfter: { ns: 5, ew: 0 }, scoresAfter: { ns: 127, ew: 49 } })
     const html = endOfHandSummaryHtml(entry, 'north')
     // summary-bags should be inside summary-total but not in its own separate block
@@ -343,13 +343,13 @@ describe('endOfHandSummaryHtml — running totals', () => {
   })
 })
 
-describe('endOfHandSummaryHtml — gameOverInfo (game over mode)', () => {
-  it('includes GAME OVER in the title when gameOverInfo is provided', () => {
+describe('endOfHandSummaryHtml — gameOverInfo (game over mode)', { timeout: 2000 }, () => {
+  it('includes GAME OVER in the title when gameOverInfo is provided', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ns' })
     assert.ok(html.includes('GAME OVER'), 'should include GAME OVER in title')
   })
 
-  it('shows winner announcement when gameOverInfo is provided', () => {
+  it('shows winner announcement when gameOverInfo is provided', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ns' })
     assert.ok(
       html.toLowerCase().includes('win') || html.toLowerCase().includes('north') || html.toLowerCase().includes('n/s'),
@@ -357,31 +357,31 @@ describe('endOfHandSummaryHtml — gameOverInfo (game over mode)', () => {
     )
   })
 
-  it('shows "Back to Lobby" button instead of "Continue" when gameOverInfo is provided', () => {
+  it('shows "Back to Lobby" button instead of "Continue" when gameOverInfo is provided', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ns' })
     assert.ok(html.includes('hand-summary-lobby') || html.toLowerCase().includes('back to lobby'), 'should have Back to Lobby button')
     assert.ok(!html.includes('hand-summary-continue'), 'should not have Continue button')
   })
 
-  it('still shows normal hand summary content when gameOverInfo is provided', () => {
+  it('still shows normal hand summary content when gameOverInfo is provided', { timeout: 2000 }, () => {
     const entry = makeEntry({ scoreDelta: { ns: 70, ew: 70 } })
     const html = endOfHandSummaryHtml(entry, 'north', { winner: 'ns' })
     assert.ok(html.includes('+70'), 'should still show hand score delta')
   })
 
-  it('shows "Continue" button and no GAME OVER title when gameOverInfo is null', () => {
+  it('shows "Continue" button and no GAME OVER title when gameOverInfo is null', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north', null)
     assert.ok(html.includes('hand-summary-continue') || html.toLowerCase().includes('continue'), 'should have Continue button')
     assert.ok(!html.includes('GAME OVER'), 'should not include GAME OVER')
   })
 
-  it('shows "Continue" button and no GAME OVER title when gameOverInfo is omitted', () => {
+  it('shows "Continue" button and no GAME OVER title when gameOverInfo is omitted', { timeout: 2000 }, () => {
     const html = endOfHandSummaryHtml(makeEntry(), 'north')
     assert.ok(html.includes('hand-summary-continue') || html.toLowerCase().includes('continue'), 'should have Continue button')
     assert.ok(!html.includes('GAME OVER'), 'should not include GAME OVER')
   })
 
-  it('announces winning team by label', () => {
+  it('announces winning team by label', { timeout: 2000 }, () => {
     const htmlNs = endOfHandSummaryHtml(makeEntry(), 'north', { winner: 'ns' })
     assert.ok(
       htmlNs.includes('N/S') || htmlNs.toLowerCase().includes('north'),

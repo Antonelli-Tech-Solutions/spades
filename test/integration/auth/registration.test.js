@@ -74,7 +74,7 @@ describe('POST /api/auth/register', { skip }, () => {
     await closeDb()
   })
 
-  it('returns 201 and a playerId on valid registration', async () => {
+  it('returns 201 and a playerId on valid registration', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -90,7 +90,7 @@ describe('POST /api/auth/register', { skip }, () => {
     assert.ok(body.message, 'response should include a message')
   })
 
-  it('sends a verification email on registration', async () => {
+  it('sends a verification email on registration', { timeout: 10000 }, async () => {
     server.sentEmails.length = 0
     await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',
@@ -106,7 +106,7 @@ describe('POST /api/auth/register', { skip }, () => {
     assert.ok(server.sentEmails[0].token, 'email should carry a verification token')
   })
 
-  it('stores account as unverified after registration', async () => {
+  it('stores account as unverified after registration', { timeout: 10000 }, async () => {
     await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -123,7 +123,7 @@ describe('POST /api/auth/register', { skip }, () => {
     assert.equal(result.rows[0].is_verified, false)
   })
 
-  it('returns 400 when email is missing', async () => {
+  it('returns 400 when email is missing', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -132,7 +132,7 @@ describe('POST /api/auth/register', { skip }, () => {
     assert.equal(res.status, 400)
   })
 
-  it('returns 400 when password is too short', async () => {
+  it('returns 400 when password is too short', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -145,7 +145,7 @@ describe('POST /api/auth/register', { skip }, () => {
     assert.equal(res.status, 400)
   })
 
-  it('returns 409 when email is already registered', async () => {
+  it('returns 409 when email is already registered', { timeout: 10000 }, async () => {
     const payload = {
       email: 'dup@test.spades.invalid',
       username: 'dup_test',
@@ -164,7 +164,7 @@ describe('POST /api/auth/register', { skip }, () => {
     assert.equal(res.status, 409)
   })
 
-  it('returns 409 when username is already taken', async () => {
+  it('returns 409 when username is already taken', { timeout: 10000 }, async () => {
     await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -202,7 +202,7 @@ describe('GET /api/auth/verify-email', { skip }, () => {
     await closeDb()
   })
 
-  it('redirects to /#/verify-email-success and marks account verified with a valid token', async () => {
+  it('redirects to /#/verify-email-success and marks account verified with a valid token', { timeout: 10000 }, async () => {
     // Register a player to get a real token
     server.sentEmails.length = 0
     await fetch(`${server.baseUrl}/api/auth/register`, {
@@ -227,7 +227,7 @@ describe('GET /api/auth/verify-email', { skip }, () => {
     assert.equal(result.rows[0].is_verified, true)
   })
 
-  it('redirects to /#/verify-email-error for an invalid token', async () => {
+  it('redirects to /#/verify-email-error for an invalid token', { timeout: 10000 }, async () => {
     const res = await fetch(
       `${server.baseUrl}/api/auth/verify-email?token=00000000-0000-4000-8000-000000000000`,
       { redirect: 'manual' },
@@ -236,13 +236,13 @@ describe('GET /api/auth/verify-email', { skip }, () => {
     assert.ok(res.headers.get('location').includes('/verify-email-error'))
   })
 
-  it('redirects to /#/verify-email-error when no token is provided', async () => {
+  it('redirects to /#/verify-email-error when no token is provided', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/verify-email`, { redirect: 'manual' })
     assert.equal(res.status, 302)
     assert.ok(res.headers.get('location').includes('/verify-email-error'))
   })
 
-  it('redirects to /#/verify-email-error when the same token is used twice (single use)', async () => {
+  it('redirects to /#/verify-email-error when the same token is used twice (single use)', { timeout: 10000 }, async () => {
     server.sentEmails.length = 0
     await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',

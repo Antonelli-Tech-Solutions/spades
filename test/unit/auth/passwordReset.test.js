@@ -2,8 +2,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { forgotPassword, resetPassword } from '../../../server/auth/passwordReset.js'
 
-describe('forgotPassword', () => {
-  it('succeeds silently when email is not found (prevents enumeration)', async () => {
+describe('forgotPassword', { timeout: 2000 }, () => {
+  it('succeeds silently when email is not found (prevents enumeration)', { timeout: 2000 }, async () => {
     const db = {
       query: async (sql) => {
         if (sql.includes('SELECT')) return { rows: [] }
@@ -15,7 +15,7 @@ describe('forgotPassword', () => {
     assert.equal(emails.length, 0)
   })
 
-  it('deletes old tokens, creates a new one, and sends email for existing player', async () => {
+  it('deletes old tokens, creates a new one, and sends email for existing player', { timeout: 2000 }, async () => {
     const queries = []
     const db = {
       query: async (sql, params) => {
@@ -39,7 +39,7 @@ describe('forgotPassword', () => {
     assert.equal(emails[0], 'alice@example.com')
   })
 
-  it('normalises email to lowercase before lookup', async () => {
+  it('normalises email to lowercase before lookup', { timeout: 2000 }, async () => {
     const lookups = []
     const db = {
       query: async (sql, params) => {
@@ -50,13 +50,13 @@ describe('forgotPassword', () => {
         return { rows: [] }
       },
     }
-    await forgotPassword(db, 'Alice@EXAMPLE.COM', async () => {})
+    await forgotPassword(db, 'Alice@EXAMPLE.COM', { timeout: 2000 }, async () => {})
     assert.equal(lookups[0], 'alice@example.com')
   })
 })
 
-describe('resetPassword', () => {
-  it('throws VALIDATION_ERROR when token is missing', async () => {
+describe('resetPassword', { timeout: 2000 }, () => {
+  it('throws VALIDATION_ERROR when token is missing', { timeout: 2000 }, async () => {
     const db = {}
     await assert.rejects(
       () => resetPassword(db, undefined, 'newpassword123'),
@@ -67,7 +67,7 @@ describe('resetPassword', () => {
     )
   })
 
-  it('throws VALIDATION_ERROR when new password is too short', async () => {
+  it('throws VALIDATION_ERROR when new password is too short', { timeout: 2000 }, async () => {
     const db = {}
     await assert.rejects(
       () => resetPassword(db, 'some-token', 'short'),
@@ -78,7 +78,7 @@ describe('resetPassword', () => {
     )
   })
 
-  it('throws INVALID_TOKEN when token is not found', async () => {
+  it('throws INVALID_TOKEN when token is not found', { timeout: 2000 }, async () => {
     const db = {
       query: async () => ({ rows: [] }),
     }
@@ -91,7 +91,7 @@ describe('resetPassword', () => {
     )
   })
 
-  it('throws EXPIRED_TOKEN when token is past its expiry', async () => {
+  it('throws EXPIRED_TOKEN when token is past its expiry', { timeout: 2000 }, async () => {
     const db = {
       query: async (sql) => {
         if (sql.includes('SELECT')) {
@@ -111,7 +111,7 @@ describe('resetPassword', () => {
     )
   })
 
-  it('updates the password hash and deletes the token on success', async () => {
+  it('updates the password hash and deletes the token on success', { timeout: 2000 }, async () => {
     const queries = []
     const db = {
       query: async (sql, params) => {

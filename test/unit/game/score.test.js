@@ -2,8 +2,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { scoreHand, checkWinLoss, applyBagPenalties } from '../../../server/game/score.js'
 
-describe('scoreHand — basic team bid', () => {
-  it('awards bid × 10 when team makes their bid exactly', () => {
+describe('scoreHand — basic team bid', { timeout: 2000 }, () => {
+  it('awards bid × 10 when team makes their bid exactly', { timeout: 2000 }, () => {
     const { scoreDelta, newBags } = scoreHand({
       bids: { north: 3, east: 4, south: 4, west: 3 },
       teamBids: { ns: 7, ew: 7 },
@@ -15,7 +15,7 @@ describe('scoreHand — basic team bid', () => {
     assert.equal(newBags.ew, 0)
   })
 
-  it('awards overtricks as bags (+1 per overtrick, not +10)', () => {
+  it('awards overtricks as bags (+1 per overtrick, not +10)', { timeout: 2000 }, () => {
     const { scoreDelta, newBags } = scoreHand({
       bids: { north: 3, east: 4, south: 4, west: 3 },
       teamBids: { ns: 7, ew: 7 },
@@ -29,7 +29,7 @@ describe('scoreHand — basic team bid', () => {
     assert.equal(newBags.ew, 1)
   })
 
-  it('deducts bid × 10 when team misses their bid', () => {
+  it('deducts bid × 10 when team misses their bid', { timeout: 2000 }, () => {
     const { scoreDelta, newBags } = scoreHand({
       bids: { north: 4, east: 4, south: 4, west: 3 },
       teamBids: { ns: 8, ew: 7 },
@@ -44,8 +44,8 @@ describe('scoreHand — basic team bid', () => {
   })
 })
 
-describe('scoreHand — nil bid', () => {
-  it('awards +50 for a successful nil', () => {
+describe('scoreHand — nil bid', { timeout: 2000 }, () => {
+  it('awards +50 for a successful nil', { timeout: 2000 }, () => {
     const { scoreDelta } = scoreHand({
       bids: { north: 'nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -55,7 +55,7 @@ describe('scoreHand — nil bid', () => {
     assert.equal(scoreDelta.ns, 50 + 50)
   })
 
-  it('deducts -50 for a failed nil', () => {
+  it('deducts -50 for a failed nil', { timeout: 2000 }, () => {
     const { scoreDelta, newBags } = scoreHand({
       bids: { north: 'nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -67,7 +67,7 @@ describe('scoreHand — nil bid', () => {
     assert.equal(newBags.ns, 0)
   })
 
-  it('nil bidder tricks that push team over bid create bags', () => {
+  it('nil bidder tricks that push team over bid create bags', { timeout: 2000 }, () => {
     const { scoreDelta, newBags } = scoreHand({
       bids: { north: 'nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -81,8 +81,8 @@ describe('scoreHand — nil bid', () => {
   })
 })
 
-describe('scoreHand — blind nil bid', () => {
-  it('awards +100 for a successful blind nil', () => {
+describe('scoreHand — blind nil bid', { timeout: 2000 }, () => {
+  it('awards +100 for a successful blind nil', { timeout: 2000 }, () => {
     const { scoreDelta } = scoreHand({
       bids: { north: 'blind_nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -91,7 +91,7 @@ describe('scoreHand — blind nil bid', () => {
     assert.ok(scoreDelta.ns >= 100 + 50) // +100 blind nil + +50 team
   })
 
-  it('deducts -100 for a failed blind nil', () => {
+  it('deducts -100 for a failed blind nil', { timeout: 2000 }, () => {
     const { scoreDelta } = scoreHand({
       bids: { north: 'blind_nil', east: 4, south: 5, west: 3 },
       teamBids: { ns: 5, ew: 7 },
@@ -103,8 +103,8 @@ describe('scoreHand — blind nil bid', () => {
   })
 })
 
-describe('scoreHand — double nil', () => {
-  it('awards +50 to each successful individual nil in a double nil', () => {
+describe('scoreHand — double nil', { timeout: 2000 }, () => {
+  it('awards +50 to each successful individual nil in a double nil', { timeout: 2000 }, () => {
     const { scoreDelta, newBags } = scoreHand({
       bids: { north: 'nil', east: 4, south: 'nil', west: 3 },
       teamBids: { ns: null, ew: 7 },
@@ -115,7 +115,7 @@ describe('scoreHand — double nil', () => {
     assert.equal(newBags.ns, 0)
   })
 
-  it('every trick in double nil is a bag and breaks individual nil', () => {
+  it('every trick in double nil is a bag and breaks individual nil', { timeout: 2000 }, () => {
     const { scoreDelta, newBags } = scoreHand({
       bids: { north: 'nil', east: 4, south: 'nil', west: 3 },
       teamBids: { ns: null, ew: 7 },
@@ -127,8 +127,8 @@ describe('scoreHand — double nil', () => {
   })
 })
 
-describe('scoreHand — team bid of 0', () => {
-  it('every trick is a bag when team bids 0', () => {
+describe('scoreHand — team bid of 0', { timeout: 2000 }, () => {
+  it('every trick is a bag when team bids 0', { timeout: 2000 }, () => {
     const { scoreDelta, newBags } = scoreHand({
       bids: { north: 0, east: 4, south: 0, west: 3 },
       teamBids: { ns: 0, ew: 7 },
@@ -140,8 +140,8 @@ describe('scoreHand — team bid of 0', () => {
   })
 })
 
-describe('applyBagPenalties', () => {
-  it('deducts 100 points per 10 bags accumulated', () => {
+describe('applyBagPenalties', { timeout: 2000 }, () => {
+  it('deducts 100 points per 10 bags accumulated', { timeout: 2000 }, () => {
     const { scores, bags } = applyBagPenalties(
       { ns: 150, ew: 100 },
       { ns: 9, ew: 5 },
@@ -155,7 +155,7 @@ describe('applyBagPenalties', () => {
     assert.equal(bags.ew, 7)
   })
 
-  it('deducts 200 when accumulating 20+ bags', () => {
+  it('deducts 200 when accumulating 20+ bags', { timeout: 2000 }, () => {
     const { scores, bags } = applyBagPenalties(
       { ns: 300, ew: 100 },
       { ns: 15, ew: 0 },
@@ -166,7 +166,7 @@ describe('applyBagPenalties', () => {
     assert.equal(bags.ns, 3)
   })
 
-  it('does not deduct when fewer than 10 bags total', () => {
+  it('does not deduct when fewer than 10 bags total', { timeout: 2000 }, () => {
     const { scores, bags } = applyBagPenalties(
       { ns: 100, ew: 100 },
       { ns: 4, ew: 4 },
@@ -179,45 +179,45 @@ describe('applyBagPenalties', () => {
   })
 })
 
-describe('checkWinLoss', () => {
-  it('returns win for team that reaches 250', () => {
+describe('checkWinLoss', { timeout: 2000 }, () => {
+  it('returns win for team that reaches 250', { timeout: 2000 }, () => {
     const result = checkWinLoss({ ns: 250, ew: 100 })
     assert.equal(result.winner, 'ns')
     assert.equal(result.loser, 'ew')
   })
 
-  it('returns win for higher-scoring team when both reach 250', () => {
+  it('returns win for higher-scoring team when both reach 250', { timeout: 2000 }, () => {
     const result = checkWinLoss({ ns: 260, ew: 255 })
     assert.equal(result.winner, 'ns')
   })
 
-  it('returns null when tied at exactly 250 (play another hand)', () => {
+  it('returns null when tied at exactly 250 (play another hand)', { timeout: 2000 }, () => {
     const result = checkWinLoss({ ns: 250, ew: 250 })
     assert.equal(result, null)
   })
 
-  it('returns loss for team that reaches -250', () => {
+  it('returns loss for team that reaches -250', { timeout: 2000 }, () => {
     const result = checkWinLoss({ ns: -250, ew: 100 })
     assert.equal(result.loser, 'ns')
     assert.equal(result.winner, 'ew')
   })
 
-  it('higher score wins when both reach -250', () => {
+  it('higher score wins when both reach -250', { timeout: 2000 }, () => {
     const result = checkWinLoss({ ns: -260, ew: -255 })
     assert.equal(result.winner, 'ew') // ew has higher score
   })
 
-  it('returns null when tied at exactly -250 (play another hand)', () => {
+  it('returns null when tied at exactly -250 (play another hand)', { timeout: 2000 }, () => {
     const result = checkWinLoss({ ns: -250, ew: -250 })
     assert.equal(result, null)
   })
 
-  it('returns null when neither threshold is reached', () => {
+  it('returns null when neither threshold is reached', { timeout: 2000 }, () => {
     const result = checkWinLoss({ ns: 100, ew: 150 })
     assert.equal(result, null)
   })
 
-  it('win condition takes priority over loss when one team hits 250 and other hits -250', () => {
+  it('win condition takes priority over loss when one team hits 250 and other hits -250', { timeout: 2000 }, () => {
     // Both conditions — winner is the team above 250
     const result = checkWinLoss({ ns: 250, ew: -250 })
     assert.equal(result.winner, 'ns')

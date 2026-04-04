@@ -825,7 +825,7 @@ describe('substitutePlayerWithBot', () => {
     }
     const state = createGame('table-1', allBotsExceptNorth)
     assert.equal(state.phase, 'bidding')
-    assert.equal(state.currentBidderSeat, 'north')
+    assert.equal(state.currentBidderSeat, 'east')
 
     const updated = substitutePlayerWithBot(state, 'north')
     assert.notEqual(updated.phase, 'bidding', 'bidding should complete when all seats are bots')

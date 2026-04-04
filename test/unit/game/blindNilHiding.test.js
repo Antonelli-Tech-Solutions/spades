@@ -28,20 +28,20 @@ function makeNoEligibleState() {
 
 // ── getPlayerView: hand hiding ──────────────────────────────────────────────
 
-describe('getPlayerView — Blind Nil hand hiding', () => {
-  it('eligible player does not receive myHand before revealing', () => {
+describe('getPlayerView — Blind Nil hand hiding', { timeout: 2000 }, () => {
+  it('eligible player does not receive myHand before revealing', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const view = getPlayerView(state, 'north')
     assert.equal(view.myHand, undefined, 'myHand should be omitted for eligible player')
   })
 
-  it('eligible player has blindNilEligible: true before revealing', () => {
+  it('eligible player has blindNilEligible: true before revealing', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const view = getPlayerView(state, 'north')
     assert.equal(view.blindNilEligible, true)
   })
 
-  it('both NS players are eligible when NS is 100+ behind', () => {
+  it('both NS players are eligible when NS is 100+ behind', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const northView = getPlayerView(state, 'north')
     const southView = getPlayerView(state, 'south')
@@ -51,7 +51,7 @@ describe('getPlayerView — Blind Nil hand hiding', () => {
     assert.equal(southView.blindNilEligible, true)
   })
 
-  it('ineligible team (EW) receives full hand immediately', () => {
+  it('ineligible team (EW) receives full hand immediately', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const eastView = getPlayerView(state, 'east')
     const westView = getPlayerView(state, 'west')
@@ -61,13 +61,13 @@ describe('getPlayerView — Blind Nil hand hiding', () => {
     assert.equal(westView.myHand.length, 13)
   })
 
-  it('ineligible player has blindNilEligible: false', () => {
+  it('ineligible player has blindNilEligible: false', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const eastView = getPlayerView(state, 'east')
     assert.equal(eastView.blindNilEligible, false, 'blindNilEligible must be false for ineligible player')
   })
 
-  it('eligible player receives myHand after reveal-hand', () => {
+  it('eligible player receives myHand after reveal-hand', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const revealed = revealHand(state, 'north')
     const view = getPlayerView(revealed, 'north')
@@ -75,14 +75,14 @@ describe('getPlayerView — Blind Nil hand hiding', () => {
     assert.equal(view.myHand.length, 13)
   })
 
-  it('HAND_REVEALED is not sent before reveal-hand — south still hidden after north reveals', () => {
+  it('HAND_REVEALED is not sent before reveal-hand — south still hidden after north reveals', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const revealedNorth = revealHand(state, 'north')
     const southView = getPlayerView(revealedNorth, 'south')
     assert.equal(southView.myHand, undefined, 'south hand should still be hidden')
   })
 
-  it('when no team is eligible all players receive their hand immediately', () => {
+  it('when no team is eligible all players receive their hand immediately', { timeout: 2000 }, () => {
     const state = makeNoEligibleState()
     for (const seat of ['north', 'east', 'south', 'west']) {
       const view = getPlayerView(state, seat)
@@ -94,8 +94,8 @@ describe('getPlayerView — Blind Nil hand hiding', () => {
 
 // ── revealHand: validation ──────────────────────────────────────────────────
 
-describe('revealHand — validation', () => {
-  it('rejects if player is not eligible for Blind Nil', () => {
+describe('revealHand — validation', { timeout: 2000 }, () => {
+  it('rejects if player is not eligible for Blind Nil', { timeout: 2000 }, () => {
     const state = makeNsEligibleState() // EW is not eligible
     assert.throws(
       () => revealHand(state, 'east'),
@@ -106,7 +106,7 @@ describe('revealHand — validation', () => {
     )
   })
 
-  it('rejects if player has already placed a bid', () => {
+  it('rejects if player has already placed a bid', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     // Directly set a bid for north (last in bidding order for north dealer)
     const stateWithBid = { ...state, bids: { ...state.bids, north: 4 } }
@@ -119,7 +119,7 @@ describe('revealHand — validation', () => {
     )
   })
 
-  it('rejects if game is not in bidding phase', () => {
+  it('rejects if game is not in bidding phase', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const playingState = { ...state, phase: 'playing' }
     assert.throws(
@@ -131,13 +131,13 @@ describe('revealHand — validation', () => {
     )
   })
 
-  it('succeeds and returns state with seat in handRevealedSeats', () => {
+  it('succeeds and returns state with seat in handRevealedSeats', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     const newState = revealHand(state, 'north')
     assert.ok(newState.handRevealedSeats.includes('north'))
   })
 
-  it('does not mutate original state', () => {
+  it('does not mutate original state', { timeout: 2000 }, () => {
     const state = makeNsEligibleState()
     revealHand(state, 'north')
     assert.deepEqual(state.handRevealedSeats, [])
@@ -146,8 +146,8 @@ describe('revealHand — validation', () => {
 
 // ── Bid Blind Nil directly — hand never revealed ────────────────────────────
 
-describe('Blind Nil bid without reveal — hand remains hidden during bidding', () => {
-  it('eligible player who bids Blind Nil directly never reveals their hand during bidding', () => {
+describe('Blind Nil bid without reveal — hand remains hidden during bidding', { timeout: 2000 }, () => {
+  it('eligible player who bids Blind Nil directly never reveals their hand during bidding', { timeout: 2000 }, () => {
     // North dealer → bidding order: east, south, west, north
     // NS is eligible; east bids first (EW), south bids second (NS)
     // Have east bid, then south bid blind_nil directly (without calling reveal-hand)

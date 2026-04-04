@@ -80,7 +80,7 @@ describe('POST /api/auth/login', { skip }, () => {
     await closeRedis()
   })
 
-  it('returns 200 with sessionId, playerId, and username on valid credentials', async () => {
+  it('returns 200 with sessionId, playerId, and username on valid credentials', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,7 +93,7 @@ describe('POST /api/auth/login', { skip }, () => {
     assert.ok(body.username, 'response should include username')
   })
 
-  it('stores the session in Redis under session:{sessionId}', async () => {
+  it('stores the session in Redis under session:{sessionId}', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -107,7 +107,7 @@ describe('POST /api/auth/login', { skip }, () => {
     assert.equal(session.username, body.username)
   })
 
-  it('returns 401 for a wrong password', async () => {
+  it('returns 401 for a wrong password', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,7 +116,7 @@ describe('POST /api/auth/login', { skip }, () => {
     assert.equal(res.status, 401)
   })
 
-  it('returns 401 for an unknown email', async () => {
+  it('returns 401 for an unknown email', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -125,7 +125,7 @@ describe('POST /api/auth/login', { skip }, () => {
     assert.equal(res.status, 401)
   })
 
-  it('returns 403 for an unverified account', async () => {
+  it('returns 403 for an unverified account', { timeout: 10000 }, async () => {
     const hash = await bcrypt.hash('password123', 4)
     await db.query(
       `INSERT INTO players (email, username, password_hash, is_verified)
@@ -144,7 +144,7 @@ describe('POST /api/auth/login', { skip }, () => {
     assert.equal(res.status, 403)
   })
 
-  it('returns 400 when email is missing', async () => {
+  it('returns 400 when email is missing', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -153,7 +153,7 @@ describe('POST /api/auth/login', { skip }, () => {
     assert.equal(res.status, 400)
   })
 
-  it('returns 400 when password is missing', async () => {
+  it('returns 400 when password is missing', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -186,7 +186,7 @@ describe('POST /api/auth/logout', { skip }, () => {
     await closeRedis()
   })
 
-  it('returns 200 and removes the session from Redis', async () => {
+  it('returns 200 and removes the session from Redis', { timeout: 10000 }, async () => {
     const loginRes = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -204,14 +204,14 @@ describe('POST /api/auth/logout', { skip }, () => {
     assert.equal(stored, null, 'session should be deleted from Redis after logout')
   })
 
-  it('returns 200 when no session header is provided (idempotent logout)', async () => {
+  it('returns 200 when no session header is provided (idempotent logout)', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/logout`, {
       method: 'POST',
     })
     assert.equal(res.status, 200)
   })
 
-  it('removes the player from any waiting table they are seated at', async () => {
+  it('removes the player from any waiting table they are seated at', { timeout: 10000 }, async () => {
     const loginRes = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -273,7 +273,7 @@ describe('Auth header validation', { skip }, () => {
     await closeRedis()
   })
 
-  it('a valid session grants access to protected routes', async () => {
+  it('a valid session grants access to protected routes', { timeout: 10000 }, async () => {
     const loginRes = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -288,7 +288,7 @@ describe('Auth header validation', { skip }, () => {
     assert.equal(session.playerId, playerId)
   })
 
-  it('session is expired/absent after logout', async () => {
+  it('session is expired/absent after logout', { timeout: 10000 }, async () => {
     const loginRes = await fetch(`${server.baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

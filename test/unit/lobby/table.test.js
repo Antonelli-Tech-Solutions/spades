@@ -15,30 +15,30 @@ function makeTable(overrides = {}) {
   }
 }
 
-describe('isTableFull', () => {
-  it('returns false when no seats are filled (0/4)', () => {
+describe('isTableFull', { timeout: 2000 }, () => {
+  it('returns false when no seats are filled (0/4)', { timeout: 2000 }, () => {
     const table = makeTable()
     assert.equal(isTableFull(table), false)
   })
 
-  it('returns false when 1 seat is filled (1/4)', () => {
+  it('returns false when 1 seat is filled (1/4)', { timeout: 2000 }, () => {
     const table = makeTable({ seats: { north: 'player-1', east: null, south: null, west: null } })
     assert.equal(isTableFull(table), false)
   })
 
-  it('returns false when 2 seats are filled (2/4)', () => {
+  it('returns false when 2 seats are filled (2/4)', { timeout: 2000 }, () => {
     const table = makeTable({ seats: { north: 'player-1', east: 'player-2', south: null, west: null } })
     assert.equal(isTableFull(table), false)
   })
 
-  it('returns false when 3 seats are filled (3/4)', () => {
+  it('returns false when 3 seats are filled (3/4)', { timeout: 2000 }, () => {
     const table = makeTable({
       seats: { north: 'player-1', east: 'player-2', south: 'player-3', west: null },
     })
     assert.equal(isTableFull(table), false)
   })
 
-  it('returns true when all 4 seats are filled (4/4)', () => {
+  it('returns true when all 4 seats are filled (4/4)', { timeout: 2000 }, () => {
     const table = makeTable({
       seats: {
         north: 'player-1',

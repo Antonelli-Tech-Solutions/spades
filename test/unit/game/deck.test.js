@@ -11,13 +11,13 @@ import {
   RANKS,
 } from '../../../server/game/deck.js'
 
-describe('createDeck', () => {
-  it('returns 52 cards', () => {
+describe('createDeck', { timeout: 2000 }, () => {
+  it('returns 52 cards', { timeout: 2000 }, () => {
     const deck = createDeck()
     assert.equal(deck.length, 52)
   })
 
-  it('has 13 cards per suit', () => {
+  it('has 13 cards per suit', { timeout: 2000 }, () => {
     const deck = createDeck()
     for (const suit of SUITS) {
       const count = deck.filter((c) => c.suit === suit).length
@@ -25,7 +25,7 @@ describe('createDeck', () => {
     }
   })
 
-  it('has 4 of each rank', () => {
+  it('has 4 of each rank', { timeout: 2000 }, () => {
     const deck = createDeck()
     for (const rank of RANKS) {
       const count = deck.filter((c) => c.rank === rank).length
@@ -33,28 +33,28 @@ describe('createDeck', () => {
     }
   })
 
-  it('has no duplicate cards', () => {
+  it('has no duplicate cards', { timeout: 2000 }, () => {
     const deck = createDeck()
     const unique = new Set(deck.map((c) => `${c.suit}:${c.rank}`))
     assert.equal(unique.size, 52)
   })
 })
 
-describe('shuffle', () => {
-  it('returns a deck with 52 cards', () => {
+describe('shuffle', { timeout: 2000 }, () => {
+  it('returns a deck with 52 cards', { timeout: 2000 }, () => {
     const deck = createDeck()
     const shuffled = shuffle(deck)
     assert.equal(shuffled.length, 52)
   })
 
-  it('does not mutate the original deck', () => {
+  it('does not mutate the original deck', { timeout: 2000 }, () => {
     const deck = createDeck()
     const original = deck.map((c) => ({ ...c }))
     shuffle(deck)
     assert.deepEqual(deck, original)
   })
 
-  it('contains the same cards as the original', () => {
+  it('contains the same cards as the original', { timeout: 2000 }, () => {
     const deck = createDeck()
     const shuffled = shuffle(deck)
     const toKey = (c) => `${c.suit}:${c.rank}`
@@ -65,8 +65,8 @@ describe('shuffle', () => {
   })
 })
 
-describe('deal', () => {
-  it('returns 4 hands of 13 cards each', () => {
+describe('deal', { timeout: 2000 }, () => {
+  it('returns 4 hands of 13 cards each', { timeout: 2000 }, () => {
     const deck = shuffle(createDeck())
     const hands = deal(deck)
     for (const seat of ['north', 'east', 'south', 'west']) {
@@ -74,7 +74,7 @@ describe('deal', () => {
     }
   })
 
-  it('distributes all 52 cards without duplication', () => {
+  it('distributes all 52 cards without duplication', { timeout: 2000 }, () => {
     const deck = shuffle(createDeck())
     const hands = deal(deck)
     const allCards = [
@@ -89,8 +89,8 @@ describe('deal', () => {
   })
 })
 
-describe('sortHand', () => {
-  it('sorts spades before hearts before clubs before diamonds', () => {
+describe('sortHand', { timeout: 2000 }, () => {
+  it('sorts spades before hearts before clubs before diamonds', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'spades', rank: '2' },
       { suit: 'hearts', rank: '3' },
@@ -104,7 +104,7 @@ describe('sortHand', () => {
     assert.equal(sorted[3].suit, 'diamonds')
   })
 
-  it('sorts by rank descending within the same suit', () => {
+  it('sorts by rank descending within the same suit', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'clubs', rank: 'A' },
       { suit: 'clubs', rank: '2' },
@@ -118,7 +118,7 @@ describe('sortHand', () => {
     )
   })
 
-  it('does not mutate the original hand', () => {
+  it('does not mutate the original hand', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'spades', rank: 'A' },
       { suit: 'clubs', rank: '2' },
@@ -129,40 +129,40 @@ describe('sortHand', () => {
   })
 })
 
-describe('rankValue', () => {
-  it('returns a higher value for A than K', () => {
+describe('rankValue', { timeout: 2000 }, () => {
+  it('returns a higher value for A than K', { timeout: 2000 }, () => {
     assert.ok(rankValue('A') > rankValue('K'))
   })
 
-  it('returns a higher value for K than Q', () => {
+  it('returns a higher value for K than Q', { timeout: 2000 }, () => {
     assert.ok(rankValue('K') > rankValue('Q'))
   })
 
-  it('returns a higher value for 10 than 9', () => {
+  it('returns a higher value for 10 than 9', { timeout: 2000 }, () => {
     assert.ok(rankValue('10') > rankValue('9'))
   })
 
-  it('returns a higher value for J than 10', () => {
+  it('returns a higher value for J than 10', { timeout: 2000 }, () => {
     assert.ok(rankValue('J') > rankValue('10'))
   })
 
-  it('returns the lowest value for 2', () => {
+  it('returns the lowest value for 2', { timeout: 2000 }, () => {
     for (const r of RANKS.filter((r) => r !== '2')) {
       assert.ok(rankValue('2') < rankValue(r), `2 should be less than ${r}`)
     }
   })
 })
 
-describe('cardEquals', () => {
-  it('returns true for the same card', () => {
+describe('cardEquals', { timeout: 2000 }, () => {
+  it('returns true for the same card', { timeout: 2000 }, () => {
     assert.ok(cardEquals({ suit: 'spades', rank: 'A' }, { suit: 'spades', rank: 'A' }))
   })
 
-  it('returns false when suit differs', () => {
+  it('returns false when suit differs', { timeout: 2000 }, () => {
     assert.ok(!cardEquals({ suit: 'spades', rank: 'A' }, { suit: 'hearts', rank: 'A' }))
   })
 
-  it('returns false when rank differs', () => {
+  it('returns false when rank differs', { timeout: 2000 }, () => {
     assert.ok(!cardEquals({ suit: 'spades', rank: 'A' }, { suit: 'spades', rank: 'K' }))
   })
 })

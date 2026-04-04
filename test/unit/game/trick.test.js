@@ -2,8 +2,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { getLegalPlays, determineTrickWinner, isCardLegal } from '../../../server/game/trick.js'
 
-describe('getLegalPlays — leading a trick', () => {
-  it('allows any non-spade on the first trick of a hand', () => {
+describe('getLegalPlays — leading a trick', { timeout: 2000 }, () => {
+  it('allows any non-spade on the first trick of a hand', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'clubs', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -14,7 +14,7 @@ describe('getLegalPlays — leading a trick', () => {
     assert.ok(legal.every((c) => c.suit !== 'spades'))
   })
 
-  it('on the first trick, if a player has ONLY spades they must play spades', () => {
+  it('on the first trick, if a player has ONLY spades they must play spades', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'spades', rank: 'A' },
       { suit: 'spades', rank: '2' },
@@ -24,7 +24,7 @@ describe('getLegalPlays — leading a trick', () => {
     assert.ok(legal.every((c) => c.suit === 'spades'))
   })
 
-  it('cannot lead spades before spades are broken (and has non-spades)', () => {
+  it('cannot lead spades before spades are broken (and has non-spades)', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'clubs', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -34,7 +34,7 @@ describe('getLegalPlays — leading a trick', () => {
     assert.equal(legal[0].suit, 'clubs')
   })
 
-  it('can lead spades once spades are broken', () => {
+  it('can lead spades once spades are broken', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'clubs', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -43,7 +43,7 @@ describe('getLegalPlays — leading a trick', () => {
     assert.equal(legal.length, 2)
   })
 
-  it('can lead any card when spades not broken but player has only spades', () => {
+  it('can lead any card when spades not broken but player has only spades', { timeout: 2000 }, () => {
     const hand = [{ suit: 'spades', rank: 'A' }]
     const legal = getLegalPlays(hand, [], false, false)
     assert.equal(legal.length, 1)
@@ -51,8 +51,8 @@ describe('getLegalPlays — leading a trick', () => {
   })
 })
 
-describe('getLegalPlays — following a trick', () => {
-  it('must follow suit if possible', () => {
+describe('getLegalPlays — following a trick', { timeout: 2000 }, () => {
+  it('must follow suit if possible', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'clubs', rank: 'A' },
       { suit: 'clubs', rank: '5' },
@@ -64,7 +64,7 @@ describe('getLegalPlays — following a trick', () => {
     assert.ok(legal.every((c) => c.suit === 'clubs'))
   })
 
-  it('may play any card when unable to follow suit', () => {
+  it('may play any card when unable to follow suit', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'spades', rank: 'A' },
       { suit: 'hearts', rank: '5' },
@@ -74,7 +74,7 @@ describe('getLegalPlays — following a trick', () => {
     assert.equal(legal.length, 2)
   })
 
-  it('on the first trick, cannot play spades when unable to follow suit if non-spades exist', () => {
+  it('on the first trick, cannot play spades when unable to follow suit if non-spades exist', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'hearts', rank: '5' },
       { suit: 'spades', rank: 'A' },
@@ -86,7 +86,7 @@ describe('getLegalPlays — following a trick', () => {
     assert.equal(legal[0].suit, 'hearts')
   })
 
-  it('on the first trick, must play spades if only spades available when unable to follow suit', () => {
+  it('on the first trick, must play spades if only spades available when unable to follow suit', { timeout: 2000 }, () => {
     const hand = [{ suit: 'spades', rank: 'A' }]
     const trick = [{ seat: 'north', card: { suit: 'clubs', rank: '2' } }]
     const legal = getLegalPlays(hand, trick, false, true)
@@ -95,8 +95,8 @@ describe('getLegalPlays — following a trick', () => {
   })
 })
 
-describe('determineTrickWinner', () => {
-  it('highest card of led suit wins when no spades played', () => {
+describe('determineTrickWinner', { timeout: 2000 }, () => {
+  it('highest card of led suit wins when no spades played', { timeout: 2000 }, () => {
     const trick = [
       { seat: 'north', card: { suit: 'clubs', rank: 'A' } },
       { seat: 'east', card: { suit: 'clubs', rank: '3' } },
@@ -106,7 +106,7 @@ describe('determineTrickWinner', () => {
     assert.equal(determineTrickWinner(trick), 'north')
   })
 
-  it('spade beats highest non-spade of led suit', () => {
+  it('spade beats highest non-spade of led suit', { timeout: 2000 }, () => {
     const trick = [
       { seat: 'north', card: { suit: 'clubs', rank: 'A' } },
       { seat: 'east', card: { suit: 'spades', rank: '2' } },
@@ -116,7 +116,7 @@ describe('determineTrickWinner', () => {
     assert.equal(determineTrickWinner(trick), 'east')
   })
 
-  it('highest spade wins when multiple spades played', () => {
+  it('highest spade wins when multiple spades played', { timeout: 2000 }, () => {
     const trick = [
       { seat: 'north', card: { suit: 'clubs', rank: 'A' } },
       { seat: 'east', card: { suit: 'spades', rank: '5' } },
@@ -126,7 +126,7 @@ describe('determineTrickWinner', () => {
     assert.equal(determineTrickWinner(trick), 'south')
   })
 
-  it('off-suit cards (not spades, not led suit) never win', () => {
+  it('off-suit cards (not spades, not led suit) never win', { timeout: 2000 }, () => {
     const trick = [
       { seat: 'north', card: { suit: 'clubs', rank: '2' } },
       { seat: 'east', card: { suit: 'hearts', rank: 'A' } }, // off-suit, irrelevant
@@ -136,7 +136,7 @@ describe('determineTrickWinner', () => {
     assert.equal(determineTrickWinner(trick), 'west')
   })
 
-  it('first spade played wins if it is the only spade', () => {
+  it('first spade played wins if it is the only spade', { timeout: 2000 }, () => {
     const trick = [
       { seat: 'north', card: { suit: 'hearts', rank: 'A' } },
       { seat: 'east', card: { suit: 'spades', rank: '2' } },
@@ -147,21 +147,21 @@ describe('determineTrickWinner', () => {
   })
 })
 
-describe('isCardLegal', () => {
-  it('returns false if card not in hand', () => {
+describe('isCardLegal', { timeout: 2000 }, () => {
+  it('returns false if card not in hand', { timeout: 2000 }, () => {
     const hand = [{ suit: 'clubs', rank: 'A' }]
     assert.ok(
       !isCardLegal({ suit: 'spades', rank: 'K' }, hand, [], false, false),
     )
   })
 
-  it('returns true if card is a legal play', () => {
+  it('returns true if card is a legal play', { timeout: 2000 }, () => {
     const hand = [{ suit: 'clubs', rank: 'A' }]
     const trick = [{ seat: 'north', card: { suit: 'clubs', rank: '2' } }]
     assert.ok(isCardLegal({ suit: 'clubs', rank: 'A' }, hand, trick, false, false))
   })
 
-  it('returns false if play violates suit-following rule', () => {
+  it('returns false if play violates suit-following rule', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'clubs', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -171,7 +171,7 @@ describe('isCardLegal', () => {
     assert.ok(!isCardLegal({ suit: 'spades', rank: 'K' }, hand, trick, false, false))
   })
 
-  it('returns false if leading spades on first trick when non-spades available', () => {
+  it('returns false if leading spades on first trick when non-spades available', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'clubs', rank: 'A' },
       { suit: 'spades', rank: 'K' },

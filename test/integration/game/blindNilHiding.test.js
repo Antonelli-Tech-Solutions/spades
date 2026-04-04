@@ -160,7 +160,7 @@ describe('Blind Nil hand hiding — integration', { skip }, () => {
     await closeRedis()
   })
 
-  it('eligible player hand is withheld on initial state fetch', async () => {
+  it('eligible player hand is withheld on initial state fetch', { timeout: 10000 }, async () => {
     const { tableId, seatMap } = await setupEligibleGame(server.baseUrl, players)
 
     const northRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
@@ -176,7 +176,7 @@ describe('Blind Nil hand hiding — integration', { skip }, () => {
     assert.equal(northState.myHand, undefined, 'north myHand should be withheld')
   })
 
-  it('ineligible team (EW) receives full hand immediately', async () => {
+  it('ineligible team (EW) receives full hand immediately', { timeout: 10000 }, async () => {
     const { tableId, seatMap } = await setupEligibleGame(server.baseUrl, players)
 
     const eastRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
@@ -192,7 +192,7 @@ describe('Blind Nil hand hiding — integration', { skip }, () => {
     assert.equal(eastState.myHand.length, 13)
   })
 
-  it('reveal-then-bid: eligible player reveals hand then bids normally', async () => {
+  it('reveal-then-bid: eligible player reveals hand then bids normally', { timeout: 10000 }, async () => {
     const { tableId, seatMap } = await setupEligibleGame(server.baseUrl, players)
 
     const northHdrs = {
@@ -252,7 +252,7 @@ describe('Blind Nil hand hiding — integration', { skip }, () => {
     )
   })
 
-  it('bid-blind-nil-directly: eligible player bids Blind Nil without revealing', async () => {
+  it('bid-blind-nil-directly: eligible player bids Blind Nil without revealing', { timeout: 10000 }, async () => {
     const { tableId, seatMap } = await setupEligibleGame(server.baseUrl, players)
 
     // Bidding order with north dealer: east, south, west, north
@@ -313,7 +313,7 @@ describe('Blind Nil hand hiding — integration', { skip }, () => {
     )
   })
 
-  it('reveal-hand is rejected if player has already placed a bid', async () => {
+  it('reveal-hand is rejected if player has already placed a bid', { timeout: 10000 }, async () => {
     const { tableId, seatMap } = await setupEligibleGame(server.baseUrl, players)
 
     // Inject a state where north has already bid (non-null) but phase is still 'bidding'
@@ -340,7 +340,7 @@ describe('Blind Nil hand hiding — integration', { skip }, () => {
     assert.ok(body.error, 'error message should be present')
   })
 
-  it('reveal-hand is rejected if player is not eligible', async () => {
+  it('reveal-hand is rejected if player is not eligible', { timeout: 10000 }, async () => {
     // Create a fresh game with default scores (nobody eligible)
     const seats = ['north', 'east', 'south', 'west']
     const seatMap = {}

@@ -13,8 +13,8 @@ function mockFetch(status, body) {
   })
 }
 
-describe('registerUser', () => {
-  it('resolves with the response body on 201', async () => {
+describe('registerUser', { timeout: 2000 }, () => {
+  it('resolves with the response body on 201', { timeout: 2000 }, async () => {
     const result = await registerUser(
       { email: 'a@b.com', username: 'alice', password: 'password123' },
       mockFetch(201, { playerId: 'uuid-123', message: 'Registration successful.' }),
@@ -22,7 +22,7 @@ describe('registerUser', () => {
     assert.equal(result.playerId, 'uuid-123')
   })
 
-  it('resolves with sessionId and username when DEV_AUTO_VERIFY is active', async () => {
+  it('resolves with sessionId and username when DEV_AUTO_VERIFY is active', { timeout: 2000 }, async () => {
     const result = await registerUser(
       { email: 'a@b.com', username: 'alice', password: 'password123' },
       mockFetch(201, { sessionId: 'sess-abc', playerId: 'uuid-123', username: 'alice' }),
@@ -32,7 +32,7 @@ describe('registerUser', () => {
     assert.equal(result.username, 'alice')
   })
 
-  it('throws with status 409 on duplicate email/username', async () => {
+  it('throws with status 409 on duplicate email/username', { timeout: 2000 }, async () => {
     await assert.rejects(
       () =>
         registerUser(
@@ -47,7 +47,7 @@ describe('registerUser', () => {
     )
   })
 
-  it('throws with status 400 on validation error', async () => {
+  it('throws with status 400 on validation error', { timeout: 2000 }, async () => {
     await assert.rejects(
       () =>
         registerUser(
@@ -61,7 +61,7 @@ describe('registerUser', () => {
     )
   })
 
-  it('throws a generic message when response body has no error field', async () => {
+  it('throws a generic message when response body has no error field', { timeout: 2000 }, async () => {
     await assert.rejects(
       () =>
         registerUser(
@@ -76,8 +76,8 @@ describe('registerUser', () => {
   })
 })
 
-describe('resendVerification', () => {
-  it('resolves on 200', async () => {
+describe('resendVerification', { timeout: 2000 }, () => {
+  it('resolves on 200', { timeout: 2000 }, async () => {
     const result = await resendVerification(
       { email: 'a@b.com' },
       mockFetch(200, { message: 'If this email is registered and unverified, a new link has been sent.' }),
@@ -85,7 +85,7 @@ describe('resendVerification', () => {
     assert.ok(result.message)
   })
 
-  it('throws on network/server error', async () => {
+  it('throws on network/server error', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => resendVerification({ email: 'a@b.com' }, mockFetch(500, { error: 'Internal server error' })),
       (err) => {
@@ -96,8 +96,8 @@ describe('resendVerification', () => {
   })
 })
 
-describe('forgotPassword', () => {
-  it('resolves on 200', async () => {
+describe('forgotPassword', { timeout: 2000 }, () => {
+  it('resolves on 200', { timeout: 2000 }, async () => {
     const result = await forgotPassword(
       { email: 'a@b.com' },
       mockFetch(200, { message: 'If that email is registered, a reset link has been sent.' }),
@@ -105,7 +105,7 @@ describe('forgotPassword', () => {
     assert.ok(result.message)
   })
 
-  it('throws on server error', async () => {
+  it('throws on server error', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => forgotPassword({ email: 'a@b.com' }, mockFetch(500, { error: 'Internal server error' })),
       (err) => {
@@ -116,8 +116,8 @@ describe('forgotPassword', () => {
   })
 })
 
-describe('resetPassword', () => {
-  it('resolves with message on 200', async () => {
+describe('resetPassword', { timeout: 2000 }, () => {
+  it('resolves with message on 200', { timeout: 2000 }, async () => {
     const result = await resetPassword(
       { token: 'valid-token', newPassword: 'newpassword123' },
       mockFetch(200, { message: 'Password reset successfully. You may now sign in.' }),
@@ -125,7 +125,7 @@ describe('resetPassword', () => {
     assert.ok(result.message)
   })
 
-  it('throws with status 400 on invalid or expired token', async () => {
+  it('throws with status 400 on invalid or expired token', { timeout: 2000 }, async () => {
     await assert.rejects(
       () =>
         resetPassword(
@@ -140,8 +140,8 @@ describe('resetPassword', () => {
   })
 })
 
-describe('logoutUser', () => {
-  it('resolves with message on 200', async () => {
+describe('logoutUser', { timeout: 2000 }, () => {
+  it('resolves with message on 200', { timeout: 2000 }, async () => {
     const result = await logoutUser(
       { sessionId: 'sess-1' },
       mockFetch(200, { message: 'Logged out successfully.' }),
@@ -149,7 +149,7 @@ describe('logoutUser', () => {
     assert.ok(result.message)
   })
 
-  it('throws on server error', async () => {
+  it('throws on server error', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => logoutUser({ sessionId: 'sess-1' }, mockFetch(500, { error: 'Internal server error' })),
       (err) => {
@@ -160,8 +160,8 @@ describe('logoutUser', () => {
   })
 })
 
-describe('loginUser', () => {
-  it('resolves with sessionId, playerId, and username on 200', async () => {
+describe('loginUser', { timeout: 2000 }, () => {
+  it('resolves with sessionId, playerId, and username on 200', { timeout: 2000 }, async () => {
     const result = await loginUser(
       { email: 'a@b.com', password: 'password123' },
       mockFetch(200, { sessionId: 'sess-1', playerId: 'uuid-1', username: 'alice' }),
@@ -171,7 +171,7 @@ describe('loginUser', () => {
     assert.equal(result.username, 'alice')
   })
 
-  it('throws with status 401 on invalid credentials', async () => {
+  it('throws with status 401 on invalid credentials', { timeout: 2000 }, async () => {
     await assert.rejects(
       () =>
         loginUser(
@@ -185,7 +185,7 @@ describe('loginUser', () => {
     )
   })
 
-  it('throws with status 403 on unverified email', async () => {
+  it('throws with status 403 on unverified email', { timeout: 2000 }, async () => {
     await assert.rejects(
       () =>
         loginUser(
@@ -199,7 +199,7 @@ describe('loginUser', () => {
     )
   })
 
-  it('throws with status 400 when fields are missing', async () => {
+  it('throws with status 400 when fields are missing', { timeout: 2000 }, async () => {
     await assert.rejects(
       () =>
         loginUser(
@@ -214,10 +214,10 @@ describe('loginUser', () => {
   })
 })
 
-describe('createTable', () => {
+describe('createTable', { timeout: 2000 }, () => {
   const auth = { sessionId: 'sess-1', playerId: 'player-1' }
 
-  it('resolves with tableId and name on 201', async () => {
+  it('resolves with tableId and name on 201', { timeout: 2000 }, async () => {
     const result = await createTable(
       { name: 'Friday Night', ...auth },
       mockFetch(201, { tableId: 'table-uuid', name: 'Friday Night' }),
@@ -226,7 +226,7 @@ describe('createTable', () => {
     assert.equal(result.name, 'Friday Night')
   })
 
-  it('resolves with null name when no name provided', async () => {
+  it('resolves with null name when no name provided', { timeout: 2000 }, async () => {
     const result = await createTable(
       { ...auth },
       mockFetch(201, { tableId: 'table-uuid', name: null }),
@@ -235,7 +235,7 @@ describe('createTable', () => {
     assert.equal(result.name, null)
   })
 
-  it('throws with status 401 when unauthenticated', async () => {
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => createTable({ ...auth }, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => {
@@ -245,7 +245,7 @@ describe('createTable', () => {
     )
   })
 
-  it('throws with status 400 when name is too long', async () => {
+  it('throws with status 400 when name is too long', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => createTable(
         { name: 'x'.repeat(51), ...auth },
@@ -260,10 +260,10 @@ describe('createTable', () => {
   })
 })
 
-describe('listTables', () => {
+describe('listTables', { timeout: 2000 }, () => {
   const auth = { sessionId: 'sess-1', playerId: 'player-1' }
 
-  it('resolves with tables array on 200', async () => {
+  it('resolves with tables array on 200', { timeout: 2000 }, async () => {
     const tables = [
       { tableId: 'table-1', name: 'Friday Night', seats: { north: null, east: null, south: null, west: null }, seatsAvailable: 4 },
     ]
@@ -271,12 +271,12 @@ describe('listTables', () => {
     assert.deepEqual(result.tables, tables)
   })
 
-  it('resolves with empty array when no tables', async () => {
+  it('resolves with empty array when no tables', { timeout: 2000 }, async () => {
     const result = await listTables(auth, mockFetch(200, { tables: [] }))
     assert.deepEqual(result.tables, [])
   })
 
-  it('throws with status 401 when unauthenticated', async () => {
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => listTables(auth, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => {
@@ -287,10 +287,10 @@ describe('listTables', () => {
   })
 })
 
-describe('sitAtTable', () => {
+describe('sitAtTable', { timeout: 2000 }, () => {
   const auth = { sessionId: 'sess-1', playerId: 'player-1' }
 
-  it('resolves on 200 with tableId and seat', async () => {
+  it('resolves on 200 with tableId and seat', { timeout: 2000 }, async () => {
     const result = await sitAtTable(
       { tableId: 'table-1', seat: 'north', ...auth },
       mockFetch(200, { tableId: 'table-1', seat: 'north' }),
@@ -299,7 +299,7 @@ describe('sitAtTable', () => {
     assert.equal(result.seat, 'north')
   })
 
-  it('throws with status 409 when seat is taken', async () => {
+  it('throws with status 409 when seat is taken', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => sitAtTable(
         { tableId: 'table-1', seat: 'north', ...auth },
@@ -312,7 +312,7 @@ describe('sitAtTable', () => {
     )
   })
 
-  it('throws with status 401 when unauthenticated', async () => {
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => sitAtTable(
         { tableId: 'table-1', seat: 'north', ...auth },
@@ -326,31 +326,31 @@ describe('sitAtTable', () => {
   })
 })
 
-describe('getGameState', () => {
+describe('getGameState', { timeout: 2000 }, () => {
   const auth = { tableId: 'table-1', sessionId: 'sess-1', playerId: 'player-1' }
 
-  it('resolves with game state on 200', async () => {
+  it('resolves with game state on 200', { timeout: 2000 }, async () => {
     const gameState = { phase: 'bidding', myHand: [], scores: { ns: 0, ew: 0 }, bags: { ns: 0, ew: 0 } }
     const result = await getGameState(auth, mockFetch(200, gameState))
     assert.equal(result.phase, 'bidding')
     assert.deepEqual(result.myHand, [])
   })
 
-  it('throws with status 401 when unauthenticated', async () => {
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => getGameState(auth, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => { assert.equal(err.status, 401); return true },
     )
   })
 
-  it('throws with status 403 when not seated at table', async () => {
+  it('throws with status 403 when not seated at table', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => getGameState(auth, mockFetch(403, { error: 'You are not seated at this table' })),
       (err) => { assert.equal(err.status, 403); return true },
     )
   })
 
-  it('throws with status 404 when table not found', async () => {
+  it('throws with status 404 when table not found', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => getGameState(auth, mockFetch(404, { error: 'Table not found' })),
       (err) => { assert.equal(err.status, 404); return true },
@@ -358,31 +358,31 @@ describe('getGameState', () => {
   })
 })
 
-describe('placeBid', () => {
+describe('placeBid', { timeout: 2000 }, () => {
   const auth = { tableId: 'table-1', bid: 3, sessionId: 'sess-1', playerId: 'player-1' }
 
-  it('resolves with updated state on 200', async () => {
+  it('resolves with updated state on 200', { timeout: 2000 }, async () => {
     const state = { phase: 'bidding', bids: { north: null, east: 3, south: null, west: null }, currentBidderSeat: 'south' }
     const result = await placeBid(auth, mockFetch(200, state))
     assert.equal(result.bids.east, 3)
     assert.equal(result.currentBidderSeat, 'south')
   })
 
-  it('throws with status 409 when not this player\'s turn', async () => {
+  it('throws with status 409 when not this player\'s turn', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => placeBid(auth, mockFetch(409, { error: 'Not your turn to bid' })),
       (err) => { assert.equal(err.status, 409); return true },
     )
   })
 
-  it('throws with status 400 on invalid bid value', async () => {
+  it('throws with status 400 on invalid bid value', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => placeBid({ ...auth, bid: 14 }, mockFetch(400, { error: 'Invalid bid value: 14' })),
       (err) => { assert.equal(err.status, 400); return true },
     )
   })
 
-  it('throws with status 400 when not eligible for blind nil', async () => {
+  it('throws with status 400 when not eligible for blind nil', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => placeBid({ ...auth, bid: 'blind_nil' }, mockFetch(400, { error: 'Not eligible for Blind Nil' })),
       (err) => {
@@ -393,7 +393,7 @@ describe('placeBid', () => {
     )
   })
 
-  it('throws with status 401 when unauthenticated', async () => {
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => placeBid(auth, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => { assert.equal(err.status, 401); return true },
@@ -401,39 +401,39 @@ describe('placeBid', () => {
   })
 })
 
-describe('playCard', () => {
+describe('playCard', { timeout: 2000 }, () => {
   const card = { suit: 'spades', rank: 'A' }
   const auth = { tableId: 'table-1', card, sessionId: 'sess-1', playerId: 'player-1' }
 
-  it('resolves with updated state on 200', async () => {
+  it('resolves with updated state on 200', { timeout: 2000 }, async () => {
     const state = { phase: 'playing', currentTrick: [{ seat: 'east', card }] }
     const result = await playCard(auth, mockFetch(200, state))
     assert.equal(result.phase, 'playing')
     assert.equal(result.currentTrick.length, 1)
   })
 
-  it('throws with status 409 when not this player\'s turn', async () => {
+  it('throws with status 409 when not this player\'s turn', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => playCard(auth, mockFetch(409, { error: 'Not your turn to play' })),
       (err) => { assert.equal(err.status, 409); return true },
     )
   })
 
-  it('throws with status 400 on illegal play', async () => {
+  it('throws with status 400 on illegal play', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => playCard(auth, mockFetch(400, { error: 'Illegal play' })),
       (err) => { assert.equal(err.status, 400); return true },
     )
   })
 
-  it('throws with status 400 when card not in hand', async () => {
+  it('throws with status 400 when card not in hand', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => playCard(auth, mockFetch(400, { error: 'Card not in hand' })),
       (err) => { assert.equal(err.status, 400); return true },
     )
   })
 
-  it('throws with status 401 when unauthenticated', async () => {
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => playCard(auth, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => { assert.equal(err.status, 401); return true },
@@ -441,10 +441,10 @@ describe('playCard', () => {
   })
 })
 
-describe('revealHand', () => {
+describe('revealHand', { timeout: 2000 }, () => {
   const auth = { tableId: 'table-1', sessionId: 'sess-1', playerId: 'player-1' }
 
-  it('resolves with updated state including myHand on 200', async () => {
+  it('resolves with updated state including myHand on 200', { timeout: 2000 }, async () => {
     const hand = Array.from({ length: 13 }, (_, i) => ({ suit: 'spades', rank: String(i + 2) }))
     const state = { phase: 'bidding', blindNilEligible: true, myHand: hand }
     const result = await revealHand(auth, mockFetch(200, state))
@@ -452,7 +452,7 @@ describe('revealHand', () => {
     assert.equal(result.myHand.length, 13)
   })
 
-  it('throws with status 409 when player has already placed a bid', async () => {
+  it('throws with status 409 when player has already placed a bid', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => revealHand(auth, mockFetch(409, { error: 'Bid already placed' })),
       (err) => {
@@ -463,7 +463,7 @@ describe('revealHand', () => {
     )
   })
 
-  it('throws with status 400 when player is not eligible for Blind Nil', async () => {
+  it('throws with status 400 when player is not eligible for Blind Nil', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => revealHand(auth, mockFetch(400, { error: 'Not eligible for Blind Nil' })),
       (err) => {
@@ -474,7 +474,7 @@ describe('revealHand', () => {
     )
   })
 
-  it('throws with status 400 when not in bidding phase', async () => {
+  it('throws with status 400 when not in bidding phase', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => revealHand(auth, mockFetch(400, { error: 'Invalid action outside bidding phase' })),
       (err) => {
@@ -484,14 +484,14 @@ describe('revealHand', () => {
     )
   })
 
-  it('throws with status 401 when unauthenticated', async () => {
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => revealHand(auth, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => { assert.equal(err.status, 401); return true },
     )
   })
 
-  it('throws a generic message when response body has no error field', async () => {
+  it('throws a generic message when response body has no error field', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => revealHand(auth, mockFetch(500, {})),
       (err) => {
@@ -502,17 +502,17 @@ describe('revealHand', () => {
   })
 })
 
-describe('submitBlindNilExchange', () => {
+describe('submitBlindNilExchange', { timeout: 2000 }, () => {
   const cards = [{ suit: 'spades', rank: 'A' }, { suit: 'hearts', rank: 'K' }]
   const auth = { tableId: 'table-1', cards, sessionId: 'sess-1', playerId: 'player-1' }
 
-  it('resolves with updated state on 200', async () => {
+  it('resolves with updated state on 200', { timeout: 2000 }, async () => {
     const state = { phase: 'playing', currentPlayerSeat: 'east' }
     const result = await submitBlindNilExchange(auth, mockFetch(200, state))
     assert.equal(result.phase, 'playing')
   })
 
-  it('throws with status 400 on invalid exchange (wrong number of cards)', async () => {
+  it('throws with status 400 on invalid exchange (wrong number of cards)', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => submitBlindNilExchange({ ...auth, cards: [cards[0]] }, mockFetch(400, { error: 'Must submit exactly 2 cards' })),
       (err) => {
@@ -523,14 +523,14 @@ describe('submitBlindNilExchange', () => {
     )
   })
 
-  it('throws with status 400 when wrong player tries to exchange', async () => {
+  it('throws with status 400 when wrong player tries to exchange', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => submitBlindNilExchange(auth, mockFetch(400, { error: 'Blind Nil player must send cards first' })),
       (err) => { assert.equal(err.status, 400); return true },
     )
   })
 
-  it('throws with status 401 when unauthenticated', async () => {
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => submitBlindNilExchange(auth, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => { assert.equal(err.status, 401); return true },

@@ -72,27 +72,27 @@ function completeOneHand(state) {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe('handHistory — initial state', () => {
-  it('createGame initialises handHistory as an empty array', () => {
+describe('handHistory — initial state', { timeout: 2000 }, () => {
+  it('createGame initialises handHistory as an empty array', { timeout: 2000 }, () => {
     const state = createGame('table-1', PLAYER_IDS)
     assert.deepEqual(state.handHistory, [])
   })
 })
 
-describe('handHistory — after one completed hand', () => {
-  it('handHistory has exactly one entry after one hand', () => {
+describe('handHistory — after one completed hand', { timeout: 2000 }, () => {
+  it('handHistory has exactly one entry after one hand', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     assert.equal(state.handHistory.length, 1)
   })
 
-  it('entry has the correct handNumber', () => {
+  it('entry has the correct handNumber', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     assert.equal(state.handHistory[0].handNumber, 1)
   })
 
-  it('entry has bids for all four seats', () => {
+  it('entry has bids for all four seats', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { bids } = state.handHistory[0]
@@ -101,7 +101,7 @@ describe('handHistory — after one completed hand', () => {
     }
   })
 
-  it('entry has teamBids for both teams', () => {
+  it('entry has teamBids for both teams', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { teamBids } = state.handHistory[0]
@@ -109,7 +109,7 @@ describe('handHistory — after one completed hand', () => {
     assert.ok(teamBids.ew !== null, 'teamBids.ew should be set')
   })
 
-  it('entry has tricksWon for all four seats summing to 13', () => {
+  it('entry has tricksWon for all four seats summing to 13', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { tricksWon } = state.handHistory[0]
@@ -117,7 +117,7 @@ describe('handHistory — after one completed hand', () => {
     assert.equal(total, 13)
   })
 
-  it('entry has scoreDelta with ns and ew keys', () => {
+  it('entry has scoreDelta with ns and ew keys', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { scoreDelta } = state.handHistory[0]
@@ -125,7 +125,7 @@ describe('handHistory — after one completed hand', () => {
     assert.ok('ew' in scoreDelta)
   })
 
-  it('entry has newBags with ns and ew keys', () => {
+  it('entry has newBags with ns and ew keys', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { newBags } = state.handHistory[0]
@@ -133,7 +133,7 @@ describe('handHistory — after one completed hand', () => {
     assert.ok('ew' in newBags)
   })
 
-  it('entry has bagPenalty counts (numbers) for both teams', () => {
+  it('entry has bagPenalty counts (numbers) for both teams', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { bagPenalty } = state.handHistory[0]
@@ -141,7 +141,7 @@ describe('handHistory — after one completed hand', () => {
     assert.equal(typeof bagPenalty.ew, 'number')
   })
 
-  it('entry has scoresAfter matching the state scores after the hand', () => {
+  it('entry has scoresAfter matching the state scores after the hand', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     // If game is still going, state.scores should equal scoresAfter
@@ -153,13 +153,13 @@ describe('handHistory — after one completed hand', () => {
     }
   })
 
-  it('entry has bagsAfter matching the state bags after the hand', () => {
+  it('entry has bagsAfter matching the state bags after the hand', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     assert.deepEqual(state.handHistory[0].bagsAfter, state.bags)
   })
 
-  it('bagPenalty.ns is 0 when bags are below 10', () => {
+  it('bagPenalty.ns is 0 when bags are below 10', { timeout: 2000 }, () => {
     // With bid=6 and 13 tricks total, bags are minimal; penalty at 10 bags is unlikely in hand 1
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
@@ -174,8 +174,8 @@ describe('handHistory — after one completed hand', () => {
   })
 })
 
-describe('handHistory — accumulates across multiple hands', () => {
-  it('handHistory grows by one entry per completed hand', () => {
+describe('handHistory — accumulates across multiple hands', { timeout: 2000 }, () => {
+  it('handHistory grows by one entry per completed hand', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     state = completeOneHand(state)
     const lengthAfterHand1 = state.handHistory.length
@@ -187,7 +187,7 @@ describe('handHistory — accumulates across multiple hands', () => {
     }
   })
 
-  it('second entry has handNumber 2', () => {
+  it('second entry has handNumber 2', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     state = completeOneHand(state)
 
@@ -197,7 +197,7 @@ describe('handHistory — accumulates across multiple hands', () => {
     }
   })
 
-  it('each entry scoresAfter matches the running score progression', () => {
+  it('each entry scoresAfter matches the running score progression', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     state = completeOneHand(state)
 
@@ -213,14 +213,14 @@ describe('handHistory — accumulates across multiple hands', () => {
   })
 })
 
-describe('handHistory — scoresBefore field', () => {
-  it('scoresBefore is { ns: 0, ew: 0 } for the first hand', () => {
+describe('handHistory — scoresBefore field', { timeout: 2000 }, () => {
+  it('scoresBefore is { ns: 0, ew: 0 } for the first hand', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     assert.deepEqual(state.handHistory[0].scoresBefore, { ns: 0, ew: 0 })
   })
 
-  it('scoresBefore for hand 2 equals scoresAfter of hand 1', () => {
+  it('scoresBefore for hand 2 equals scoresAfter of hand 1', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     state = completeOneHand(state)
     if (state.phase === 'game_over') return // skip if game ended in one hand
@@ -230,14 +230,14 @@ describe('handHistory — scoresBefore field', () => {
   })
 })
 
-describe('handHistory — bagsBefore field', () => {
-  it('bagsBefore is { ns: 0, ew: 0 } for the first hand', () => {
+describe('handHistory — bagsBefore field', { timeout: 2000 }, () => {
+  it('bagsBefore is { ns: 0, ew: 0 } for the first hand', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     assert.deepEqual(state.handHistory[0].bagsBefore, { ns: 0, ew: 0 })
   })
 
-  it('bagsBefore for hand 2 equals bagsAfter of hand 1', () => {
+  it('bagsBefore for hand 2 equals bagsAfter of hand 1', { timeout: 2000 }, () => {
     let state = createGame('table-1', PLAYER_IDS)
     state = completeOneHand(state)
     if (state.phase === 'game_over') return // skip if game ended in one hand
@@ -247,8 +247,8 @@ describe('handHistory — bagsBefore field', () => {
   })
 })
 
-describe('handHistory — lastTrick field', () => {
-  it('entry contains a lastTrick field with winner and plays after a completed hand', () => {
+describe('handHistory — lastTrick field', { timeout: 2000 }, () => {
+  it('entry contains a lastTrick field with winner and plays after a completed hand', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const entry = state.handHistory[0]
@@ -258,14 +258,14 @@ describe('handHistory — lastTrick field', () => {
     assert.equal(entry.lastTrick.plays.length, 4, 'lastTrick.plays should have 4 cards')
   })
 
-  it('lastTrick.winner is one of the four seats', () => {
+  it('lastTrick.winner is one of the four seats', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { lastTrick } = state.handHistory[0]
     assert.ok(CLOCKWISE_SEATS.includes(lastTrick.winner), 'lastTrick.winner should be a valid seat')
   })
 
-  it('lastTrick.plays has one card per seat', () => {
+  it('lastTrick.plays has one card per seat', { timeout: 2000 }, () => {
     const initial = createGame('table-1', PLAYER_IDS)
     const state = completeOneHand(initial)
     const { lastTrick } = state.handHistory[0]
@@ -276,8 +276,8 @@ describe('handHistory — lastTrick field', () => {
   })
 })
 
-describe('handHistory — bag penalty detection', () => {
-  it('bagPenalty.ns is 1 when ns crosses 10 bags in a hand', () => {
+describe('handHistory — bag penalty detection', { timeout: 2000 }, () => {
+  it('bagPenalty.ns is 1 when ns crosses 10 bags in a hand', { timeout: 2000 }, () => {
     // Construct a state with 9 bags for ns and force another bag this hand
     // We'll build a synthetic state snapshot rather than playing through it
     const initial = createGame('table-1', PLAYER_IDS)
@@ -303,7 +303,7 @@ describe('handHistory — bag penalty detection', () => {
     }
   })
 
-  it('bagPenalty.ns is 2 when ns accumulates 20+ bags (double bag-out) in a hand', () => {
+  it('bagPenalty.ns is 2 when ns accumulates 20+ bags (double bag-out) in a hand', { timeout: 2000 }, () => {
     // Start with 9 prior bags for NS. NS bids 0 (team total 0 → every trick is a bag).
     // With NS taking all 13 tricks: 9 + 13 = 22 total → Math.floor(22/10) = 2 penalties.
     // Use scoreHand directly with predetermined tricksWon to avoid random deck dependency.

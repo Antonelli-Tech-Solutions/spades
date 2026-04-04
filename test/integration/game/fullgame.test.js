@@ -157,7 +157,7 @@ describe('E2E: 4 players complete a full game from table creation to game over',
     await closeRedis()
   })
 
-  it('4 players complete a full game from table creation to game over', async () => {
+  it('4 players complete a full game from table creation to game over', { timeout: 30000 }, async () => {
     const seats = ['north', 'east', 'south', 'west']
 
     // seat → player credentials

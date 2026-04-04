@@ -96,7 +96,7 @@ describe('POST /api/tables/:tableId/terminate', { skip }, () => {
     await closeRedis()
   })
 
-  it('host can terminate a waiting table', async () => {
+  it('host can terminate a waiting table', { timeout: 10000 }, async () => {
     const host = players[0]
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {
       method: 'POST',
@@ -139,7 +139,7 @@ describe('POST /api/tables/:tableId/terminate', { skip }, () => {
     assert.equal(stateRes.status, 404, 'table should be gone after termination')
   })
 
-  it('non-host player gets 403', async () => {
+  it('non-host player gets 403', { timeout: 10000 }, async () => {
     const host = players[0]
     const other = players[1]
 
@@ -164,7 +164,7 @@ describe('POST /api/tables/:tableId/terminate', { skip }, () => {
     assert.equal(termRes.status, 403)
   })
 
-  it('returns 404 for unknown tableId', async () => {
+  it('returns 404 for unknown tableId', { timeout: 10000 }, async () => {
     const host = players[0]
     const fakeId = '00000000-0000-0000-0000-000000000000'
     const termRes = await fetch(`${server.baseUrl}/api/tables/${fakeId}/terminate`, {
@@ -178,7 +178,7 @@ describe('POST /api/tables/:tableId/terminate', { skip }, () => {
     assert.equal(termRes.status, 404)
   })
 
-  it('returns 401 without auth headers', async () => {
+  it('returns 401 without auth headers', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/tables/some-id/terminate`, {
       method: 'POST',
     })

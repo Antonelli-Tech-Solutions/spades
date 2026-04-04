@@ -2,15 +2,15 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { isBot, getBotPlayerId, botBid, botPlay, botBlindNilExchange } from '../../../server/game/bot.js'
 
-describe('isBot', () => {
-  it('returns true for bot player IDs', () => {
+describe('isBot', { timeout: 2000 }, () => {
+  it('returns true for bot player IDs', { timeout: 2000 }, () => {
     assert.equal(isBot('bot:north'), true)
     assert.equal(isBot('bot:south'), true)
     assert.equal(isBot('bot:east'), true)
     assert.equal(isBot('bot:west'), true)
   })
 
-  it('returns false for human player IDs', () => {
+  it('returns false for human player IDs', { timeout: 2000 }, () => {
     assert.equal(isBot('some-uuid-player-id'), false)
     assert.equal(isBot(null), false)
     assert.equal(isBot(undefined), false)
@@ -18,8 +18,8 @@ describe('isBot', () => {
   })
 })
 
-describe('getBotPlayerId', () => {
-  it('returns bot:<seat> for each seat', () => {
+describe('getBotPlayerId', { timeout: 2000 }, () => {
+  it('returns bot:<seat> for each seat', { timeout: 2000 }, () => {
     assert.equal(getBotPlayerId('north'), 'bot:north')
     assert.equal(getBotPlayerId('south'), 'bot:south')
     assert.equal(getBotPlayerId('east'), 'bot:east')
@@ -27,8 +27,8 @@ describe('getBotPlayerId', () => {
   })
 })
 
-describe('botBid', () => {
-  it('counts spades in hand', () => {
+describe('botBid', { timeout: 2000 }, () => {
+  it('counts spades in hand', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'spades', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -38,7 +38,7 @@ describe('botBid', () => {
     assert.equal(botBid(hand), 2)
   })
 
-  it('returns 0 when no spades in hand', () => {
+  it('returns 0 when no spades in hand', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'hearts', rank: 'A' },
       { suit: 'clubs', rank: 'K' },
@@ -47,7 +47,7 @@ describe('botBid', () => {
     assert.equal(botBid(hand), 0)
   })
 
-  it('returns 13 when hand is all spades', () => {
+  it('returns 13 when hand is all spades', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'spades', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -66,7 +66,7 @@ describe('botBid', () => {
     assert.equal(botBid(hand), 13)
   })
 
-  describe('second bidder (partnerBid provided)', () => {
+  describe('second bidder (partnerBid provided)', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'spades', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -74,26 +74,26 @@ describe('botBid', () => {
       { suit: 'clubs', rank: '7' },
     ] // 2 spades
 
-    it('returns partner bid + spades when partner bid a number', () => {
+    it('returns partner bid + spades when partner bid a number', { timeout: 2000 }, () => {
       assert.equal(botBid(hand, 4), 6) // team total = 4 + 2
     })
 
-    it('returns partner bid + spades when partner bid 0', () => {
+    it('returns partner bid + spades when partner bid 0', { timeout: 2000 }, () => {
       assert.equal(botBid(hand, 0), 2) // team total = 0 + 2
     })
 
-    it('returns just spades count when partner bid nil', () => {
+    it('returns just spades count when partner bid nil', { timeout: 2000 }, () => {
       assert.equal(botBid(hand, 'nil'), 2)
     })
 
-    it('returns just spades count when partner bid blind_nil', () => {
+    it('returns just spades count when partner bid blind_nil', { timeout: 2000 }, () => {
       assert.equal(botBid(hand, 'blind_nil'), 2)
     })
   })
 })
 
-describe('botPlay', () => {
-  it('returns a card that is in the hand', () => {
+describe('botPlay', { timeout: 2000 }, () => {
+  it('returns a card that is in the hand', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'hearts', rank: 'A' },
       { suit: 'clubs', rank: 'K' },
@@ -103,7 +103,7 @@ describe('botPlay', () => {
     assert.ok(hand.some((c) => c.suit === card.suit && c.rank === card.rank))
   })
 
-  it('does not lead spades on the first trick when alternatives exist', () => {
+  it('does not lead spades on the first trick when alternatives exist', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'hearts', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -112,7 +112,7 @@ describe('botPlay', () => {
     assert.equal(card.suit, 'hearts')
   })
 
-  it('follows suit if possible', () => {
+  it('follows suit if possible', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'hearts', rank: 'A' },
       { suit: 'spades', rank: 'K' },
@@ -122,7 +122,7 @@ describe('botPlay', () => {
     assert.equal(card.suit, 'hearts')
   })
 
-  it('can play any card when cannot follow suit', () => {
+  it('can play any card when cannot follow suit', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'spades', rank: 'K' },
       { suit: 'clubs', rank: '5' },
@@ -132,7 +132,7 @@ describe('botPlay', () => {
     assert.ok(hand.some((c) => c.suit === card.suit && c.rank === card.rank))
   })
 
-  it('returns a card from a single-card hand', () => {
+  it('returns a card from a single-card hand', { timeout: 2000 }, () => {
     const hand = [{ suit: 'clubs', rank: '2' }]
     const card = botPlay(hand, [], false, false)
     assert.equal(card.suit, 'clubs')
@@ -140,7 +140,7 @@ describe('botPlay', () => {
   })
 })
 
-describe('botBlindNilExchange', () => {
+describe('botBlindNilExchange', { timeout: 2000 }, () => {
   const hand = [
     { suit: 'spades', rank: 'A' },
     { suit: 'spades', rank: 'K' },
@@ -149,24 +149,24 @@ describe('botBlindNilExchange', () => {
     { suit: 'diamonds', rank: '3' },
   ]
 
-  it('returns exactly 2 cards', () => {
+  it('returns exactly 2 cards', { timeout: 2000 }, () => {
     const cards = botBlindNilExchange(hand)
     assert.equal(cards.length, 2)
   })
 
-  it('returns cards that are in the hand', () => {
+  it('returns cards that are in the hand', { timeout: 2000 }, () => {
     const cards = botBlindNilExchange(hand)
     for (const card of cards) {
       assert.ok(hand.some((c) => c.suit === card.suit && c.rank === card.rank))
     }
   })
 
-  it('returns 2 distinct cards (no duplicate)', () => {
+  it('returns 2 distinct cards (no duplicate)', { timeout: 2000 }, () => {
     const cards = botBlindNilExchange(hand)
     assert.notDeepEqual(cards[0], cards[1])
   })
 
-  it('does not mutate the original hand', () => {
+  it('does not mutate the original hand', { timeout: 2000 }, () => {
     const originalLength = hand.length
     botBlindNilExchange(hand)
     assert.equal(hand.length, originalLength)

@@ -55,7 +55,7 @@ describe('Auth endpoint rate limiting', { skip }, () => {
     await closeRedis()
   })
 
-  it('sets X-RateLimit-* headers on POST /api/auth/register', async () => {
+  it('sets X-RateLimit-* headers on POST /api/auth/register', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -66,7 +66,7 @@ describe('Auth endpoint rate limiting', { skip }, () => {
     assert.ok(res.headers.get('x-ratelimit-reset'), 'X-RateLimit-Reset should be set')
   })
 
-  it('returns 429 after limit is exceeded on POST /api/auth/register', async () => {
+  it('returns 429 after limit is exceeded on POST /api/auth/register', { timeout: 10000 }, async () => {
     for (let i = 0; i < 3; i++) {
       await fetch(`${server.baseUrl}/api/auth/register`, {
         method: 'POST',
@@ -86,7 +86,7 @@ describe('Auth endpoint rate limiting', { skip }, () => {
     assert.ok(body.error, 'error message should be in response body')
   })
 
-  it('returns 429 after limit is exceeded on POST /api/auth/login', async () => {
+  it('returns 429 after limit is exceeded on POST /api/auth/login', { timeout: 10000 }, async () => {
     for (let i = 0; i < 3; i++) {
       await fetch(`${server.baseUrl}/api/auth/login`, {
         method: 'POST',
@@ -104,7 +104,7 @@ describe('Auth endpoint rate limiting', { skip }, () => {
     assert.ok(blocked.headers.get('retry-after'), 'Retry-After header should be set on 429')
   })
 
-  it('returns 429 after limit is exceeded on GET /api/auth/verify-email', async () => {
+  it('returns 429 after limit is exceeded on GET /api/auth/verify-email', { timeout: 10000 }, async () => {
     for (let i = 0; i < 3; i++) {
       await fetch(`${server.baseUrl}/api/auth/verify-email?token=some-token-${i}`)
     }
@@ -114,7 +114,7 @@ describe('Auth endpoint rate limiting', { skip }, () => {
     assert.ok(blocked.headers.get('retry-after'), 'Retry-After header should be set on 429')
   })
 
-  it('shares a single counter across all auth endpoints (same IP)', async () => {
+  it('shares a single counter across all auth endpoints (same IP)', { timeout: 10000 }, async () => {
     // Mix register, login, and verify-email — all share the same rate limit key per IP
     await fetch(`${server.baseUrl}/api/auth/register`, {
       method: 'POST',

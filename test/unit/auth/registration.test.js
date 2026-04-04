@@ -9,33 +9,33 @@ import {
   resendVerificationEmail,
 } from '../../../server/auth/registration.js'
 
-describe('hashPassword', () => {
-  it('produces a non-empty hash', async () => {
+describe('hashPassword', { timeout: 2000 }, () => {
+  it('produces a non-empty hash', { timeout: 2000 }, async () => {
     const hash = await hashPassword('hunter2')
     assert.ok(hash.length > 0)
   })
 
-  it('produces different hashes for the same password (bcrypt salting)', async () => {
+  it('produces different hashes for the same password (bcrypt salting)', { timeout: 2000 }, async () => {
     const hash1 = await hashPassword('hunter2')
     const hash2 = await hashPassword('hunter2')
     assert.notEqual(hash1, hash2)
   })
 })
 
-describe('verifyPassword', () => {
-  it('returns true for correct password', async () => {
+describe('verifyPassword', { timeout: 2000 }, () => {
+  it('returns true for correct password', { timeout: 2000 }, async () => {
     const hash = await hashPassword('correcthorse')
     assert.ok(await verifyPassword('correcthorse', hash))
   })
 
-  it('returns false for wrong password', async () => {
+  it('returns false for wrong password', { timeout: 2000 }, async () => {
     const hash = await hashPassword('correcthorse')
     assert.ok(!(await verifyPassword('wrongpassword', hash)))
   })
 })
 
-describe('generateVerificationToken', () => {
-  it('returns a UUID v4-formatted string', () => {
+describe('generateVerificationToken', { timeout: 2000 }, () => {
+  it('returns a UUID v4-formatted string', { timeout: 2000 }, () => {
     const token = generateVerificationToken()
     assert.match(
       token,
@@ -43,16 +43,16 @@ describe('generateVerificationToken', () => {
     )
   })
 
-  it('returns unique tokens on each call', () => {
+  it('returns unique tokens on each call', { timeout: 2000 }, () => {
     const tokens = new Set(Array.from({ length: 100 }, generateVerificationToken))
     assert.equal(tokens.size, 100)
   })
 })
 
-describe('registerPlayer — input validation', () => {
+describe('registerPlayer — input validation', { timeout: 2000 }, () => {
   const noop = async () => {}
 
-  it('throws VALIDATION_ERROR when email is missing', async () => {
+  it('throws VALIDATION_ERROR when email is missing', { timeout: 2000 }, async () => {
     const db = {}
     await assert.rejects(
       () => registerPlayer(db, { username: 'alice', password: 'password123' }, noop),
@@ -63,7 +63,7 @@ describe('registerPlayer — input validation', () => {
     )
   })
 
-  it('throws VALIDATION_ERROR when username is missing', async () => {
+  it('throws VALIDATION_ERROR when username is missing', { timeout: 2000 }, async () => {
     const db = {}
     await assert.rejects(
       () => registerPlayer(db, { email: 'a@b.com', password: 'password123' }, noop),
@@ -74,7 +74,7 @@ describe('registerPlayer — input validation', () => {
     )
   })
 
-  it('throws VALIDATION_ERROR when password is missing', async () => {
+  it('throws VALIDATION_ERROR when password is missing', { timeout: 2000 }, async () => {
     const db = {}
     await assert.rejects(
       () => registerPlayer(db, { email: 'a@b.com', username: 'alice' }, noop),
@@ -85,7 +85,7 @@ describe('registerPlayer — input validation', () => {
     )
   })
 
-  it('throws VALIDATION_ERROR when password is too short', async () => {
+  it('throws VALIDATION_ERROR when password is too short', { timeout: 2000 }, async () => {
     const db = {}
     await assert.rejects(
       () => registerPlayer(db, { email: 'a@b.com', username: 'alice', password: 'short' }, noop),
@@ -96,7 +96,7 @@ describe('registerPlayer — input validation', () => {
     )
   })
 
-  it('normalises email to lowercase before insert', async () => {
+  it('normalises email to lowercase before insert', { timeout: 2000 }, async () => {
     let capturedEmail
     const db = {
       query: async (sql, params) => {
@@ -116,8 +116,8 @@ describe('registerPlayer — input validation', () => {
   })
 })
 
-describe('resendVerificationEmail', () => {
-  it('succeeds silently when email is not found (prevents enumeration)', async () => {
+describe('resendVerificationEmail', { timeout: 2000 }, () => {
+  it('succeeds silently when email is not found (prevents enumeration)', { timeout: 2000 }, async () => {
     const db = {
       query: async (sql) => {
         if (sql.includes('SELECT')) return { rows: [] }
@@ -129,7 +129,7 @@ describe('resendVerificationEmail', () => {
     assert.equal(emails.length, 0)
   })
 
-  it('succeeds silently when player is already verified (prevents enumeration)', async () => {
+  it('succeeds silently when player is already verified (prevents enumeration)', { timeout: 2000 }, async () => {
     const db = {
       query: async (sql) => {
         if (sql.includes('SELECT')) return { rows: [{ id: 'player-1', is_verified: true }] }
@@ -141,7 +141,7 @@ describe('resendVerificationEmail', () => {
     assert.equal(emails.length, 0)
   })
 
-  it('deletes old tokens and sends a new one for unverified player', async () => {
+  it('deletes old tokens and sends a new one for unverified player', { timeout: 2000 }, async () => {
     const queries = []
     const db = {
       query: async (sql, params) => {
@@ -159,7 +159,7 @@ describe('resendVerificationEmail', () => {
     assert.equal(emails[0], 'alice@example.com')
   })
 
-  it('normalises email to lowercase before lookup', async () => {
+  it('normalises email to lowercase before lookup', { timeout: 2000 }, async () => {
     const lookups = []
     const db = {
       query: async (sql, params) => {
@@ -170,13 +170,13 @@ describe('resendVerificationEmail', () => {
         return { rows: [] }
       },
     }
-    await resendVerificationEmail(db, 'Alice@EXAMPLE.COM', async () => {})
+    await resendVerificationEmail(db, 'Alice@EXAMPLE.COM', { timeout: 2000 }, async () => {})
     assert.equal(lookups[0], 'alice@example.com')
   })
 })
 
-describe('registerPlayer — DEV_AUTO_VERIFY', () => {
-  it('skips email and token when DEV_AUTO_VERIFY=true', async () => {
+describe('registerPlayer — DEV_AUTO_VERIFY', { timeout: 2000 }, () => {
+  it('skips email and token when DEV_AUTO_VERIFY=true', { timeout: 2000 }, async () => {
     process.env.DEV_AUTO_VERIFY = 'true'
     const queries = []
     const emailsSent = []
@@ -206,7 +206,7 @@ describe('registerPlayer — DEV_AUTO_VERIFY', () => {
     assert.equal(playerInsert.params[3], true)
   })
 
-  it('does NOT skip verification when NODE_ENV=production, even if DEV_AUTO_VERIFY=true', async () => {
+  it('does NOT skip verification when NODE_ENV=production, even if DEV_AUTO_VERIFY=true', { timeout: 2000 }, async () => {
     process.env.DEV_AUTO_VERIFY = 'true'
     process.env.NODE_ENV = 'production'
     const emailsSent = []
@@ -227,7 +227,7 @@ describe('registerPlayer — DEV_AUTO_VERIFY', () => {
     assert.equal(emailsSent.length, 1, 'should still send verification email in production')
   })
 
-  it('sends email normally when DEV_AUTO_VERIFY is not set', async () => {
+  it('sends email normally when DEV_AUTO_VERIFY is not set', { timeout: 2000 }, async () => {
     delete process.env.DEV_AUTO_VERIFY
     const emailsSent = []
     const db = {
@@ -246,8 +246,8 @@ describe('registerPlayer — DEV_AUTO_VERIFY', () => {
   })
 })
 
-describe('verifyEmailToken — input validation', () => {
-  it('throws VALIDATION_ERROR when token is missing', async () => {
+describe('verifyEmailToken — input validation', { timeout: 2000 }, () => {
+  it('throws VALIDATION_ERROR when token is missing', { timeout: 2000 }, async () => {
     const db = {}
     await assert.rejects(
       () => verifyEmailToken(db, undefined),
@@ -258,7 +258,7 @@ describe('verifyEmailToken — input validation', () => {
     )
   })
 
-  it('throws INVALID_TOKEN when token is not found', async () => {
+  it('throws INVALID_TOKEN when token is not found', { timeout: 2000 }, async () => {
     const db = {
       query: async () => ({ rows: [] }),
     }
@@ -271,7 +271,7 @@ describe('verifyEmailToken — input validation', () => {
     )
   })
 
-  it('throws EXPIRED_TOKEN when token is past its expiry', async () => {
+  it('throws EXPIRED_TOKEN when token is past its expiry', { timeout: 2000 }, async () => {
     const db = {
       query: async (sql) => {
         if (sql.includes('SELECT')) {

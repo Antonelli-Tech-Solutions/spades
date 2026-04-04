@@ -85,7 +85,7 @@ describe('POST /api/tables', { skip }, () => {
     await closeRedis()
   })
 
-  it('creates a table and returns tableId for authenticated player', async () => {
+  it('creates a table and returns tableId for authenticated player', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = await loginPlayer(
       server.baseUrl,
       'host@gtest.spades.invalid',
@@ -100,7 +100,7 @@ describe('POST /api/tables', { skip }, () => {
     assert.ok(body.tableId, 'should return a tableId')
   })
 
-  it('returns 401 without auth headers', async () => {
+  it('returns 401 without auth headers', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/tables`, { method: 'POST' })
     assert.equal(res.status, 401)
   })
@@ -139,7 +139,7 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     await closeRedis()
   })
 
-  it('4 players can sit and game starts automatically', async () => {
+  it('4 players can sit and game starts automatically', { timeout: 10000 }, async () => {
     // Host creates table
     const { sessionId, playerId } = players[0]
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {
@@ -173,7 +173,7 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     assert.equal(state.myHand.length, 13, 'player should have 13 cards')
   })
 
-  it('game state remains waiting when only 3 of 4 seats are filled', async () => {
+  it('game state remains waiting when only 3 of 4 seats are filled', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = players[0]
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {
       method: 'POST',
@@ -206,7 +206,7 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     assert.equal(state.phase, undefined, 'no game phase should exist yet')
   })
 
-  it('returns 409 when seat is already taken', async () => {
+  it('returns 409 when seat is already taken', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = players[0]
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {
       method: 'POST',
@@ -238,7 +238,7 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     assert.equal(res.status, 409)
   })
 
-  it('returns 400 for an invalid seat name', async () => {
+  it('returns 400 for an invalid seat name', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = players[0]
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {
       method: 'POST',
@@ -258,7 +258,7 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     assert.equal(res.status, 400)
   })
 
-  it('returns 409 when player is already seated at this table', async () => {
+  it('returns 409 when player is already seated at this table', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = players[0]
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {
       method: 'POST',
@@ -290,7 +290,7 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     assert.equal(res.status, 409)
   })
 
-  it('returns 404 for a non-existent table', async () => {
+  it('returns 404 for a non-existent table', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = players[0]
     const res = await fetch(`${server.baseUrl}/api/tables/00000000-0000-0000-0000-000000000000/sit`, {
       method: 'POST',
@@ -304,7 +304,7 @@ describe('POST /api/tables/:tableId/sit', { skip }, () => {
     assert.equal(res.status, 404)
   })
 
-  it('GET /api/tables/:tableId/state returns 403 when player is not seated', async () => {
+  it('GET /api/tables/:tableId/state returns 403 when player is not seated', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = players[0]
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {
       method: 'POST',
@@ -377,7 +377,7 @@ describe('POST /api/tables/:tableId/bid', { skip }, () => {
     await closeRedis()
   })
 
-  it('east player bids first (left of north dealer)', async () => {
+  it('east player bids first (left of north dealer)', { timeout: 10000 }, async () => {
     // players[1] is east (second player seated)
     const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
       method: 'POST',
@@ -394,7 +394,7 @@ describe('POST /api/tables/:tableId/bid', { skip }, () => {
     assert.equal(state.currentBidderSeat, 'south')
   })
 
-  it('returns 409 when wrong player tries to bid', async () => {
+  it('returns 409 when wrong player tries to bid', { timeout: 10000 }, async () => {
     // players[0] is north — but it should be south's turn now
     const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
       method: 'POST',
@@ -408,7 +408,7 @@ describe('POST /api/tables/:tableId/bid', { skip }, () => {
     assert.equal(res.status, 409)
   })
 
-  it('returns 400 for an invalid bid value', async () => {
+  it('returns 400 for an invalid bid value', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
       method: 'POST',
       headers: {
@@ -421,7 +421,7 @@ describe('POST /api/tables/:tableId/bid', { skip }, () => {
     assert.equal(res.status, 400)
   })
 
-  it('returns 400 when bidding blind nil without eligibility (team not 100+ behind)', async () => {
+  it('returns 400 when bidding blind nil without eligibility (team not 100+ behind)', { timeout: 10000 }, async () => {
     // Scores start at 0-0; NS is not 100+ behind
     // players[1] is east — that's the current bidder
     const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
@@ -460,12 +460,12 @@ describe('GET /api/tables', { skip }, () => {
     await closeRedis()
   })
 
-  it('returns 401 without auth headers', async () => {
+  it('returns 401 without auth headers', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/tables`)
     assert.equal(res.status, 401)
   })
 
-  it('returns 200 with tables array when authenticated', async () => {
+  it('returns 200 with tables array when authenticated', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = await loginPlayer(
       server.baseUrl,
       'listhost@gtest.spades.invalid',
@@ -479,7 +479,7 @@ describe('GET /api/tables', { skip }, () => {
     assert.ok(Array.isArray(body.tables), 'should return a tables array')
   })
 
-  it('includes newly created waiting tables in the list', async () => {
+  it('includes newly created waiting tables in the list', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = await loginPlayer(
       server.baseUrl,
       'listhost@gtest.spades.invalid',
@@ -508,7 +508,7 @@ describe('GET /api/tables', { skip }, () => {
     assert.equal(found.seatsAvailable, 4)
   })
 
-  it('does not include tables that are already playing', async () => {
+  it('does not include tables that are already playing', { timeout: 10000 }, async () => {
     const players = []
     for (let i = 1; i <= 4; i++) {
       await insertVerifiedPlayer(db, {
@@ -662,13 +662,13 @@ describe('POST /api/tables/:tableId/blind-nil-exchange', { skip }, () => {
     return res.json()
   }
 
-  it('transitions to blind_nil_exchange phase after all bids when a player bids blind nil', async () => {
+  it('transitions to blind_nil_exchange phase after all bids when a player bids blind nil', { timeout: 10000 }, async () => {
     const state = await bidToBlindNilExchange()
     assert.equal(state.phase, 'blind_nil_exchange')
     assert.equal(state.bids.south, 'blind_nil')
   })
 
-  it('blind nil player sends 2 cards to partner, then partner sends 2 back — phase becomes playing', async () => {
+  it('blind nil player sends 2 cards to partner, then partner sends 2 back — phase becomes playing', { timeout: 10000 }, async () => {
     // Get south's hand (blind nil player)
     const southStateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
       headers: { 'x-session-id': players[2].sessionId, 'x-player-id': players[2].playerId },
@@ -711,7 +711,7 @@ describe('POST /api/tables/:tableId/blind-nil-exchange', { skip }, () => {
     assert.equal(finalState.phase, 'playing', 'game should transition to playing after full exchange')
   })
 
-  it('returns 400 when wrong player tries to submit exchange', async () => {
+  it('returns 400 when wrong player tries to submit exchange', { timeout: 10000 }, async () => {
     // After the exchange above, game is in 'playing'. We need a fresh game state in
     // blind_nil_exchange phase for this test. Re-set the game state in Redis directly.
     const gameStateRaw = await redis.get(`game:${tableId}`)
@@ -749,7 +749,7 @@ describe('POST /api/tables/:tableId/blind-nil-exchange', { skip }, () => {
     assert.equal(res.status, 400)
   })
 
-  it('returns 400 when submitting wrong number of cards (not 2)', async () => {
+  it('returns 400 when submitting wrong number of cards (not 2)', { timeout: 10000 }, async () => {
     // Get south's current hand
     const southStateRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
       headers: { 'x-session-id': players[2].sessionId, 'x-player-id': players[2].playerId },
@@ -824,7 +824,7 @@ describe('Card visibility: GET /api/tables/:tableId/state', { skip }, () => {
     await closeRedis()
   })
 
-  it('state response never contains a hands key for any player', async () => {
+  it('state response never contains a hands key for any player', { timeout: 10000 }, async () => {
     for (const p of players) {
       const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
         headers: { 'x-session-id': p.sessionId, 'x-player-id': p.playerId },
@@ -835,7 +835,7 @@ describe('Card visibility: GET /api/tables/:tableId/state', { skip }, () => {
     }
   })
 
-  it('each player receives exactly 13 cards in myHand', async () => {
+  it('each player receives exactly 13 cards in myHand', { timeout: 10000 }, async () => {
     for (const p of players) {
       const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
         headers: { 'x-session-id': p.sessionId, 'x-player-id': p.playerId },
@@ -846,7 +846,7 @@ describe('Card visibility: GET /api/tables/:tableId/state', { skip }, () => {
     }
   })
 
-  it('each player receives a distinct myHand (no two players share any card)', async () => {
+  it('each player receives a distinct myHand (no two players share any card)', { timeout: 10000 }, async () => {
     const hands = []
     for (const p of players) {
       const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
@@ -868,7 +868,7 @@ describe('Card visibility: GET /api/tables/:tableId/state', { skip }, () => {
     }
   })
 
-  it('state response after a bid still contains no hands key', async () => {
+  it('state response after a bid still contains no hands key', { timeout: 10000 }, async () => {
     // players[1] is east — first to bid (north deals, east bids first)
     const bidRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/bid`, {
       method: 'POST',
@@ -959,7 +959,7 @@ describe('GET /api/tables/:tableId/state — game_over phase', { skip }, () => {
     await closeRedis()
   })
 
-  it('returns phase=game_over with correct winner, scores, and bags', async () => {
+  it('returns phase=game_over with correct winner, scores, and bags', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
       headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
     })
@@ -971,7 +971,7 @@ describe('GET /api/tables/:tableId/state — game_over phase', { skip }, () => {
     assert.deepEqual(body.bags, { ns: 2, ew: 0 })
   })
 
-  it('game_over state response does not expose the hands key', async () => {
+  it('game_over state response does not expose the hands key', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
       headers: { 'x-session-id': players[0].sessionId, 'x-player-id': players[0].playerId },
     })
@@ -979,7 +979,7 @@ describe('GET /api/tables/:tableId/state — game_over phase', { skip }, () => {
     assert.ok(!('hands' in body), 'response must not contain a hands key')
   })
 
-  it('all four players see the same game_over result', async () => {
+  it('all four players see the same game_over result', { timeout: 10000 }, async () => {
     for (const player of players) {
       const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/state`, {
         headers: { 'x-session-id': player.sessionId, 'x-player-id': player.playerId },

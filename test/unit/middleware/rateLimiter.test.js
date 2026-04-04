@@ -66,8 +66,8 @@ function makeMockReqRes(ip = '127.0.0.1') {
   return { req, res, next, get nextCalled() { return nextCalled } }
 }
 
-describe('createRateLimiter', () => {
-  it('calls next() when under the limit', async () => {
+describe('createRateLimiter', { timeout: 2000 }, () => {
+  it('calls next() when under the limit', { timeout: 2000 }, async () => {
     const redis = makeMockRedis()
     const limiter = createRateLimiter(redis, { keyPrefix: 'test', max: 5, windowSecs: 60 })
 
@@ -79,7 +79,7 @@ describe('createRateLimiter', () => {
     assert.equal(res.statusCode, null)
   })
 
-  it('sets X-RateLimit-* headers on each request', async () => {
+  it('sets X-RateLimit-* headers on each request', { timeout: 2000 }, async () => {
     const redis = makeMockRedis()
     const limiter = createRateLimiter(redis, { keyPrefix: 'hdr', max: 10, windowSecs: 60 })
 
@@ -91,7 +91,7 @@ describe('createRateLimiter', () => {
     assert.ok(res._headers['X-RateLimit-Reset'] !== undefined)
   })
 
-  it('decrements X-RateLimit-Remaining with each request', async () => {
+  it('decrements X-RateLimit-Remaining with each request', { timeout: 2000 }, async () => {
     const redis = makeMockRedis()
     const limiter = createRateLimiter(redis, { keyPrefix: 'rem', max: 3, windowSecs: 60 })
     const ip = '10.0.0.1'
@@ -106,7 +106,7 @@ describe('createRateLimiter', () => {
     assert.deepEqual(results, [2, 1, 0])
   })
 
-  it('returns 429 and sets Retry-After when the limit is exceeded', async () => {
+  it('returns 429 and sets Retry-After when the limit is exceeded', { timeout: 2000 }, async () => {
     const redis = makeMockRedis()
     const limiter = createRateLimiter(redis, { keyPrefix: 'block', max: 2, windowSecs: 60 })
     const ip = '10.0.0.2'
@@ -127,7 +127,7 @@ describe('createRateLimiter', () => {
     assert.ok(res._headers['Retry-After'] !== undefined, 'Retry-After header should be set')
   })
 
-  it('uses separate counters per IP', async () => {
+  it('uses separate counters per IP', { timeout: 2000 }, async () => {
     const redis = makeMockRedis()
     const limiter = createRateLimiter(redis, { keyPrefix: 'ip', max: 1, windowSecs: 60 })
 
@@ -148,7 +148,7 @@ describe('createRateLimiter', () => {
     assert.ok(bPassed, 'IP B should not be rate limited by IP A exhausting their limit')
   })
 
-  it('sets EXPIRE only on the first request (count === 1)', async () => {
+  it('sets EXPIRE only on the first request (count === 1)', { timeout: 2000 }, async () => {
     const redis = makeMockRedis()
     const limiter = createRateLimiter(redis, { keyPrefix: 'exp', max: 5, windowSecs: 60 })
     const ip = '3.3.3.3'
@@ -164,7 +164,7 @@ describe('createRateLimiter', () => {
     assert.equal(redis._ttls.size, 1, 'expire should only have been called once')
   })
 
-  it('calls next() when no redis client is provided (graceful degradation)', async () => {
+  it('calls next() when no redis client is provided (graceful degradation)', { timeout: 2000 }, async () => {
     const limiter = createRateLimiter(null, { keyPrefix: 'null', max: 5, windowSecs: 60 })
 
     let called = false
@@ -172,7 +172,7 @@ describe('createRateLimiter', () => {
     assert.ok(called, 'next() should be called when redis is null')
   })
 
-  it('uses AUTH_RATE_LIMIT_MAX and AUTH_RATE_LIMIT_WINDOW env vars as defaults', async () => {
+  it('uses AUTH_RATE_LIMIT_MAX and AUTH_RATE_LIMIT_WINDOW env vars as defaults', { timeout: 2000 }, async () => {
     const original = { ...process.env }
     process.env.AUTH_RATE_LIMIT_MAX = '3'
     process.env.AUTH_RATE_LIMIT_WINDOW = '120'

@@ -96,7 +96,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     await closeRedis()
   })
 
-  it('seated player can leave a waiting table', async () => {
+  it('seated player can leave a waiting table', { timeout: 10000 }, async () => {
     const host = players[0]
     const other = players[1]
 
@@ -163,7 +163,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     assert.equal(stateBody.seats.east, null, 'east seat should be empty after player left')
   })
 
-  it('returns 409 if player is not seated at the table', async () => {
+  it('returns 409 if player is not seated at the table', { timeout: 10000 }, async () => {
     const host = players[0]
     const unseated = players[2]
 
@@ -188,7 +188,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     assert.equal(leaveRes.status, 409)
   })
 
-  it('returns 404 for unknown tableId', async () => {
+  it('returns 404 for unknown tableId', { timeout: 10000 }, async () => {
     const host = players[0]
     const fakeId = '00000000-0000-0000-0000-000000000000'
     const leaveRes = await fetch(`${server.baseUrl}/api/tables/${fakeId}/leave`, {
@@ -202,14 +202,14 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     assert.equal(leaveRes.status, 404)
   })
 
-  it('returns 401 without auth headers', async () => {
+  it('returns 401 without auth headers', { timeout: 10000 }, async () => {
     const res = await fetch(`${server.baseUrl}/api/tables/some-id/leave`, {
       method: 'POST',
     })
     assert.equal(res.status, 401)
   })
 
-  it('human can leave an in-progress game — bot takes their seat', async () => {
+  it('human can leave an in-progress game — bot takes their seat', { timeout: 10000 }, async () => {
     const host = players[0]
     const p2 = players[1]
     const p3 = players[2]
@@ -273,7 +273,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     assert.equal(stateBody.players.east, 'bot:east', 'east seat should be occupied by a bot')
   })
 
-  it('host leaving in-progress game reassigns host to remaining human', async () => {
+  it('host leaving in-progress game reassigns host to remaining human', { timeout: 10000 }, async () => {
     const host = players[0]
     const p2 = players[1]
     const p3 = players[2]
@@ -334,7 +334,7 @@ describe('POST /api/tables/:tableId/leave', { skip }, () => {
     assert.equal(terminateRes.status, 200, 'new host should be able to terminate the game')
   })
 
-  it('last human leaving in-progress game terminates the table', async () => {
+  it('last human leaving in-progress game terminates the table', { timeout: 10000 }, async () => {
     const host = players[0]
 
     const createRes = await fetch(`${server.baseUrl}/api/tables`, {

@@ -526,6 +526,7 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 |---|---|---|
 | `JOINED` | `{ "tableId": "<uuid>" }` | Confirms the client has joined the table room. |
 | `LEFT` | `{ "tableId": "<uuid>" }` | Confirms the client has left the table room. |
+| `JOIN_DENIED` | `{ "tableId": "<uuid>", "reason": "not_seated" \| "table_not_found" \| "error" }` | Sent when a `JOIN` request is rejected because the player is not seated at the table, the table does not exist, or an internal error occurred. |
 | `JOINED_LOBBY` | `{}` | Confirms the client has joined the lobby channel. |
 | `LEFT_LOBBY` | `{}` | Confirms the client has left the lobby channel. |
 

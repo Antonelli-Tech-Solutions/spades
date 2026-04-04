@@ -23,11 +23,163 @@ import {
   leaveTable,
   leaveInProgressGame,
 } from './lobby/table.js'
-import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, advanceBotTurns, substitutePlayerWithBot } from './game/state.js'
+import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
+import { isBot, botBid, botPlay, botBlindNilExchange } from './game/bot.js'
+import { getPartnerSeat, isEligibleForBlindNil } from './game/bid.js'
 
 function sendJSON(res, statusCode, data) {
   res.status(statusCode).json(data)
+}
+
+// ── WebSocket event emission helpers ─────────────────────────────────────────
+
+/** Return the active seat for TURN_CHANGED payload. */
+function getActiveSeat(state) {
+  if (state.phase === 'bidding') return state.currentBidderSeat
+  if (state.phase === 'playing') return state.currentPlayerSeat
+  if (state.phase === 'blind_nil_exchange') {
+    const { step, currentBlindNilSeat } = state.blindNilExchange
+    return step === 'blind_to_partner' ? currentBlindNilSeat : getPartnerSeat(currentBlindNilSeat)
+  }
+  return null
+}
+
+/**
+ * Emit HAND_DEALT to each player individually (security: only their own cards).
+ * Players eligible for Blind Nil do not receive myHand until they reveal or bid Blind Nil.
+ */
+function emitHandDealt(wss, state) {
+  for (const seat of ['north', 'east', 'south', 'west']) {
+    const playerId = state.players[seat]
+    const eligible = isEligibleForBlindNil(state.scores, seat)
+    const payload = {
+      dealer: state.dealerSeat,
+      biddingOrder: state.biddingOrder,
+      blindNilEligible: eligible,
+    }
+    if (!eligible) {
+      payload.myHand = state.hands[seat]
+    }
+    wss.sendToPlayer(playerId, 'HAND_DEALT', payload)
+  }
+}
+
+/**
+ * Emit BLIND_NIL_EXCHANGE_PROMPT to the relevant player(s) based on the current exchange step.
+ * step='blind_to_partner': blind nil player gets direction='send', partner gets direction='receive'.
+ * step='partner_to_blind': partner gets direction='send' (their turn to send cards back).
+ */
+function emitBlindNilExchangePrompts(wss, state) {
+  const { currentBlindNilSeat, step } = state.blindNilExchange
+  const partnerSeat = getPartnerSeat(currentBlindNilSeat)
+
+  if (step === 'blind_to_partner') {
+    wss.sendToPlayer(state.players[currentBlindNilSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'send', count: 2 })
+    wss.sendToPlayer(state.players[partnerSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'receive', count: 2 })
+  } else {
+    // step === 'partner_to_blind': partner now sends cards back
+    wss.sendToPlayer(state.players[partnerSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'send', count: 2 })
+  }
+}
+
+/**
+ * Emit HAND_SCORED after all 13 tricks are played. Also emits GAME_OVER or HAND_DEALT
+ * depending on whether the game ended or a new hand begins.
+ * Reads score data from the last handHistory entry.
+ */
+function emitHandComplete(wss, tableId, newState) {
+  const lastEntry = newState.handHistory[newState.handHistory.length - 1]
+  wss.broadcast(tableId, 'HAND_SCORED', {
+    scoreDelta: lastEntry.scoreDelta,
+    newTotals: lastEntry.scoresAfter,
+    bags: lastEntry.bagsAfter,
+  })
+  if (newState.phase === 'game_over') {
+    wss.broadcast(tableId, 'GAME_OVER', {
+      winningTeam: newState.winner,
+      finalScores: newState.scores,
+    })
+  } else {
+    emitHandDealt(wss, newState)
+  }
+}
+
+/**
+ * Advance bot turns step-by-step, emitting WebSocket events for each bot action.
+ * When wss is null/undefined, behaves identically to the game engine's advanceBotTurns.
+ */
+function advanceBotsWithEvents(state, wss, tableId) {
+  let current = state
+  while (true) {
+    if (current.phase === 'bidding') {
+      const seat = current.currentBidderSeat
+      if (!seat || !isBot(current.players[seat])) break
+      const bid = botBid(current.hands[seat], current.bids[getPartnerSeat(seat)])
+      console.log('Bot bid:', { seat, bid, tableId: current.tableId })
+      current = placeBid(current, seat, bid)
+      if (wss) {
+        const bidType = bid === 'nil' ? 'nil' : bid === 'blind_nil' ? 'blindNil' : 'number'
+        wss.broadcast(tableId, 'BID_PLACED', { seat, bidType })
+        if (current.phase === 'blind_nil_exchange') {
+          emitBlindNilExchangePrompts(wss, current)
+        }
+        wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(current), phase: current.phase })
+      }
+    } else if (current.phase === 'playing') {
+      const seat = current.currentPlayerSeat
+      if (!seat || !isBot(current.players[seat])) break
+      const card = botPlay(current.hands[seat], current.currentTrick, current.spadesbroken, current.isFirstTrick)
+      const prevCompletedLen = current.completedTricks.length
+      const prevPhase = current.phase
+      console.log('Bot play:', { seat, card, tableId: current.tableId })
+      current = playCard(current, seat, card)
+      if (wss) {
+        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card })
+        // trickJustCompleted: tricks 1-12 AND 13th trick when game-over (length grows 12→13)
+        const trickJustCompleted = current.completedTricks.length > prevCompletedLen
+        // handJustScored: phase left 'playing' — either new hand or game over
+        const handJustScored = prevPhase === 'playing' && current.phase !== 'playing'
+        if (trickJustCompleted) {
+          const trick = current.completedTricks[current.completedTricks.length - 1]
+          wss.broadcast(tableId, 'TRICK_COMPLETE', { winnerSeat: trick.winner, plays: trick.plays })
+        } else if (handJustScored) {
+          // New-hand 13th trick: completedTricks reset to [] so trickJustCompleted is false
+          const lastEntry = current.handHistory[current.handHistory.length - 1]
+          if (lastEntry?.lastTrick) {
+            wss.broadcast(tableId, 'TRICK_COMPLETE', {
+              winnerSeat: lastEntry.lastTrick.winner,
+              plays: lastEntry.lastTrick.plays,
+            })
+          }
+        }
+        if (handJustScored) {
+          emitHandComplete(wss, tableId, current)
+          if (current.phase === 'game_over') break
+          // New hand started — continue loop (may have bot bids for new hand)
+        }
+        wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(current), phase: current.phase })
+      }
+    } else if (current.phase === 'blind_nil_exchange') {
+      const { currentBlindNilSeat, step } = current.blindNilExchange
+      // Bots never bid blind nil, so they only act as partner (step: partner_to_blind)
+      if (step !== 'partner_to_blind') break
+      const partnerSeat = getPartnerSeat(currentBlindNilSeat)
+      if (!isBot(current.players[partnerSeat])) break
+      const cards = botBlindNilExchange(current.hands[partnerSeat])
+      console.log('Bot blind nil exchange:', { seat: partnerSeat, cards, tableId: current.tableId })
+      current = submitBlindNilExchange(current, partnerSeat, cards)
+      if (wss) {
+        if (current.phase === 'blind_nil_exchange') {
+          emitBlindNilExchangePrompts(wss, current)
+        }
+        wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(current), phase: current.phase })
+      }
+    } else {
+      break
+    }
+  }
+  return current
 }
 
 /**
@@ -36,7 +188,7 @@ function sendJSON(res, statusCode, data) {
  * @param {import('express').Application} app
  * @param {{ mailer?: (email: string, token: string) => Promise<void>, redis?: object, rateLimitConfig?: { max?: number, windowSecs?: number } }} [opts]
  */
-export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConfig } = {}) {
+export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConfig, wss } = {}) {
   const emailer = mailer ?? defaultMailer
   const passwordResetEmailer = passwordResetMailer ?? defaultPasswordResetMailer
   const authRateLimiter = createRateLimiter(redis ?? null, {
@@ -261,9 +413,13 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (isTableFull(table)) {
         const players = table.seats // { north, east, south, west } → playerIds
         let gameState = createGame(tableId, players)
-        gameState = advanceBotTurns(gameState)
+        if (wss) emitHandDealt(wss, gameState)
+        gameState = advanceBotsWithEvents(gameState, wss, tableId)
         await saveGameState(redisClient, tableId, gameState)
         await markTablePlaying(redisClient, tableId, gameState.gameId)
+        if (wss) {
+          wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(gameState), phase: gameState.phase })
+        }
         console.log('Game started:', { tableId, gameId: gameState.gameId })
       }
 
@@ -299,9 +455,13 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (isTableFull(updated)) {
         const players = updated.seats
         let gameState = createGame(tableId, players)
-        gameState = advanceBotTurns(gameState)
+        if (wss) emitHandDealt(wss, gameState)
+        gameState = advanceBotsWithEvents(gameState, wss, tableId)
         await saveGameState(redisClient, tableId, gameState)
         await markTablePlaying(redisClient, tableId, gameState.gameId)
+        if (wss) {
+          wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(gameState), phase: gameState.phase })
+        }
         console.log('Game started with bots:', { tableId, gameId: gameState.gameId })
       }
 
@@ -415,8 +575,18 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
       validateBidTurn(gameState, seat)
       let newState = placeBid(gameState, seat, bid)
-      newState = advanceBotTurns(newState)
+      if (wss) {
+        const bidType = bid === 'nil' ? 'nil' : bid === 'blind_nil' ? 'blindNil' : 'number'
+        wss.broadcast(tableId, 'BID_PLACED', { seat, bidType })
+        if (newState.phase === 'blind_nil_exchange') {
+          emitBlindNilExchangePrompts(wss, newState)
+        }
+      }
+      newState = advanceBotsWithEvents(newState, wss, tableId)
       await saveGameState(redisClient, tableId, newState)
+      if (wss && newState.phase !== 'game_over') {
+        wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(newState), phase: newState.phase })
+      }
       sendJSON(res, 200, getPlayerView(newState, seat))
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
@@ -448,8 +618,14 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
 
       let newState = submitBlindNilExchange(gameState, seat, cards)
-      newState = advanceBotTurns(newState)
+      if (wss && newState.phase === 'blind_nil_exchange') {
+        emitBlindNilExchangePrompts(wss, newState)
+      }
+      newState = advanceBotsWithEvents(newState, wss, tableId)
       await saveGameState(redisClient, tableId, newState)
+      if (wss && newState.phase !== 'game_over') {
+        wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(newState), phase: newState.phase })
+      }
       sendJSON(res, 200, getPlayerView(newState, seat))
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
@@ -479,6 +655,9 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
       const newState = revealHand(gameState, seat)
       await saveGameState(redisClient, tableId, newState)
+      if (wss) {
+        wss.sendToPlayer(session.playerId, 'HAND_REVEALED', { myHand: newState.hands[seat] })
+      }
       sendJSON(res, 200, getPlayerView(newState, seat))
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
@@ -507,9 +686,37 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
 
       validateCardPlay(gameState, seat, card)
+      const prevCompletedLen = gameState.completedTricks.length
+      const prevPhase = gameState.phase
       let newState = playCard(gameState, seat, card)
-      newState = advanceBotTurns(newState)
+      if (wss) {
+        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card })
+        // trickJustCompleted: tricks 1-12 AND 13th trick when game-over (length grows 12→13)
+        const trickJustCompleted = newState.completedTricks.length > prevCompletedLen
+        // handJustScored: phase left 'playing' — either new hand or game over
+        const handJustScored = prevPhase === 'playing' && newState.phase !== 'playing'
+        if (trickJustCompleted) {
+          const trick = newState.completedTricks[newState.completedTricks.length - 1]
+          wss.broadcast(tableId, 'TRICK_COMPLETE', { winnerSeat: trick.winner, plays: trick.plays })
+        } else if (handJustScored) {
+          // New-hand 13th trick: completedTricks reset to [] so trickJustCompleted is false
+          const lastEntry = newState.handHistory[newState.handHistory.length - 1]
+          if (lastEntry?.lastTrick) {
+            wss.broadcast(tableId, 'TRICK_COMPLETE', {
+              winnerSeat: lastEntry.lastTrick.winner,
+              plays: lastEntry.lastTrick.plays,
+            })
+          }
+        }
+        if (handJustScored) {
+          emitHandComplete(wss, tableId, newState)
+        }
+      }
+      newState = advanceBotsWithEvents(newState, wss, tableId)
       await saveGameState(redisClient, tableId, newState)
+      if (wss && newState.phase !== 'game_over') {
+        wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(newState), phase: newState.phase })
+      }
       sendJSON(res, 200, getPlayerView(newState, seat))
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })

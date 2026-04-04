@@ -70,6 +70,7 @@ describe('WebSocket server', { skip }, () => {
       pingIntervalMs: 150,
       pongTimeoutMs: 100,
     })
+    await wss._subscriberReady
     await new Promise((resolve) => httpServer.listen(0, '127.0.0.1', resolve))
   })
 
@@ -213,6 +214,7 @@ describe('WebSocket server', { skip }, () => {
 
       httpServer2 = http.createServer()
       wss2 = createWsServer(httpServer2, { redis, pingIntervalMs: 30_000, pongTimeoutMs: 10_000 })
+      await wss2._subscriberReady
       await new Promise((resolve) => httpServer2.listen(0, '127.0.0.1', resolve))
     })
 

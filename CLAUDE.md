@@ -38,11 +38,22 @@ Spades Online is a real-time multiplayer card game (web + mobile) built with a N
 - If checks fail, download the logs, diagnose the failure, push a fix, and wait for checks to pass again
 - Once all checks pass, merge with: `gh pr merge <PR_NUMBER> --squash --delete-branch`
 
+## Default Behavior for Issues
+
+Unless an issue explicitly states otherwise:
+1. Complete the work for the issue
+2. Create a PR targeting `dev` branch with a clear description
+3. Poll CI status using `gh pr checks <PR_NUMBER> --watch`
+4. If any checks fail, download logs, diagnose, fix, and wait for all checks to pass
+5. Once all checks pass, merge with: `gh pr merge <PR_NUMBER> --squash --delete-branch`
+6. Mark the task complete in `docs/TASKS.md` in the same PR as the code change
+
 ## Sequential Issue Processing
-If an issue description contains "When this issue is completed, assign Issue #XYZ to dantonel", 
+
+If an issue description or any comment contains "When this issue is completed, assign Issue #XYZ to dantonel", 
 you MUST:
 1. Complete the work for the current issue
-2. Create and merge the PR
+2. Create and merge the PR (as per Default Behavior)
 3. Once merged, assign the next issue to dantonel using: gh issue edit <issue-number> --add-assignee dantonel
 4. Do NOT move to the next issue until the current one is fully merged
 

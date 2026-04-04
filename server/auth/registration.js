@@ -45,8 +45,13 @@ export async function registerPlayer(db, { email, username, password }, sendVeri
   const passwordHash = await hashPassword(password)
 
   // DEV_AUTO_VERIFY=true skips email verification entirely — for local testing only.
-  // Never set this in production.
-  const autoVerify = process.env.DEV_AUTO_VERIFY === 'true'
+  // Blocked unconditionally in production even if the env var is set, so it can
+  // never accidentally reach a production deployment.
+  if (process.env.DEV_AUTO_VERIFY === 'true' && process.env.NODE_ENV === 'production') {
+    console.warn('DEV_AUTO_VERIFY is set but has no effect in NODE_ENV=production')
+  }
+  const autoVerify =
+    process.env.NODE_ENV !== 'production' && process.env.DEV_AUTO_VERIFY === 'true'
 
   let player
   try {

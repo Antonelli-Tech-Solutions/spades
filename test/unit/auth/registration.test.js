@@ -203,6 +203,27 @@ describe('registerPlayer — DEV_AUTO_VERIFY', () => {
     assert.equal(playerInsert.params[3], true)
   })
 
+  it('does NOT skip verification when NODE_ENV=production, even if DEV_AUTO_VERIFY=true', async () => {
+    process.env.DEV_AUTO_VERIFY = 'true'
+    process.env.NODE_ENV = 'production'
+    const emailsSent = []
+    const db = {
+      query: async (sql) => {
+        if (sql.includes('INSERT INTO players')) return { rows: [{ id: 'prod-id' }] }
+        return { rows: [] }
+      },
+    }
+    await registerPlayer(
+      db,
+      { email: 'prod@example.com', username: 'produser', password: 'password123' },
+      async (email) => emailsSent.push(email),
+    )
+    delete process.env.DEV_AUTO_VERIFY
+    delete process.env.NODE_ENV
+
+    assert.equal(emailsSent.length, 1, 'should still send verification email in production')
+  })
+
   it('sends email normally when DEV_AUTO_VERIFY is not set', async () => {
     delete process.env.DEV_AUTO_VERIFY
     const emailsSent = []

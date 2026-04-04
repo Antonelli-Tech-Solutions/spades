@@ -34,6 +34,14 @@ export function detectCompletedTrick(prevState, nextState) {
   if (nextState.completedTricks.length > prevLen) {
     return nextState.completedTricks[nextState.completedTricks.length - 1]
   }
+  // The 13th trick completes a hand and completedTricks is reset for the new hand.
+  // Detect this by checking whether handHistory grew, then use lastTrick from the new entry.
+  const prevHistoryLen = Array.isArray(prevState.handHistory) ? prevState.handHistory.length : 0
+  const nextHistoryLen = Array.isArray(nextState.handHistory) ? nextState.handHistory.length : 0
+  if (nextHistoryLen > prevHistoryLen) {
+    const lastEntry = nextState.handHistory[nextState.handHistory.length - 1]
+    if (lastEntry?.lastTrick) return lastEntry.lastTrick
+  }
   return null
 }
 

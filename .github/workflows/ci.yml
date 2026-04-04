@@ -36,6 +36,7 @@ jobs:
 
       - name: Run tests
         run: npm test
+        timeout-minutes: 5
         env:
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test

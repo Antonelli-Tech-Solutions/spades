@@ -517,6 +517,8 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 |---|---|---|
 | `JOIN` | `{ "tableId": "<uuid>" }` | Subscribe to real-time events for a table. Acknowledged with `JOINED`. |
 | `LEAVE` | `{ "tableId": "<uuid>" }` | Unsubscribe from a table's events. Acknowledged with `LEFT`. |
+| `JOIN_LOBBY` | `{}` | Subscribe to lobby-wide events (table created/removed). Acknowledged with `JOINED_LOBBY`. |
+| `LEAVE_LOBBY` | `{}` | Unsubscribe from lobby events. Acknowledged with `LEFT_LOBBY`. |
 
 ### Server → Client Events
 
@@ -524,8 +526,12 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 |---|---|---|
 | `JOINED` | `{ "tableId": "<uuid>" }` | Confirms the client has joined the table room. |
 | `LEFT` | `{ "tableId": "<uuid>" }` | Confirms the client has left the table room. |
+| `JOINED_LOBBY` | `{}` | Confirms the client has joined the lobby channel. |
+| `LEFT_LOBBY` | `{}` | Confirms the client has left the lobby channel. |
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+
+Lobby events (table created, table removed, etc.) are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
 
 ### Heartbeat
 

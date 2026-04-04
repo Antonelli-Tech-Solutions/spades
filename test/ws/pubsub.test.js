@@ -96,7 +96,7 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
 
   // ── Table room pub/sub fan-out ─────────────────────────────────────────────
 
-  it('broadcast() on instance 2 delivers to client on instance 1 via Redis pub/sub', async () => {
+  it('broadcast() on instance 2 delivers to client on instance 1 via Redis pub/sub', { timeout: 10000 }, async () => {
     const ws = await wsConnect(httpServer1, { 'x-session-id': 'pubsub-s1' })
 
     ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'fanout-table' } }))
@@ -114,7 +114,7 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
     await waitClose(ws)
   })
 
-  it('broadcast() on instance 1 delivers to client on instance 2 via Redis pub/sub', async () => {
+  it('broadcast() on instance 1 delivers to client on instance 2 via Redis pub/sub', { timeout: 10000 }, async () => {
     const ws = await wsConnect(httpServer2, { 'x-session-id': 'pubsub-s1' })
 
     ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'fanout-table' } }))
@@ -132,7 +132,7 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
     await waitClose(ws)
   })
 
-  it('broadcast() delivers to clients on both instances simultaneously', async () => {
+  it('broadcast() delivers to clients on both instances simultaneously', { timeout: 10000 }, async () => {
     const ws1 = await wsConnect(httpServer1, { 'x-session-id': 'pubsub-s1' })
     const ws2 = await wsConnect(httpServer2, { 'x-session-id': 'pubsub-s2' })
 
@@ -154,7 +154,7 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
 
   // ── Lobby channel ────────────────────────────────────────────────────────────
 
-  it('JOIN_LOBBY receives JOINED_LOBBY ack', async () => {
+  it('JOIN_LOBBY receives JOINED_LOBBY ack', { timeout: 10000 }, async () => {
     const ws = await wsConnect(httpServer1, { 'x-session-id': 'pubsub-s1' })
 
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
@@ -166,7 +166,7 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
     await waitClose(ws)
   })
 
-  it('LEAVE_LOBBY receives LEFT_LOBBY ack', async () => {
+  it('LEAVE_LOBBY receives LEFT_LOBBY ack', { timeout: 10000 }, async () => {
     const ws = await wsConnect(httpServer1, { 'x-session-id': 'pubsub-s1' })
 
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
@@ -181,7 +181,7 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
     await waitClose(ws)
   })
 
-  it('broadcastLobby() on instance 2 delivers to lobby subscriber on instance 1', async () => {
+  it('broadcastLobby() on instance 2 delivers to lobby subscriber on instance 1', { timeout: 10000 }, async () => {
     const ws = await wsConnect(httpServer1, { 'x-session-id': 'pubsub-s1' })
 
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
@@ -198,7 +198,7 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
     await waitClose(ws)
   })
 
-  it('broadcastLobby() delivers to lobby subscribers on both instances', async () => {
+  it('broadcastLobby() delivers to lobby subscribers on both instances', { timeout: 10000 }, async () => {
     const ws1 = await wsConnect(httpServer1, { 'x-session-id': 'pubsub-s1' })
     const ws2 = await wsConnect(httpServer2, { 'x-session-id': 'pubsub-s2' })
 
@@ -218,7 +218,7 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
     await Promise.all([waitClose(ws1), waitClose(ws2)])
   })
 
-  it('lobby subscriber does NOT receive table room events', async () => {
+  it('lobby subscriber does NOT receive table room events', { timeout: 15000 }, async () => {
     const ws = await wsConnect(httpServer1, { 'x-session-id': 'pubsub-s1' })
 
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))

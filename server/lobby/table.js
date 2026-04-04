@@ -201,33 +201,41 @@ export async function removePlayerFromTables(redis, playerId) {
 }
 
 /**
- * Remove the requesting player from a waiting table's seat.
- * Only allowed while the table is in 'waiting' status — in-progress games
- * require separate disconnect handling.
+ * Remove the requesting player from a table's seat.
+ *
+ * - If the table is 'waiting': the seat is vacated (set to null).
+ * - If the table is 'playing': the seat is taken over by a bot (`bot:<seat>`)
+ *   so the game can continue uninterrupted (see PRD Section 6.4.7).
  *
  * @param {import('redis').RedisClientType} redis
  * @param {string} tableId
  * @param {string} playerId
- * @returns {Promise<TableState>}
- * @throws {Error} If the table is not found, game is in progress, or player is not seated
+ * @returns {Promise<{ table: TableState, seat: string, wasPlaying: boolean }>}
+ * @throws {Error} If the table is not found or the player is not seated
  */
 export async function leaveTable(redis, tableId, playerId) {
   const table = await getTable(redis, tableId)
   if (!table) {
     throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
   }
-  if (table.status === 'playing') {
-    throw Object.assign(new Error('Cannot leave a game in progress'), { code: 'GAME_IN_PROGRESS' })
-  }
   const seatEntry = Object.entries(table.seats).find(([, id]) => id === playerId)
   if (!seatEntry) {
     throw Object.assign(new Error('You are not seated at this table'), { code: 'NOT_SEATED' })
   }
   const [seat] = seatEntry
+
+  if (table.status === 'playing') {
+    const botId = `bot:${seat}`
+    const updated = { ...table, seats: { ...table.seats, [seat]: botId } }
+    await saveTable(redis, updated)
+    console.log('Player left in-progress game, replaced by bot:', { tableId, playerId, seat, botId })
+    return { table: updated, seat, wasPlaying: true }
+  }
+
   const updated = { ...table, seats: { ...table.seats, [seat]: null } }
   await saveTable(redis, updated)
-  console.log('Player left table:', { tableId, playerId, seat })
-  return updated
+  console.log('Player left waiting table:', { tableId, playerId, seat })
+  return { table: updated, seat, wasPlaying: false }
 }
 
 /**

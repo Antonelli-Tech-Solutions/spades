@@ -3,25 +3,9 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 import WebSocket from 'ws'
 import { createWsServer } from '../../server/ws/index.js'
+import { getRedis, closeRedis } from '../../server/redis.js'
 
-// --- Minimal fake Redis -----------------------------------------------------------
-function makeFakeRedis(sessions = {}, tables = {}) {
-  return {
-    get: async (key) => {
-      if (key.startsWith('session:')) {
-        const sessionId = key.replace(/^session:/, '')
-        return sessions[sessionId] ? JSON.stringify(sessions[sessionId]) : null
-      }
-      if (key.startsWith('table:')) {
-        const tableId = key.replace(/^table:/, '')
-        return tables[tableId] || null
-      }
-      return null
-    },
-    set: async () => 'OK',
-    del: async () => 1,
-  }
-}
+const skip = !process.env.REDIS_URL ? 'REDIS_URL must be set' : false
 
 function makeTableJson(tableId, seatedPlayerIds = []) {
   const seatNames = ['north', 'east', 'south', 'west']
@@ -68,22 +52,18 @@ function waitClose(ws) {
 }
 
 // ----- Test suite ----------------------------------------------------------------
-describe('WebSocket server', () => {
+describe('WebSocket server', { skip }, () => {
   let httpServer, wss, redis
 
   before(async () => {
-    redis = makeFakeRedis(
-      {
-        'valid-session-1': { playerId: 'player-1', username: 'Alice' },
-      },
-      {
-        // Seed tables with player-1 seated so existing room management tests pass
-        'table-abc':   makeTableJson('table-abc',   ['player-1']),
-        'table-xyz':   makeTableJson('table-xyz',   ['player-1']),
-        'table-bcast': makeTableJson('table-bcast', ['player-1']),
-        'table-in':    makeTableJson('table-in',    ['player-1']),
-      },
-    )
+    redis = await getRedis()
+
+    await redis.set('session:valid-session-1', JSON.stringify({ playerId: 'player-1', username: 'Alice' }))
+    await redis.set('table:table-abc',   makeTableJson('table-abc',   ['player-1']))
+    await redis.set('table:table-xyz',   makeTableJson('table-xyz',   ['player-1']))
+    await redis.set('table:table-bcast', makeTableJson('table-bcast', ['player-1']))
+    await redis.set('table:table-in',    makeTableJson('table-in',    ['player-1']))
+
     httpServer = http.createServer()
     wss = createWsServer(httpServer, {
       redis,
@@ -96,6 +76,14 @@ describe('WebSocket server', () => {
   after(async () => {
     wss.close()
     await new Promise((resolve) => httpServer.close(resolve))
+
+    await redis.del('session:valid-session-1')
+    await redis.del('table:table-abc')
+    await redis.del('table:table-xyz')
+    await redis.del('table:table-bcast')
+    await redis.del('table:table-in')
+
+    await closeRedis()
   })
 
   // ── Authentication ──────────────────────────────────────────────────────────
@@ -219,23 +207,22 @@ describe('WebSocket server', () => {
     let httpServer2, wss2
 
     before(async () => {
-      const authRedis = makeFakeRedis(
-        {
-          'session-p1': { playerId: 'player-1', username: 'Alice' },
-          'session-p2': { playerId: 'player-2', username: 'Bob' },
-        },
-        {
-          'table-private': makeTableJson('table-private', ['player-1']),
-        },
-      )
+      await redis.set('session:session-p1', JSON.stringify({ playerId: 'player-1', username: 'Alice' }))
+      await redis.set('session:session-p2', JSON.stringify({ playerId: 'player-2', username: 'Bob' }))
+      await redis.set('table:table-private', makeTableJson('table-private', ['player-1']))
+
       httpServer2 = http.createServer()
-      wss2 = createWsServer(httpServer2, { redis: authRedis, pingIntervalMs: 30_000, pongTimeoutMs: 10_000 })
+      wss2 = createWsServer(httpServer2, { redis, pingIntervalMs: 30_000, pongTimeoutMs: 10_000 })
       await new Promise((resolve) => httpServer2.listen(0, '127.0.0.1', resolve))
     })
 
     after(async () => {
       wss2.close()
       await new Promise((resolve) => httpServer2.close(resolve))
+
+      await redis.del('session:session-p1')
+      await redis.del('session:session-p2')
+      await redis.del('table:table-private')
     })
 
     it('sends JOIN_DENIED when player is not seated at the table', async () => {

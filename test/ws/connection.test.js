@@ -70,11 +70,12 @@ describe('WebSocket server', { skip }, () => {
       pingIntervalMs: 150,
       pongTimeoutMs: 100,
     })
+    await wss._subscriberReady
     await new Promise((resolve) => httpServer.listen(0, '127.0.0.1', resolve))
   })
 
   after(async () => {
-    wss.close()
+    await new Promise((resolve) => wss.close(resolve))
     await new Promise((resolve) => httpServer.close(resolve))
 
     await redis.del('session:valid-session-1')
@@ -151,8 +152,7 @@ describe('WebSocket server', { skip }, () => {
 
       ws1.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-bcast' } }))
       ws2.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-bcast' } }))
-      await nextMessage(ws1) // JOINED
-      await nextMessage(ws2) // JOINED
+      await Promise.all([nextMessage(ws1), nextMessage(ws2)]) // both JOINED
 
       const p1 = nextMessage(ws1)
       const p2 = nextMessage(ws2)
@@ -213,11 +213,12 @@ describe('WebSocket server', { skip }, () => {
 
       httpServer2 = http.createServer()
       wss2 = createWsServer(httpServer2, { redis, pingIntervalMs: 30_000, pongTimeoutMs: 10_000 })
+      await wss2._subscriberReady
       await new Promise((resolve) => httpServer2.listen(0, '127.0.0.1', resolve))
     })
 
     after(async () => {
-      wss2.close()
+      await new Promise((resolve) => wss2.close(resolve))
       await new Promise((resolve) => httpServer2.close(resolve))
 
       await redis.del('session:session-p1')

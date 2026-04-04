@@ -50,10 +50,13 @@ jobs:
           base_branch: dev
           additional_permissions: |
             actions: read
-          prompt: |
-            If assigned to an issue: implement the solution, create a PR on a new branch,
-            then poll CI status with the gh cli. When all checks pass, merge with:
-              gh pr merge <PR_NUMBER> --squash --delete-branch
-            If any checks fail, download the logs, fix the issue, push, and wait
-            for checks to pass before merging.
-            For all other triggers: follow the instructions in the comment or review.
+####################
+# Moved to CLAUDE.md
+####################
+#          prompt: |
+#            If assigned to an issue: implement the solution, create a PR on a new branch,
+#            then poll CI status with the gh cli. When all checks pass, merge with:
+#              gh pr merge <PR_NUMBER> --squash --delete-branch
+#            If any checks fail, download the logs, fix the issue, push, and wait
+#            for checks to pass before merging.
+#            For all other triggers: follow the instructions in the comment or review.

@@ -5,15 +5,39 @@ import WebSocket from 'ws'
 import { createWsServer } from '../../server/ws/index.js'
 
 // --- Minimal fake Redis -----------------------------------------------------------
-function makeFakeRedis(sessions = {}) {
+function makeFakeRedis(sessions = {}, tables = {}) {
   return {
     get: async (key) => {
-      const sessionId = key.replace(/^session:/, '')
-      return sessions[sessionId] ? JSON.stringify(sessions[sessionId]) : null
+      if (key.startsWith('session:')) {
+        const sessionId = key.replace(/^session:/, '')
+        return sessions[sessionId] ? JSON.stringify(sessions[sessionId]) : null
+      }
+      if (key.startsWith('table:')) {
+        const tableId = key.replace(/^table:/, '')
+        return tables[tableId] || null
+      }
+      return null
     },
     set: async () => 'OK',
     del: async () => 1,
   }
+}
+
+function makeTableJson(tableId, seatedPlayerIds = []) {
+  const seatNames = ['north', 'east', 'south', 'west']
+  const seats = { north: null, east: null, south: null, west: null }
+  seatedPlayerIds.forEach((id, i) => {
+    if (seatNames[i]) seats[seatNames[i]] = id
+  })
+  return JSON.stringify({
+    tableId,
+    seats,
+    status: 'waiting',
+    hostPlayerId: seatedPlayerIds[0] || null,
+    name: null,
+    gameId: null,
+    createdAt: new Date().toISOString(),
+  })
 }
 
 // --- Helpers ---------------------------------------------------------------------
@@ -48,9 +72,18 @@ describe('WebSocket server', () => {
   let httpServer, wss, redis
 
   before(async () => {
-    redis = makeFakeRedis({
-      'valid-session-1': { playerId: 'player-1', username: 'Alice' },
-    })
+    redis = makeFakeRedis(
+      {
+        'valid-session-1': { playerId: 'player-1', username: 'Alice' },
+      },
+      {
+        // Seed tables with player-1 seated so existing room management tests pass
+        'table-abc':   makeTableJson('table-abc',   ['player-1']),
+        'table-xyz':   makeTableJson('table-xyz',   ['player-1']),
+        'table-bcast': makeTableJson('table-bcast', ['player-1']),
+        'table-in':    makeTableJson('table-in',    ['player-1']),
+      },
+    )
     httpServer = http.createServer()
     wss = createWsServer(httpServer, {
       redis,
@@ -175,6 +208,62 @@ describe('WebSocket server', () => {
 
       assert.equal(msg.type, 'HAND_DEALT')
 
+      ws.close()
+      await waitClose(ws)
+    })
+  })
+
+  // ── JOIN authorization ──────────────────────────────────────────────────────
+
+  describe('JOIN authorization', () => {
+    let httpServer2, wss2
+
+    before(async () => {
+      const authRedis = makeFakeRedis(
+        {
+          'session-p1': { playerId: 'player-1', username: 'Alice' },
+          'session-p2': { playerId: 'player-2', username: 'Bob' },
+        },
+        {
+          'table-private': makeTableJson('table-private', ['player-1']),
+        },
+      )
+      httpServer2 = http.createServer()
+      wss2 = createWsServer(httpServer2, { redis: authRedis, pingIntervalMs: 30_000, pongTimeoutMs: 10_000 })
+      await new Promise((resolve) => httpServer2.listen(0, '127.0.0.1', resolve))
+    })
+
+    after(async () => {
+      wss2.close()
+      await new Promise((resolve) => httpServer2.close(resolve))
+    })
+
+    it('sends JOIN_DENIED when player is not seated at the table', async () => {
+      const ws = await wsConnect(httpServer2, { 'x-session-id': 'session-p2' })
+      ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-private' } }))
+      const msg = await nextMessage(ws)
+      assert.equal(msg.type, 'JOIN_DENIED')
+      assert.equal(msg.payload.tableId, 'table-private')
+      ws.close()
+      await waitClose(ws)
+    })
+
+    it('sends JOIN_DENIED when table does not exist in Redis', async () => {
+      const ws = await wsConnect(httpServer2, { 'x-session-id': 'session-p1' })
+      ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'nonexistent-table' } }))
+      const msg = await nextMessage(ws)
+      assert.equal(msg.type, 'JOIN_DENIED')
+      assert.equal(msg.payload.tableId, 'nonexistent-table')
+      ws.close()
+      await waitClose(ws)
+    })
+
+    it('sends JOINED when player is seated at the table', async () => {
+      const ws = await wsConnect(httpServer2, { 'x-session-id': 'session-p1' })
+      ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId: 'table-private' } }))
+      const msg = await nextMessage(ws)
+      assert.equal(msg.type, 'JOINED')
+      assert.equal(msg.payload.tableId, 'table-private')
       ws.close()
       await waitClose(ws)
     })

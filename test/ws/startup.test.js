@@ -7,22 +7,32 @@ import { getRedis, closeRedis } from '../../server/redis.js'
 
 const skip = !process.env.REDIS_URL ? 'REDIS_URL must be set' : false
 
-function wsConnect(server, headers = {}) {
+const TEST_TIMEOUT_MS = 5000
+
+function wsConnect(server, headers = {}, timeoutMs = TEST_TIMEOUT_MS) {
   const { port } = server.address()
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      ws.terminate()
+      reject(new Error(`wsConnect timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
     const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers })
-    ws.once('open', () => resolve(ws))
-    ws.once('error', reject)
+    ws.once('open', () => { clearTimeout(timer); resolve(ws) })
+    ws.once('error', (err) => { clearTimeout(timer); reject(err) })
     ws.once('unexpected-response', (_req, res) => {
+      clearTimeout(timer)
       reject(Object.assign(new Error(`HTTP ${res.statusCode}`), { statusCode: res.statusCode }))
     })
   })
 }
 
-function waitClose(ws) {
-  return new Promise((resolve) => {
+function waitClose(ws, timeoutMs = TEST_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
     if (ws.readyState === WebSocket.CLOSED) return resolve(ws._closeCode ?? ws.closeCode)
-    ws.once('close', (code) => resolve(code))
+    const timer = setTimeout(() => {
+      reject(new Error(`waitClose timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+    ws.once('close', (code) => { clearTimeout(timer); resolve(code) })
   })
 }
 
@@ -59,14 +69,14 @@ describe('app.js WS_PORT startup branching', { skip }, () => {
       await new Promise((resolve) => httpServer.close(resolve))
     })
 
-    it('accepts authenticated WebSocket connections on the shared server', async () => {
+    it('accepts authenticated WebSocket connections on the shared server', { timeout: TEST_TIMEOUT_MS }, async () => {
       const ws = await wsConnect(httpServer, { 'x-session-id': 'startup-session' })
       assert.equal(ws.readyState, WebSocket.OPEN)
       ws.close()
       await waitClose(ws)
     })
 
-    it('rejects unauthenticated WebSocket connections on the shared server', async () => {
+    it('rejects unauthenticated WebSocket connections on the shared server', { timeout: TEST_TIMEOUT_MS }, async () => {
       const err = await wsConnect(httpServer).then(
         () => { throw new Error('expected rejection') },
         (e) => e,
@@ -102,20 +112,20 @@ describe('app.js WS_PORT startup branching', { skip }, () => {
       ])
     })
 
-    it('dedicated WS server and main HTTP server listen on different ports', () => {
+    it('dedicated WS server and main HTTP server listen on different ports', { timeout: TEST_TIMEOUT_MS }, () => {
       const wsPort = wsHttpServer.address().port
       const httpPort = httpServer.address().port
       assert.notEqual(wsPort, httpPort, 'WS server and HTTP server must be on different ports')
     })
 
-    it('accepts authenticated WebSocket connections on the dedicated WS server', async () => {
+    it('accepts authenticated WebSocket connections on the dedicated WS server', { timeout: TEST_TIMEOUT_MS }, async () => {
       const ws = await wsConnect(wsHttpServer, { 'x-session-id': 'startup-session' })
       assert.equal(ws.readyState, WebSocket.OPEN)
       ws.close()
       await waitClose(ws)
     })
 
-    it('rejects unauthenticated WebSocket connections on the dedicated WS server', async () => {
+    it('rejects unauthenticated WebSocket connections on the dedicated WS server', { timeout: TEST_TIMEOUT_MS }, async () => {
       const err = await wsConnect(wsHttpServer).then(
         () => { throw new Error('expected rejection') },
         (e) => e,
@@ -126,8 +136,10 @@ describe('app.js WS_PORT startup branching', { skip }, () => {
       )
     })
 
-    it('WebSocket upgrade is not handled on the main HTTP server', async () => {
-      // The main HTTP server has no WS handler attached — the upgrade should fail
+    it('WebSocket upgrade is not handled on the main HTTP server', { timeout: TEST_TIMEOUT_MS }, async () => {
+      // The main HTTP server has no WS handler attached — the upgrade should fail or be refused.
+      // Node.js destroys the socket when no 'upgrade' listener is present, causing an ECONNRESET
+      // or similar error on the client side.
       const err = await wsConnect(httpServer, { 'x-session-id': 'startup-session' }).then(
         () => { throw new Error('expected connection to main HTTP server to fail') },
         (e) => e,

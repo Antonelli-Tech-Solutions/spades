@@ -1,7 +1,7 @@
 name: Claude CI Fixer
 on:
   workflow_run:
-    workflows: ["CI"]   # ← change to match your CI workflow name exactly
+    workflows: ["CI"]
     types: [completed]
 
 permissions:
@@ -21,6 +21,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_branch }}
+      
+      - name: Find associated PR
+        id: find-pr
+        run: |
+          PR_NUMBER=$(gh pr list --head ${{ github.event.workflow_run.head_branch }} --json number --jq '.[0].number')
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+      
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -28,7 +35,7 @@ jobs:
           additional_permissions: |
             actions: read
           prompt: |
-            The CI checks failed on this branch. Download the failure logs,
-            diagnose what went wrong, and push a fix.
+            The CI checks failed on PR #${{ steps.find-pr.outputs.pr_number }}.
+            Download the failure logs, diagnose what went wrong, and push a fix.
             Once all checks pass, merge the PR with:
               gh pr merge --squash --delete-branch

@@ -1,5 +1,6 @@
 import { validateRegisterForm } from '../validation.js'
 import { registerUser, resendVerification } from '../api.js'
+import { navigate } from '../router.js'
 
 /**
  * Render the registration screen into `container`.
@@ -70,7 +71,17 @@ export function renderRegisterScreen(container) {
     btn.textContent = 'Creating account\u2026'
 
     try {
-      await registerUser({ email, username, password })
+      const result = await registerUser({ email, username, password })
+
+      if (result.sessionId) {
+        sessionStorage.setItem('sessionId', result.sessionId)
+        sessionStorage.setItem('playerId', result.playerId)
+        sessionStorage.setItem('username', result.username)
+        console.log('Auto-verified registration, going to lobby:', { playerId: result.playerId, username: result.username })
+        navigate('#/lobby')
+        return
+      }
+
       const safeEmail = escapeHtml(email)
       container.innerHTML = `
         <div class="auth-card">

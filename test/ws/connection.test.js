@@ -175,7 +175,7 @@ describe('WebSocket server', { skip }, () => {
       // wsOut never joins any room
 
       let outsiderReceived = false
-      wsOut.on('message', { timeout: 15000 }, () => { outsiderReceived = true })
+      wsOut.on('message', () => { outsiderReceived = true })
 
       wss.broadcast('table-in', 'CARD_PLAYED', { seat: 'east', card: { suit: 'hearts', rank: '2' } })
 

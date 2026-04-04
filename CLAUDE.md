@@ -145,6 +145,16 @@ The following are coding-specific gotchas that are easy to misimplement even whe
 - Run `npm test` to execute the full test suite
 - Do not break existing API contracts — clients depend on exact response and event shapes
 
+## Testing Timeouts
+
+When writing tests:
+- Unit tests (pure game logic): `timeout: 2000` (2 seconds)
+- Integration tests (with Redis/database): `timeout: 10000` (10 seconds)
+- Async operations or external calls: `timeout: 15000` (15 seconds)
+- Set timeout in the test options: `test('name', { timeout: 5000 }, async () => { ... })`
+- If a test legitimately needs longer, document why in a comment.
+- Never skip timeouts — hanging tests block the entire CI pipeline
+
 ## Dependency Management
 
 - After adding or changing npm dependencies, always run `npm install` to update `package-lock.json`

@@ -22,6 +22,16 @@ describe('registerUser', () => {
     assert.equal(result.playerId, 'uuid-123')
   })
 
+  it('resolves with sessionId and username when DEV_AUTO_VERIFY is active', async () => {
+    const result = await registerUser(
+      { email: 'a@b.com', username: 'alice', password: 'password123' },
+      mockFetch(201, { sessionId: 'sess-abc', playerId: 'uuid-123', username: 'alice' }),
+    )
+    assert.equal(result.sessionId, 'sess-abc')
+    assert.equal(result.playerId, 'uuid-123')
+    assert.equal(result.username, 'alice')
+  })
+
   it('throws with status 409 on duplicate email/username', async () => {
     await assert.rejects(
       () =>

@@ -94,7 +94,7 @@ export function createWsServer(httpServer, opts = {}) {
     })
 
     // ── Message handler ─────────────────────────────────────────────────────
-    ws.on('message', (data) => {
+    ws.on('message', async (data) => {
       let msg
       try {
         msg = JSON.parse(data.toString())
@@ -107,6 +107,29 @@ export function createWsServer(httpServer, opts = {}) {
       if (type === 'JOIN') {
         const { tableId } = payload
         if (!tableId) return
+
+        // Security: verify the player is seated at this table before subscribing
+        if (redis) {
+          try {
+            const tableData = await redis.get(`table:${tableId}`)
+            if (!tableData) {
+              ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'table_not_found' } }))
+              return
+            }
+            const table = JSON.parse(tableData)
+            const isSeated = Object.values(table.seats).includes(playerId)
+            if (!isSeated) {
+              console.log('WebSocket JOIN denied — not seated:', { playerId, tableId })
+              ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'not_seated' } }))
+              return
+            }
+          } catch (err) {
+            console.error('WebSocket JOIN auth error:', { playerId, tableId, error: err.message })
+            ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'error' } }))
+            return
+          }
+        }
+
         const roomKey = `table:${tableId}`
         if (!rooms.has(roomKey)) {
           rooms.set(roomKey, new Set())

@@ -81,6 +81,7 @@
 ### Backend
 
 - [x] `P0` Build `server/ws/` WebSocket server: authenticated connection upgrade (`x-session-id` header), table room management (`table:{tableId}` rooms), heartbeat ping/pong (30 s interval, 10 s timeout)
+- [x] `BUG` Security: WebSocket JOIN handler now verifies the player is seated at the requested table before subscribing them to the room. Unauthorised JOIN attempts receive a `JOIN_DENIED` event instead of being silently admitted, closing the card-visibility information-leak.
 - [ ] `P0` Implement Redis pub/sub fan-out: each `table:{tableId}` room and the `lobby` channel map to a Redis pub/sub channel so all server instances can broadcast to connected clients
 - [ ] `P0` Emit in-game events after each validated state mutation: `HAND_DEALT` (per-player), `BID_PLACED`, `BLIND_NIL_EXCHANGE_PROMPT`, `CARD_PLAYED`, `TRICK_COMPLETE`, `HAND_SCORED`, `GAME_OVER`, `TURN_CHANGED`
 - [ ] `P0` Implement player disconnect detection: emit `PLAYER_DISCONNECTED` with a 60 s reconnect window on ping failure or clean close; emit `PLAYER_RECONNECTED` when the player re-joins within the window; stall game with "waiting for reconnect" indicator if window expires

@@ -140,7 +140,8 @@ describe('app.js WS_PORT startup branching', { skip }, () => {
       // The main HTTP server has no WS handler attached — the upgrade should fail or be refused.
       // Node.js destroys the socket when no 'upgrade' listener is present, causing an ECONNRESET
       // or similar error on the client side.
-      const err = await wsConnect(httpServer, { 'x-session-id': 'startup-session' }).then(
+      // Use a shorter connect timeout (3000ms) so it rejects before the test runner's 5000ms limit.
+      const err = await wsConnect(httpServer, { 'x-session-id': 'startup-session' }, 3000).then(
         () => { throw new Error('expected connection to main HTTP server to fail') },
         (e) => e,
       )

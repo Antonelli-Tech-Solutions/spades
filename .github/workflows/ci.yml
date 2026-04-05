@@ -40,3 +40,14 @@ jobs:
         env:
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
+  pass-secret-to-fixer:
+    if: failure()
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger CI Fixer with secret
+        run: |
+          gh workflow run claude-ci-fixer.yml \
+            -f anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}
+        env:
+          GH_TOKEN: ${{ github.token }}

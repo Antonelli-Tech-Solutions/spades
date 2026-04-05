@@ -47,26 +47,21 @@ export async function renderLobbyScreen(container) {
     <div class="auth-card">
       <h1 class="auth-title">Lobby</h1>
       <p class="auth-message">Welcome back, <strong>${escapeHtml(username)}</strong>!</p>
-      <div class="lobby-actions">
-        <button id="create-table-btn" class="btn-primary">Create Table</button>
-        <button id="join-table-btn" class="btn-secondary">Join Table</button>
-        <button id="logout-btn" class="btn-link">Log out</button>
-      </div>
       <div class="lobby-tables">
         <h2 class="lobby-tables-title">Open Tables</h2>
-        <div id="table-list" class="table-list">
+        <div id="table-list" class="table-list table-list-scroll">
           <p class="table-list-empty">Loading tables\u2026</p>
         </div>
+      </div>
+      <div class="lobby-actions">
+        <button id="create-table-btn" class="btn-primary">Create Table</button>
+        <button id="logout-btn" class="btn-link">Log out</button>
       </div>
     </div>
   `
 
   container.querySelector('#create-table-btn').addEventListener('click', () => {
     navigate('#/create-table')
-  })
-
-  container.querySelector('#join-table-btn').addEventListener('click', () => {
-    navigate('#/join')
   })
 
   container.querySelector('#logout-btn').addEventListener('click', async () => {

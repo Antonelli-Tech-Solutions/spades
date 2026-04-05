@@ -854,3 +854,56 @@ describe('advanceBotTurns', { timeout: 2000 }, () => {
     assert.notEqual(result.phase, 'bidding', 'all bot bids should be resolved')
   })
 })
+
+describe('getPlayerView — validCards', { timeout: 2000 }, () => {
+  // Helper: bid all seats with the given bid to reach playing phase
+  function bidAllToPlay(state, bid = 3) {
+    for (const seat of state.biddingOrder) {
+      state = placeBid(state, seat, bid)
+    }
+    return state
+  }
+
+  it('includes validCards for the active player during playing phase', { timeout: 2000 }, () => {
+    let state = createGame('table-1', PLAYER_IDS)
+    state = bidAllToPlay(state)
+    assert.equal(state.phase, 'playing')
+    const activeSeat = state.currentPlayerSeat
+    const view = getPlayerView(state, activeSeat)
+    assert.ok(Array.isArray(view.validCards), 'validCards should be an array')
+    assert.ok(view.validCards.length > 0, 'active player should have at least one valid card')
+  })
+
+  it('does not include validCards for inactive players', { timeout: 2000 }, () => {
+    let state = createGame('table-1', PLAYER_IDS)
+    state = bidAllToPlay(state)
+    assert.equal(state.phase, 'playing')
+    const activeSeat = state.currentPlayerSeat
+    const otherSeats = CLOCKWISE_SEATS.filter((s) => s !== activeSeat)
+    for (const seat of otherSeats) {
+      const view = getPlayerView(state, seat)
+      assert.equal(view.validCards, undefined, `${seat} should not receive validCards`)
+    }
+  })
+
+  it('validCards does not include spades on the first trick when spades are not broken', { timeout: 2000 }, () => {
+    let state = createGame('table-1', PLAYER_IDS)
+    state = bidAllToPlay(state)
+    assert.equal(state.isFirstTrick, true)
+    const activeSeat = state.currentPlayerSeat
+    const hand = state.hands[activeSeat]
+    // Only test this if the active player actually has non-spade cards
+    const hasNonSpades = hand.some((c) => c.suit !== 'spades')
+    if (hasNonSpades) {
+      const view = getPlayerView(state, activeSeat)
+      assert.ok(view.validCards.every((c) => c.suit !== 'spades'), 'no spades should be valid on the first trick')
+    }
+  })
+
+  it('does not include validCards during bidding phase', { timeout: 2000 }, () => {
+    const state = createGame('table-1', PLAYER_IDS)
+    assert.equal(state.phase, 'bidding')
+    const view = getPlayerView(state, state.currentBidderSeat)
+    assert.equal(view.validCards, undefined, 'validCards should not appear during bidding')
+  })
+})

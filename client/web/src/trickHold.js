@@ -1,5 +1,4 @@
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
-const TRICK_CLASS = { spades: 'trick-spades', hearts: 'trick-hearts', diamonds: 'trick-diamonds', clubs: 'trick-clubs' }
 
 function esc(s) {
   return String(s ?? '')
@@ -83,8 +82,8 @@ export function trickHoldHtml(trick, rel) {
     const card = bySeats[seat]
     if (!card) return '<div class="trick-slot"></div>'
     const s = SUIT_SYMBOL[card.suit]
-    const suitCls = TRICK_CLASS[card.suit] ? ` ${TRICK_CLASS[card.suit]}` : ''
-    return `<div class="trick-slot"><div class="trick-card${suitCls}">${esc(card.rank)}${s}</div></div>`
+    const colorCls = card.suit ? ` trick-${card.suit}` : ''
+    return `<div class="trick-slot"><div class="trick-card${colorCls}">${esc(card.rank)}${s}</div></div>`
   }
 
   const winnerLabel = trick.winner === rel.me

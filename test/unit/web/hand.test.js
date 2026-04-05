@@ -39,18 +39,22 @@ describe('cardHtml', { timeout: 2000 }, () => {
     assert.ok(html.includes('data-rank="K"'))
   })
 
-  it('adds card-red class for red suits', { timeout: 2000 }, () => {
+  it('adds suit-specific color class for each suit', { timeout: 2000 }, () => {
     const hearts = cardHtml({ suit: 'hearts', rank: '2' }, '')
     const diamonds = cardHtml({ suit: 'diamonds', rank: '2' }, '')
-    assert.ok(hearts.includes('card-red'), 'hearts should be red')
-    assert.ok(diamonds.includes('card-red'), 'diamonds should be red')
-  })
-
-  it('does not add card-red class for black suits', { timeout: 2000 }, () => {
     const spades = cardHtml({ suit: 'spades', rank: '2' }, '')
     const clubs = cardHtml({ suit: 'clubs', rank: '2' }, '')
-    assert.ok(!spades.includes('card-red'), 'spades should not be red')
-    assert.ok(!clubs.includes('card-red'), 'clubs should not be red')
+    assert.ok(hearts.includes('card-hearts'), 'hearts should have card-hearts class')
+    assert.ok(diamonds.includes('card-diamonds'), 'diamonds should have card-diamonds class')
+    assert.ok(spades.includes('card-spades'), 'spades should have card-spades class')
+    assert.ok(clubs.includes('card-clubs'), 'clubs should have card-clubs class')
+  })
+
+  it('does not mix up suit color classes', { timeout: 2000 }, () => {
+    const spades = cardHtml({ suit: 'spades', rank: '2' }, '')
+    const clubs = cardHtml({ suit: 'clubs', rank: '2' }, '')
+    assert.ok(!spades.includes('card-hearts'), 'spades should not have card-hearts class')
+    assert.ok(!clubs.includes('card-diamonds'), 'clubs should not have card-diamonds class')
   })
 
   it('appends extra CSS class when provided', { timeout: 2000 }, () => {
@@ -121,20 +125,21 @@ describe('handSpreadHtml', { timeout: 2000 }, () => {
     assert.ok(!html.includes('card-play'))
   })
 
-  it('marks red-suit cards with card-red', { timeout: 2000 }, () => {
+  it('marks suit cards with suit-specific color class', { timeout: 2000 }, () => {
     const hand = [
       { suit: 'hearts', rank: '5' },
       { suit: 'spades', rank: '5' },
     ]
     const html = handSpreadHtml(hand, noExtra)
-    // Only the hearts card should get card-red
+    // Hearts card should get card-hearts; spades card should get card-spades
     const heartsIdx = html.indexOf('data-suit="hearts"')
     const spadesIdx = html.indexOf('data-suit="spades"')
     // Grab the class attributes from each span block
     const heartsSpan = html.slice(html.lastIndexOf('<span', heartsIdx), heartsIdx)
     const spadesSpan = html.slice(html.lastIndexOf('<span', spadesIdx), spadesIdx)
-    assert.ok(heartsSpan.includes('card-red'))
-    assert.ok(!spadesSpan.includes('card-red'))
+    assert.ok(heartsSpan.includes('card-hearts'))
+    assert.ok(!spadesSpan.includes('card-hearts'))
+    assert.ok(spadesSpan.includes('card-spades'))
   })
 })
 
@@ -172,8 +177,8 @@ describe('handDiagramHtml', { timeout: 2000 }, () => {
       { suit: 'hearts', rank: 'K' },
     ]
     const html = handDiagramHtml(hand, noExtra)
-    assert.ok(html.includes('class="diagram-suit"'), 'spades row should have diagram-suit class')
-    assert.ok(html.includes('class="diagram-suit suit-red"'), 'hearts row should have suit-red class')
+    assert.ok(html.includes('class="diagram-suit suit-spades"'), 'spades row should have suit-spades class')
+    assert.ok(html.includes('class="diagram-suit suit-hearts"'), 'hearts row should have suit-hearts class')
   })
 
   it('renders all cards for a suit in a single row', { timeout: 2000 }, () => {
@@ -260,14 +265,16 @@ describe('lastTrickHtml', { timeout: 2000 }, () => {
     assert.ok(html.includes('Won by North'), 'should say "Won by North"')
   })
 
-  it('applies trick-red class to red-suit cards', { timeout: 2000 }, () => {
+  it('applies suit-specific trick class to each card', { timeout: 2000 }, () => {
     const html = lastTrickHtml(fullTrick, rel)
-    // hearts (K) and diamonds (Q) should have trick-red
-    const redCount = (html.match(/trick-red/g) || []).length
-    assert.equal(redCount, 2, 'exactly 2 red-suit cards should have trick-red')
+    // each suit should have its own trick-<suit> class
+    assert.ok(html.includes('trick-hearts'), 'hearts card should have trick-hearts class')
+    assert.ok(html.includes('trick-diamonds'), 'diamonds card should have trick-diamonds class')
+    assert.ok(html.includes('trick-spades'), 'spades card should have trick-spades class')
+    assert.ok(html.includes('trick-clubs'), 'clubs card should have trick-clubs class')
   })
 
-  it('does not apply trick-red to black-suit cards', { timeout: 2000 }, () => {
+  it('does not mix up suit trick classes', { timeout: 2000 }, () => {
     const blackOnly = {
       winner: 'north',
       plays: [
@@ -278,7 +285,8 @@ describe('lastTrickHtml', { timeout: 2000 }, () => {
       ],
     }
     const html = lastTrickHtml(blackOnly, rel)
-    assert.equal((html.match(/trick-red/g) || []).length, 0)
+    assert.equal((html.match(/trick-hearts/g) || []).length, 0, 'no trick-hearts for black-only trick')
+    assert.equal((html.match(/trick-diamonds/g) || []).length, 0, 'no trick-diamonds for black-only trick')
   })
 
   it('escapes HTML special characters in card rank', { timeout: 2000 }, () => {

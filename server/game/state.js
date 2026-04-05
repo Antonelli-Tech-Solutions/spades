@@ -514,10 +514,20 @@ export function getPlayerView(state, seat) {
     }
   }
 
+  const myHand = hands[seat]
+
+  // Compute valid cards when it is this player's turn to play.
+  // The client uses this for highlighting — the server still validates every play.
+  let validCards
+  if (state.phase === 'playing' && state.currentPlayerSeat === seat) {
+    validCards = getLegalPlays(myHand, state.currentTrick, state.spadesbroken, state.isFirstTrick)
+  }
+
   return {
     ...rest,
     blindNilEligible: false,
-    myHand: hands[seat],
+    myHand,
+    ...(validCards !== undefined ? { validCards } : {}),
     // Include played cards from the current trick (visible to all)
     // Do NOT include other players' unplayed hands
   }

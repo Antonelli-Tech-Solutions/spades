@@ -9,6 +9,8 @@
 
 ## ✅ Completed
 
+- [x] `P1` UI pass (issue #251): 4-color suit scheme (♠ black, ♥ red, ♦ blue, ♣ green) as default; larger cards and seat-info elements; team bid target + tricks-taken bar during play; valid-card highlighting — server computes `validCards` via `getLegalPlays` in `getPlayerView`, client dims invalid cards and blocks clicks on them; stable hover (only valid playable cards lift on hover); `teamBidTricksHtml` panel shows N/S and E/W bid vs tricks inline below scoreboard.
+
 - [x] `P1` Refactor WebSocket events to carry delta payloads (hybrid approach): split `GAME_REFRESH_EVENTS` into `FULL_REFRESH_EVENTS` (structural transitions) and `DELTA_EVENTS` (in-flight game events). Delta events (`CARD_PLAYED`, `BID_PLACED`, `TRICK_COMPLETE`, `TURN_CHANGED`, `HAND_REVEALED`, `BLIND_NIL_EXCHANGE_PROMPT`, `PLAYER_DISCONNECTED`, `PLAYER_RECONNECTED`) are applied directly to client state via `applyDelta()` without an HTTP round-trip. Server emitters updated to include delta fields (`currentTrick`, `nextPlayerSeat`, `spadesBroken` on `CARD_PLAYED`; `bid` on numeric `BID_PLACED`; `step`/`currentBlindNilSeat` on `BLIND_NIL_EXCHANGE_PROMPT`; `seat` on `HAND_REVEALED`). Reduces per-trick HTTP round-trips from 52 to 0 for a full 13-trick hand. Reconnect re-hydration path preserved (issue #239).
 
 - [x] `BUG` Fix play/bid order appearing counterclockwise in the web UI: `relSeats()` in `client/web/src/screens/game.js` had `left` and `right` swapped, making each player's clockwise neighbour appear on the wrong side of the screen. Extracted `relSeats` and `CW` to `client/web/src/seatUtils.js` and added unit tests. Server engine was unaffected.

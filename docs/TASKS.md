@@ -105,11 +105,11 @@
 
 ---
 
-## Slice 3 — Full Lobby & Access Control
+## Slice 3 — Full Lobby, Access Control & Social
 
-> Goal: the complete table discovery and access model from the PRD is in place — public/friends-only/private visibility, join policies, shareable links, spectating, and the arrive-then-sit flow.
+> Goal: the complete table discovery and access model from the PRD is in place — public/friends-only/private visibility, join policies, shareable links, spectating, and the arrive-then-sit flow. The friends list, presence, invites, and block system are also delivered in this slice, since much of the lobby access control model depends on friend relationships.
 
-- [ ] `P0` Subscribe each connected client to their personal notification channel `player:{playerId}:notify` on WebSocket connect; this channel delivers Friends-Only table events and Slice 4 social notifications (friend requests, in-app invites)
+- [ ] `P0` Subscribe each connected client to their personal notification channel `player:{playerId}:notify` on WebSocket connect; this channel delivers Friends-Only table events and social notifications (friend requests, in-app invites)
 - [ ] `P0` Implement visibility-aware lobby event routing: Public tables → `lobby` channel; Friends-Only tables → `player:{friendId}:notify` per friend of host; Private tables → no broadcast (see PRD Section 6.4.4)
 - [ ] `P0` Implement visibility transition events: when a host changes table visibility, send `TABLE_REMOVED` on the old audience's channel and `TABLE_CREATED` on the new audience's channel (all six transition combinations in PRD Section 6.4.4)
 - [ ] `P0` Implement friend-list side effects for Friends-Only tables: on host-removes-friend emit `TABLE_REMOVED` to that player's notify channel; on host-accepts-friend-request emit `TABLE_CREATED` (current state) to new friend's notify channel
@@ -127,11 +127,7 @@
 - [ ] `P0` Allow any player who can see a table to spectate, subject to the host's spectating setting
 - [ ] `P1` Display spectators in a separate observer rail, distinct from seated players
 
----
-
-## Slice 4 — Social Features
-
-> Goal: players can find and play with friends, see who is online, and communicate during games.
+### Social
 
 - [ ] `P1` Build friends list: send, accept, decline requests by username search
 - [ ] `P1` Show online / offline / in-game status; display table name if player has visibility permission, "Playing at a private table" if not, "In lobby" if between games
@@ -140,6 +136,13 @@
 - [ ] `P1` Deliver in-app invite notifications with one-click join; notify host on decline
 - [ ] `P1` Implement block: prevent friend requests and game invitations from blocked players
 - [ ] `P1` Deliver friend request notifications in-app and via push (if enabled)
+
+---
+
+## Slice 4 — In-Game Chat
+
+> Goal: players can communicate during games.
+
 - [ ] `P1` Build in-game chat panel with profanity filter; allow host to disable
 - [ ] `P2` Implement chat abuse reporting (moderation policy unresolved — see OQ-6; do not implement mute mechanics until decided)
 

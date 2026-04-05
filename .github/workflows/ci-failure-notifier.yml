@@ -50,5 +50,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
-              body: `@claude CI failed on this PR. Please check the [workflow run](${runUrl}), diagnose the failure, fix it, and re-run checks.`
+              body: `@claude CI failed on this PR. Please check the [workflow run](${runUrl}), diagnose the failure, fix it, and once all checks pass merge with: \`gh pr merge ${prNumber} --squash --delete-branch\``
             });

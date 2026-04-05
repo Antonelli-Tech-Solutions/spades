@@ -164,6 +164,78 @@ export function createGameSocket({
 }
 
 /**
+ * Create an authenticated WebSocket connection to the lobby channel.
+ *
+ * Sends JOIN_LOBBY after connecting; waits for JOINED_LOBBY as the ack.
+ * TABLE_CREATED, TABLE_UPDATED, and TABLE_REMOVED events are forwarded to onEvent.
+ * All other handshake messages (JOINED_LOBBY, LEFT_LOBBY) are consumed internally.
+ *
+ * @param {object} opts
+ * @param {string} opts.wsUrl              - Full WS/WSS URL with `sessionId` query param
+ * @param {function} [opts.onEvent]        - Called with each lobby event `{ type, payload }`
+ * @param {function} [opts.onOpen]         - Called once JOINED_LOBBY is received
+ * @param {function} [opts.onClose]        - Called when the socket closes
+ * @param {function} [opts.onError]        - Called on WebSocket error
+ * @param {typeof WebSocket} [opts.WebSocketClass] - Injected for testing; defaults to globalThis.WebSocket
+ * @returns {{ close: function }}
+ */
+export function createLobbySocket({
+  wsUrl,
+  onEvent,
+  onOpen,
+  onClose,
+  onError,
+  WebSocketClass = globalThis.WebSocket,
+}) {
+  const ws = new WebSocketClass(wsUrl)
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+  }
+
+  ws.onmessage = (event) => {
+    let msg
+    try {
+      msg = JSON.parse(typeof event.data === 'string' ? event.data : event.data.toString())
+    } catch {
+      return
+    }
+
+    const { type } = msg
+
+    if (type === 'JOINED_LOBBY') {
+      onOpen?.()
+      return
+    }
+
+    if (type === 'LEFT_LOBBY') {
+      return
+    }
+
+    onEvent?.(msg)
+  }
+
+  ws.onclose = () => {
+    onClose?.()
+  }
+
+  ws.onerror = (err) => {
+    onError?.(err)
+  }
+
+  function close() {
+    if (ws.readyState === 1 /* OPEN */) {
+      ws.send(JSON.stringify({ type: 'LEAVE_LOBBY', payload: {} }))
+    }
+    if (ws.readyState !== 2 /* CLOSING */ && ws.readyState !== 3 /* CLOSED */) {
+      ws.close()
+    }
+  }
+
+  return { close }
+}
+
+/**
  * Build the WebSocket URL for the current origin, appending the session token
  * as a query parameter.
  *

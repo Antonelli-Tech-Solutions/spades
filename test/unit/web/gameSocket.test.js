@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createGameSocket, buildWsUrl } from '../../../client/web/src/gameSocket.js'
+import { createGameSocket, createLobbySocket, buildWsUrl } from '../../../client/web/src/gameSocket.js'
 
 // --- Mock WebSocket -----------------------------------------------------------
 
@@ -446,5 +446,169 @@ describe('buildWsUrl', { timeout: 2000 }, () => {
   it('URL-encodes special characters in the session ID', { timeout: 2000 }, () => {
     const url = buildWsUrl('session with spaces')
     assert.ok(!url.includes(' '), 'URL should not contain unencoded spaces')
+  })
+})
+
+// --- createLobbySocket -------------------------------------------------------
+
+describe('createLobbySocket', { timeout: 2000 }, () => {
+  it('creates a WebSocket connection to the given URL', { timeout: 2000 }, () => {
+    const { close } = createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=sess-1',
+      WebSocketClass: MockWebSocket,
+    })
+    assert.equal(MockWebSocket.lastInstance.url, 'ws://localhost?sessionId=sess-1')
+    close()
+  })
+
+  it('sends JOIN_LOBBY once the WebSocket opens', { timeout: 2000 }, () => {
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      WebSocketClass: MockWebSocket,
+    })
+    MockWebSocket.lastInstance._open()
+    const sent = MockWebSocket.lastInstance.sent
+    assert.equal(sent.length, 1)
+    assert.equal(sent[0].type, 'JOIN_LOBBY')
+  })
+
+  it('calls onOpen when JOINED_LOBBY is received', { timeout: 2000 }, () => {
+    let opened = false
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onOpen: () => { opened = true },
+      WebSocketClass: MockWebSocket,
+    })
+    const ws = MockWebSocket.lastInstance
+    ws._open()
+    ws._receive({ type: 'JOINED_LOBBY', payload: {} })
+    assert.equal(opened, true)
+  })
+
+  it('calls onEvent for TABLE_CREATED events', { timeout: 2000 }, () => {
+    const events = []
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onEvent: (msg) => events.push(msg),
+      WebSocketClass: MockWebSocket,
+    })
+    const ws = MockWebSocket.lastInstance
+    ws._open()
+    ws._receive({ type: 'JOINED_LOBBY', payload: {} })
+    ws._receive({ type: 'TABLE_CREATED', payload: { tableId: 'tbl-1' } })
+    assert.equal(events.length, 1)
+    assert.equal(events[0].type, 'TABLE_CREATED')
+  })
+
+  it('calls onEvent for TABLE_UPDATED events', { timeout: 2000 }, () => {
+    const events = []
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onEvent: (msg) => events.push(msg),
+      WebSocketClass: MockWebSocket,
+    })
+    const ws = MockWebSocket.lastInstance
+    ws._open()
+    ws._receive({ type: 'JOINED_LOBBY', payload: {} })
+    ws._receive({ type: 'TABLE_UPDATED', payload: { tableId: 'tbl-1', visibility: 'public' } })
+    assert.equal(events.length, 1)
+    assert.equal(events[0].type, 'TABLE_UPDATED')
+  })
+
+  it('calls onEvent for TABLE_REMOVED events', { timeout: 2000 }, () => {
+    const events = []
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onEvent: (msg) => events.push(msg),
+      WebSocketClass: MockWebSocket,
+    })
+    const ws = MockWebSocket.lastInstance
+    ws._open()
+    ws._receive({ type: 'JOINED_LOBBY', payload: {} })
+    ws._receive({ type: 'TABLE_REMOVED', payload: { tableId: 'tbl-1' } })
+    assert.equal(events.length, 1)
+    assert.equal(events[0].type, 'TABLE_REMOVED')
+  })
+
+  it('does not forward JOINED_LOBBY or LEFT_LOBBY to onEvent', { timeout: 2000 }, () => {
+    const events = []
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onEvent: (msg) => events.push(msg),
+      WebSocketClass: MockWebSocket,
+    })
+    const ws = MockWebSocket.lastInstance
+    ws._open()
+    ws._receive({ type: 'JOINED_LOBBY', payload: {} })
+    ws._receive({ type: 'LEFT_LOBBY', payload: {} })
+    assert.equal(events.length, 0)
+  })
+
+  it('close() sends LEAVE_LOBBY when connection is open', { timeout: 2000 }, () => {
+    const { close } = createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      WebSocketClass: MockWebSocket,
+    })
+    const ws = MockWebSocket.lastInstance
+    ws._open()
+    ws._receive({ type: 'JOINED_LOBBY', payload: {} })
+    close()
+    const leaveMsg = ws.sent.find((m) => m.type === 'LEAVE_LOBBY')
+    assert.ok(leaveMsg, 'LEAVE_LOBBY message should be sent on close')
+    assert.ok(ws.readyState >= 2, 'WebSocket should be closing or closed')
+  })
+
+  it('close() does not send LEAVE_LOBBY when connection is not yet open', { timeout: 2000 }, () => {
+    const { close } = createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      WebSocketClass: MockWebSocket,
+    })
+    // readyState is CONNECTING (0) — should not send LEAVE_LOBBY
+    assert.doesNotThrow(() => close())
+    const leaveMsg = MockWebSocket.lastInstance.sent.find((m) => m.type === 'LEAVE_LOBBY')
+    assert.equal(leaveMsg, undefined)
+  })
+
+  it('close() is safe to call when connection is already closed', { timeout: 2000 }, () => {
+    const { close } = createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      WebSocketClass: MockWebSocket,
+    })
+    MockWebSocket.lastInstance._close()
+    assert.doesNotThrow(() => close())
+  })
+
+  it('calls onClose when the socket closes', { timeout: 2000 }, () => {
+    let closed = false
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onClose: () => { closed = true },
+      WebSocketClass: MockWebSocket,
+    })
+    MockWebSocket.lastInstance._close()
+    assert.equal(closed, true)
+  })
+
+  it('calls onError when the WebSocket fires an error', { timeout: 2000 }, () => {
+    const errors = []
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onError: (e) => errors.push(e),
+      WebSocketClass: MockWebSocket,
+    })
+    const fakeErr = new Error('connection refused')
+    MockWebSocket.lastInstance.onerror(fakeErr)
+    assert.equal(errors.length, 1)
+    assert.equal(errors[0], fakeErr)
+  })
+
+  it('ignores malformed messages without throwing', { timeout: 2000 }, () => {
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      WebSocketClass: MockWebSocket,
+    })
+    const ws = MockWebSocket.lastInstance
+    ws._open()
+    assert.doesNotThrow(() => ws.onmessage?.({ data: 'not-json{{' }))
   })
 })

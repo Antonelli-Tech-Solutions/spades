@@ -572,6 +572,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
       const gameState = await getGameState(redisClient, tableId)
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
+      if (gameState.waitingForReconnect) return sendJSON(res, 409, { error: 'Game is waiting for a player to reconnect' })
 
       validateBidTurn(gameState, seat)
       let newState = placeBid(gameState, seat, bid)
@@ -684,6 +685,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
       const gameState = await getGameState(redisClient, tableId)
       if (!gameState) return sendJSON(res, 409, { error: 'Game has not started' })
+      if (gameState.waitingForReconnect) return sendJSON(res, 409, { error: 'Game is waiting for a player to reconnect' })
 
       validateCardPlay(gameState, seat, card)
       const prevCompletedLen = gameState.completedTricks.length

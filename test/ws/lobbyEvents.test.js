@@ -325,3 +325,285 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     await waitClose(ws)
   })
 })
+
+// ── Visibility enforcement ────────────────────────────────────────────────────
+
+/**
+ * Collect all messages received on the WebSocket within the given window.
+ * Used to assert that NO lobby events are emitted for non-public tables.
+ */
+function collectFor(ws, durationMs) {
+  return new Promise((resolve) => {
+    const msgs = []
+    function onMsg(data) { msgs.push(JSON.parse(data.toString())) }
+    ws.on('message', onMsg)
+    setTimeout(() => {
+      ws.removeListener('message', onMsg)
+      resolve(msgs)
+    }, durationMs)
+  })
+}
+
+describe('Visibility enforcement — Friends-Only and Private tables do NOT emit to lobby channel', { skip }, () => {
+  let server, redis
+
+  const SESSION_VIS = 'lobby-vis-session-a'
+  const PLAYER_VIS = 'lobby-vis-player-a'
+
+  before(async () => {
+    redis = await getRedis()
+    await redis.set(`session:${SESSION_VIS}`, JSON.stringify({ playerId: PLAYER_VIS, username: 'LobbyVisA' }))
+    server = await startTestServer(redis)
+  })
+
+  after(async () => {
+    await server.close()
+    await redis.del(`session:${SESSION_VIS}`)
+    await closeRedis()
+  })
+
+  // ── Friends-Only ────────────────────────────────────────────────────────────
+
+  it('TABLE_UPDATED is NOT emitted to lobby when a player sits at a Friends-Only table', { timeout: 10000 }, async () => {
+    const tableId = 'lobby-vis-fo-sit'
+    const table = {
+      tableId,
+      hostPlayerId: PLAYER_VIS,
+      name: 'Friends-Only Sit Test',
+      seats: { north: null, east: null, south: null, west: null },
+      status: 'waiting',
+      gameId: null,
+      createdAt: new Date().toISOString(),
+      visibility: 'friends-only',
+    }
+    await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: 3600 })
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: PLAYER_VIS, status: 'waiting' }))
+
+    const ws = await wsConnect(server, { 'x-session-id': SESSION_VIS })
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+    await waitForType(ws, 'JOINED_LOBBY')
+
+    // Begin collecting before the sit action fires
+    const collectPromise = collectFor(ws, 500)
+
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'north' },
+      { 'x-session-id': SESSION_VIS, 'x-player-id': PLAYER_VIS },
+    )
+
+    const msgs = await collectPromise
+    const lobbyTableMsgs = msgs.filter((m) => ['TABLE_CREATED', 'TABLE_UPDATED', 'TABLE_REMOVED'].includes(m.type))
+    assert.equal(lobbyTableMsgs.length, 0, `Expected no lobby table events for friends-only table, got: ${lobbyTableMsgs.map((m) => m.type).join(', ')}`)
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+
+    ws.close()
+    await waitClose(ws)
+  })
+
+  it('TABLE_REMOVED is NOT emitted to lobby when a Friends-Only table is terminated', { timeout: 10000 }, async () => {
+    const tableId = 'lobby-vis-fo-terminate'
+    const table = {
+      tableId,
+      hostPlayerId: PLAYER_VIS,
+      name: 'Friends-Only Terminate Test',
+      seats: { north: PLAYER_VIS, east: null, south: null, west: null },
+      status: 'waiting',
+      gameId: null,
+      createdAt: new Date().toISOString(),
+      visibility: 'friends-only',
+    }
+    await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: 3600 })
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: PLAYER_VIS, status: 'waiting' }))
+
+    const ws = await wsConnect(server, { 'x-session-id': SESSION_VIS })
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+    await waitForType(ws, 'JOINED_LOBBY')
+
+    const collectPromise = collectFor(ws, 500)
+
+    const { status } = await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/terminate`,
+      null,
+      { 'x-session-id': SESSION_VIS, 'x-player-id': PLAYER_VIS },
+    )
+    assert.equal(status, 200)
+
+    const msgs = await collectPromise
+    const lobbyTableMsgs = msgs.filter((m) => ['TABLE_CREATED', 'TABLE_UPDATED', 'TABLE_REMOVED'].includes(m.type))
+    assert.equal(lobbyTableMsgs.length, 0, `Expected no lobby table events for friends-only table, got: ${lobbyTableMsgs.map((m) => m.type).join(', ')}`)
+
+    ws.close()
+    await waitClose(ws)
+  })
+
+  it('TABLE_UPDATED is NOT emitted to lobby when the host leaves a Friends-Only waiting table', { timeout: 10000 }, async () => {
+    const tableId = 'lobby-vis-fo-leave'
+    const table = {
+      tableId,
+      hostPlayerId: PLAYER_VIS,
+      name: 'Friends-Only Leave Test',
+      seats: { north: PLAYER_VIS, east: null, south: null, west: null },
+      status: 'waiting',
+      gameId: null,
+      createdAt: new Date().toISOString(),
+      visibility: 'friends-only',
+    }
+    await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: 3600 })
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: PLAYER_VIS, status: 'waiting' }))
+
+    const ws = await wsConnect(server, { 'x-session-id': SESSION_VIS })
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+    await waitForType(ws, 'JOINED_LOBBY')
+
+    const collectPromise = collectFor(ws, 500)
+
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/leave`,
+      null,
+      { 'x-session-id': SESSION_VIS, 'x-player-id': PLAYER_VIS },
+    )
+
+    const msgs = await collectPromise
+    const lobbyTableMsgs = msgs.filter((m) => ['TABLE_CREATED', 'TABLE_UPDATED', 'TABLE_REMOVED'].includes(m.type))
+    assert.equal(lobbyTableMsgs.length, 0, `Expected no lobby table events for friends-only table, got: ${lobbyTableMsgs.map((m) => m.type).join(', ')}`)
+
+    // Cleanup remaining table state (leave doesn't terminate for waiting tables)
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+
+    ws.close()
+    await waitClose(ws)
+  })
+
+  // ── Private ──────────────────────────────────────────────────────────────────
+
+  it('TABLE_UPDATED is NOT emitted to lobby when a player sits at a Private table', { timeout: 10000 }, async () => {
+    const tableId = 'lobby-vis-priv-sit'
+    const table = {
+      tableId,
+      hostPlayerId: PLAYER_VIS,
+      name: 'Private Sit Test',
+      seats: { north: null, east: null, south: null, west: null },
+      status: 'waiting',
+      gameId: null,
+      createdAt: new Date().toISOString(),
+      visibility: 'private',
+    }
+    await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: 3600 })
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: PLAYER_VIS, status: 'waiting' }))
+
+    const ws = await wsConnect(server, { 'x-session-id': SESSION_VIS })
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+    await waitForType(ws, 'JOINED_LOBBY')
+
+    const collectPromise = collectFor(ws, 500)
+
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'north' },
+      { 'x-session-id': SESSION_VIS, 'x-player-id': PLAYER_VIS },
+    )
+
+    const msgs = await collectPromise
+    const lobbyTableMsgs = msgs.filter((m) => ['TABLE_CREATED', 'TABLE_UPDATED', 'TABLE_REMOVED'].includes(m.type))
+    assert.equal(lobbyTableMsgs.length, 0, `Expected no lobby table events for private table, got: ${lobbyTableMsgs.map((m) => m.type).join(', ')}`)
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+
+    ws.close()
+    await waitClose(ws)
+  })
+
+  it('TABLE_REMOVED is NOT emitted to lobby when a Private table is terminated', { timeout: 10000 }, async () => {
+    const tableId = 'lobby-vis-priv-terminate'
+    const table = {
+      tableId,
+      hostPlayerId: PLAYER_VIS,
+      name: 'Private Terminate Test',
+      seats: { north: PLAYER_VIS, east: null, south: null, west: null },
+      status: 'waiting',
+      gameId: null,
+      createdAt: new Date().toISOString(),
+      visibility: 'private',
+    }
+    await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: 3600 })
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: PLAYER_VIS, status: 'waiting' }))
+
+    const ws = await wsConnect(server, { 'x-session-id': SESSION_VIS })
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+    await waitForType(ws, 'JOINED_LOBBY')
+
+    const collectPromise = collectFor(ws, 500)
+
+    const { status } = await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/terminate`,
+      null,
+      { 'x-session-id': SESSION_VIS, 'x-player-id': PLAYER_VIS },
+    )
+    assert.equal(status, 200)
+
+    const msgs = await collectPromise
+    const lobbyTableMsgs = msgs.filter((m) => ['TABLE_CREATED', 'TABLE_UPDATED', 'TABLE_REMOVED'].includes(m.type))
+    assert.equal(lobbyTableMsgs.length, 0, `Expected no lobby table events for private table, got: ${lobbyTableMsgs.map((m) => m.type).join(', ')}`)
+
+    ws.close()
+    await waitClose(ws)
+  })
+
+  it('TABLE_UPDATED is NOT emitted to lobby when the host leaves a Private waiting table', { timeout: 10000 }, async () => {
+    const tableId = 'lobby-vis-priv-leave'
+    const table = {
+      tableId,
+      hostPlayerId: PLAYER_VIS,
+      name: 'Private Leave Test',
+      seats: { north: PLAYER_VIS, east: null, south: null, west: null },
+      status: 'waiting',
+      gameId: null,
+      createdAt: new Date().toISOString(),
+      visibility: 'private',
+    }
+    await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: 3600 })
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: PLAYER_VIS, status: 'waiting' }))
+
+    const ws = await wsConnect(server, { 'x-session-id': SESSION_VIS })
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+    await waitForType(ws, 'JOINED_LOBBY')
+
+    const collectPromise = collectFor(ws, 500)
+
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/leave`,
+      null,
+      { 'x-session-id': SESSION_VIS, 'x-player-id': PLAYER_VIS },
+    )
+
+    const msgs = await collectPromise
+    const lobbyTableMsgs = msgs.filter((m) => ['TABLE_CREATED', 'TABLE_UPDATED', 'TABLE_REMOVED'].includes(m.type))
+    assert.equal(lobbyTableMsgs.length, 0, `Expected no lobby table events for private table, got: ${lobbyTableMsgs.map((m) => m.type).join(', ')}`)
+
+    // Cleanup remaining table state
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+
+    ws.close()
+    await waitClose(ws)
+  })
+})

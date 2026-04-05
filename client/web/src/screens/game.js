@@ -773,6 +773,17 @@ export function renderGameScreen(container) {
       onOpen: () => {
         console.log('GameSocket joined table room:', { tableId })
       },
+      onReconnect: async () => {
+        console.log('GameSocket reconnected — re-hydrating state:', { tableId })
+        try {
+          const s = await getGameState({ tableId, sessionId, playerId })
+          if (!mounted) return
+          state = s
+          render()
+        } catch (err) {
+          console.log('GameSocket rehydration failed:', { tableId, error: err?.message })
+        }
+      },
       onEvent: async (msg) => {
         console.log('GameSocket event:', { type: msg.type, tableId })
         if (!mounted || acting) return

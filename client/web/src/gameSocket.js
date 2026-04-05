@@ -10,15 +10,32 @@
  * Create an authenticated WebSocket connection to the game server, subscribe
  * to the given table room, and return a handle to tear it down.
  *
+ * Reconnect behaviour
+ * -------------------
+ * If the connection drops unexpectedly (i.e. `close()` was not called by the
+ * caller), the socket automatically reconnects with exponential backoff.
+ * On a successful reconnect the JOINED ack triggers `onReconnect` (not
+ * `onOpen`).  Any events that arrive while `onReconnect` is in-flight are
+ * buffered and flushed — in order — once the promise returned by `onReconnect`
+ * resolves.  This guarantees that `onEvent` never fires against stale
+ * pre-disconnect state.
+ *
  * @param {object} opts
  * @param {string} opts.wsUrl              - Full WS/WSS URL with `sessionId` query param
  * @param {string} opts.tableId            - Table room to JOIN after connecting
  * @param {function} [opts.onEvent]        - Called with each game event `{ type, payload }`
  *                                           (JOINED / JOIN_DENIED are consumed internally)
- * @param {function} [opts.onOpen]         - Called once the JOINED ack is received
- * @param {function} [opts.onClose]        - Called when the connection closes
+ * @param {function} [opts.onOpen]         - Called once the initial JOINED ack is received
+ * @param {function} [opts.onReconnect]    - Async callback called on reconnect JOINED ack.
+ *                                           Should re-hydrate state and return a Promise.
+ *                                           Events are buffered until the promise resolves.
+ * @param {function} [opts.onClose]        - Called when all reconnect attempts are exhausted
+ *                                           or after an intentional close
  * @param {function} [opts.onError]        - Called on WebSocket error
+ * @param {number}   [opts.maxReconnectAttempts=5] - Max automatic reconnect attempts
  * @param {typeof WebSocket} [opts.WebSocketClass] - Injected for testing; defaults to globalThis.WebSocket
+ * @param {function} [opts.setTimeoutFn]   - Injected for testing; defaults to globalThis.setTimeout
+ * @param {function} [opts.clearTimeoutFn] - Injected for testing; defaults to globalThis.clearTimeout
  * @returns {{ close: function }}
  */
 export function createGameSocket({
@@ -26,48 +43,113 @@ export function createGameSocket({
   tableId,
   onEvent,
   onOpen,
+  onReconnect,
   onClose,
   onError,
+  maxReconnectAttempts = 5,
   WebSocketClass = globalThis.WebSocket,
+  setTimeoutFn = globalThis.setTimeout,
+  clearTimeoutFn = globalThis.clearTimeout,
 }) {
-  const ws = new WebSocketClass(wsUrl)
+  let intentionalClose = false
+  let reconnectAttempts = 0
+  let reconnectTimer = null
+  let ws = null
 
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
-  }
+  function connect() {
+    ws = new WebSocketClass(wsUrl)
+    const isReconnect = reconnectAttempts > 0
 
-  ws.onmessage = (event) => {
-    let msg
-    try {
-      msg = JSON.parse(typeof event.data === 'string' ? event.data : event.data.toString())
-    } catch {
-      return
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
     }
 
-    const { type, payload = {} } = msg
+    ws.onmessage = (event) => {
+      let msg
+      try {
+        msg = JSON.parse(typeof event.data === 'string' ? event.data : event.data.toString())
+      } catch {
+        return
+      }
 
-    if (type === 'JOINED' && payload.tableId === tableId) {
-      onOpen?.()
-      return
+      const { type, payload = {} } = msg
+
+      if (type === 'JOINED' && payload.tableId === tableId) {
+        // Successful join — reset reconnect counter
+        reconnectAttempts = 0
+
+        if (isReconnect && onReconnect) {
+          // Buffer events that arrive while rehydration is in-flight so that
+          // onEvent is never called against stale pre-disconnect state.
+          let eventQueue = []
+          let draining = false
+          const normalOnMessage = ws.onmessage
+
+          ws.onmessage = (e) => {
+            let m
+            try {
+              m = JSON.parse(typeof e.data === 'string' ? e.data : e.data.toString())
+            } catch {
+              return
+            }
+            if (draining) {
+              onEvent?.(m)
+            } else {
+              eventQueue.push(m)
+            }
+          }
+
+          Promise.resolve(onReconnect()).then(() => {
+            draining = true
+            eventQueue.forEach((m) => onEvent?.(m))
+            eventQueue = []
+            ws.onmessage = normalOnMessage
+          })
+        } else if (!isReconnect) {
+          onOpen?.()
+        }
+        // isReconnect && !onReconnect: silent success — no callback needed
+        return
+      }
+
+      if (type === 'JOIN_DENIED') {
+        console.log('GameSocket JOIN denied:', { tableId, reason: payload.reason })
+        return
+      }
+
+      onEvent?.(msg)
     }
 
-    if (type === 'JOIN_DENIED') {
-      console.log('GameSocket JOIN denied:', { tableId, reason: payload.reason })
-      return
+    ws.onclose = () => {
+      if (intentionalClose) {
+        onClose?.()
+        return
+      }
+
+      if (reconnectAttempts >= maxReconnectAttempts) {
+        onClose?.()
+        return
+      }
+
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s, capped at 30s
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+      reconnectAttempts++
+      reconnectTimer = setTimeoutFn(connect, delay)
     }
 
-    onEvent?.(msg)
+    ws.onerror = (err) => {
+      onError?.(err)
+    }
   }
 
-  ws.onclose = () => {
-    onClose?.()
-  }
-
-  ws.onerror = (err) => {
-    onError?.(err)
-  }
+  connect()
 
   function close() {
+    intentionalClose = true
+    if (reconnectTimer !== null) {
+      clearTimeoutFn(reconnectTimer)
+      reconnectTimer = null
+    }
     // Only send LEAVE when the connection is fully open
     if (ws.readyState === 1 /* OPEN */) {
       ws.send(JSON.stringify({ type: 'LEAVE', payload: { tableId } }))

@@ -124,13 +124,15 @@ describe('createGameSocket', { timeout: 2000 }, () => {
     assert.equal(events.length, 0)
   })
 
-  it('calls onClose when the WebSocket closes', { timeout: 2000 }, () => {
+  it('calls onClose when reconnect retries are exhausted', { timeout: 2000 }, () => {
     let closed = false
     createGameSocket({
       wsUrl: 'ws://localhost?sessionId=s1',
       tableId: 'table-abc',
       onClose: () => { closed = true },
       WebSocketClass: MockWebSocket,
+      // 0 retries so onClose fires on the very first unexpected close
+      maxReconnectAttempts: 0,
     })
     MockWebSocket.lastInstance._close()
     assert.equal(closed, true)
@@ -198,6 +200,233 @@ describe('createGameSocket', { timeout: 2000 }, () => {
     const ws = MockWebSocket.lastInstance
     ws._open()
     assert.doesNotThrow(() => ws.onmessage?.({ data: 'not-json{{' }))
+  })
+})
+
+// --- Reconnect ---------------------------------------------------------------
+
+describe('createGameSocket reconnect', { timeout: 2000 }, () => {
+  // Collect all MockWebSocket instances created during a test so we can
+  // simulate the reconnect WebSocket independently.
+  class TrackingWebSocket extends MockWebSocket {
+    constructor(url) {
+      super(url)
+      TrackingWebSocket.instances.push(this)
+    }
+    static reset() { TrackingWebSocket.instances = [] }
+  }
+  TrackingWebSocket.instances = []
+
+  it('does not reconnect after intentional close()', { timeout: 2000 }, () => {
+    TrackingWebSocket.reset()
+    const timeouts = []
+    const { close } = createGameSocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      tableId: 'table-abc',
+      WebSocketClass: TrackingWebSocket,
+      setTimeoutFn: (fn, ms) => { timeouts.push({ fn, ms }); return timeouts.length },
+      clearTimeoutFn: () => {},
+    })
+    const ws = TrackingWebSocket.instances[0]
+    ws._open()
+    ws._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    close() // intentional
+    ws._close()
+    assert.equal(timeouts.length, 0, 'should not schedule reconnect after intentional close')
+    assert.equal(TrackingWebSocket.instances.length, 1, 'should not create a new WebSocket')
+  })
+
+  it('schedules a reconnect after unexpected close', { timeout: 2000 }, () => {
+    TrackingWebSocket.reset()
+    const timeouts = []
+    createGameSocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      tableId: 'table-abc',
+      WebSocketClass: TrackingWebSocket,
+      setTimeoutFn: (fn, ms) => { timeouts.push({ fn, ms }); return timeouts.length },
+      clearTimeoutFn: () => {},
+    })
+    const ws = TrackingWebSocket.instances[0]
+    ws._open()
+    ws._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    ws._close() // unexpected
+    assert.equal(timeouts.length, 1, 'should schedule one reconnect attempt')
+  })
+
+  it('uses exponential backoff for reconnect delays', { timeout: 2000 }, () => {
+    TrackingWebSocket.reset()
+    const timeouts = []
+    createGameSocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      tableId: 'table-abc',
+      WebSocketClass: TrackingWebSocket,
+      setTimeoutFn: (fn, ms) => { timeouts.push({ fn, ms }); return timeouts.length },
+      clearTimeoutFn: () => {},
+    })
+
+    // Initial connect succeeds, then disconnects unexpectedly
+    TrackingWebSocket.instances[0]._open()
+    TrackingWebSocket.instances[0]._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    TrackingWebSocket.instances[0]._close()
+    // → delay = 1000 * 2^0 = 1000ms, reconnectAttempts = 1
+
+    // Fire reconnect — but DO NOT receive JOINED so the counter keeps climbing
+    timeouts[0].fn()
+    TrackingWebSocket.instances[1]._open()
+    TrackingWebSocket.instances[1]._close()
+    // → delay = 1000 * 2^1 = 2000ms, reconnectAttempts = 2
+
+    timeouts[1].fn()
+    TrackingWebSocket.instances[2]._open()
+    TrackingWebSocket.instances[2]._close()
+    // → delay = 1000 * 2^2 = 4000ms, reconnectAttempts = 3
+
+    const delays = timeouts.map((t) => t.ms)
+    assert.ok(delays[1] > delays[0], 'second delay should be larger than first')
+    assert.ok(delays[2] > delays[1], 'third delay should be larger than second')
+  })
+
+  it('calls onReconnect (not onOpen) when rejoining after a disconnect', { timeout: 2000 }, () => {
+    TrackingWebSocket.reset()
+    const timeouts = []
+    let openCount = 0
+    let reconnectCount = 0
+
+    createGameSocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      tableId: 'table-abc',
+      onOpen: () => { openCount++ },
+      onReconnect: async () => { reconnectCount++ },
+      WebSocketClass: TrackingWebSocket,
+      setTimeoutFn: (fn, ms) => { timeouts.push(fn); return timeouts.length },
+      clearTimeoutFn: () => {},
+    })
+
+    // Initial connect
+    TrackingWebSocket.instances[0]._open()
+    TrackingWebSocket.instances[0]._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    assert.equal(openCount, 1)
+    assert.equal(reconnectCount, 0)
+
+    // Unexpected close → reconnect
+    TrackingWebSocket.instances[0]._close()
+    timeouts[0]() // fire reconnect timeout
+
+    // Second WS connects and gets JOINED ack
+    TrackingWebSocket.instances[1]._open()
+    TrackingWebSocket.instances[1]._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    assert.equal(openCount, 1, 'onOpen should not fire again on reconnect')
+    assert.equal(reconnectCount, 1, 'onReconnect should fire on the reconnect JOINED ack')
+  })
+
+  it('buffers events received during onReconnect rehydration and flushes them after', { timeout: 2000 }, async () => {
+    TrackingWebSocket.reset()
+    const timeouts = []
+    const receivedEvents = []
+    let resolveReconnect
+
+    createGameSocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      tableId: 'table-abc',
+      onEvent: (msg) => receivedEvents.push(msg),
+      onReconnect: () => new Promise((res) => { resolveReconnect = res }),
+      WebSocketClass: TrackingWebSocket,
+      setTimeoutFn: (fn, ms) => { timeouts.push(fn); return timeouts.length },
+      clearTimeoutFn: () => {},
+    })
+
+    // Initial connect
+    TrackingWebSocket.instances[0]._open()
+    TrackingWebSocket.instances[0]._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+
+    // Unexpected disconnect
+    TrackingWebSocket.instances[0]._close()
+    timeouts[0]() // fire reconnect
+
+    // Reconnected
+    TrackingWebSocket.instances[1]._open()
+    TrackingWebSocket.instances[1]._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    // onReconnect is now in-flight (promise not yet resolved)
+
+    // Events arriving while rehydration is in-flight — should be buffered
+    TrackingWebSocket.instances[1]._receive({ type: 'CARD_PLAYED', payload: { seat: 'north' } })
+    TrackingWebSocket.instances[1]._receive({ type: 'TURN_CHANGED', payload: { activeSeat: 'east' } })
+    assert.equal(receivedEvents.length, 0, 'events should be buffered while onReconnect is in-flight')
+
+    // Resolve rehydration
+    resolveReconnect()
+    // Allow the microtask queue to drain
+    await Promise.resolve()
+    await Promise.resolve()
+
+    assert.equal(receivedEvents.length, 2, 'buffered events should be flushed after onReconnect resolves')
+    assert.equal(receivedEvents[0].type, 'CARD_PLAYED')
+    assert.equal(receivedEvents[1].type, 'TURN_CHANGED')
+  })
+
+  it('stops reconnecting after maxReconnectAttempts', { timeout: 2000 }, () => {
+    TrackingWebSocket.reset()
+    const timeouts = []
+    let closeCount = 0
+
+    createGameSocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      tableId: 'table-abc',
+      onClose: () => { closeCount++ },
+      WebSocketClass: TrackingWebSocket,
+      setTimeoutFn: (fn, ms) => { timeouts.push(fn); return timeouts.length },
+      clearTimeoutFn: () => {},
+      maxReconnectAttempts: 2,
+    })
+
+    // Initial connect succeeds, then disconnects unexpectedly
+    TrackingWebSocket.instances[0]._open()
+    TrackingWebSocket.instances[0]._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    TrackingWebSocket.instances[0]._close() // → attempt 1 scheduled, reconnectAttempts=1
+
+    // Attempt 1: fails without JOINED
+    timeouts[0]()
+    TrackingWebSocket.instances[1]._open()
+    TrackingWebSocket.instances[1]._close() // → attempt 2 scheduled, reconnectAttempts=2
+
+    // Attempt 2: fails without JOINED — reconnectAttempts now equals maxReconnectAttempts
+    timeouts[1]()
+    TrackingWebSocket.instances[2]._open()
+    TrackingWebSocket.instances[2]._close() // → onClose fires, no more retries
+
+    assert.equal(timeouts.length, 2, 'should stop scheduling reconnects after max attempts')
+    assert.equal(closeCount, 1, 'onClose should fire once all retries are exhausted')
+  })
+
+  it('resets reconnect attempt counter after a successful reconnect', { timeout: 2000 }, () => {
+    TrackingWebSocket.reset()
+    const timeouts = []
+
+    createGameSocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      tableId: 'table-abc',
+      onReconnect: async () => {},
+      WebSocketClass: TrackingWebSocket,
+      setTimeoutFn: (fn, ms) => { timeouts.push(fn); return timeouts.length },
+      clearTimeoutFn: () => {},
+      maxReconnectAttempts: 2,
+    })
+
+    // Initial connect → disconnect → attempt 1 scheduled
+    TrackingWebSocket.instances[0]._open()
+    TrackingWebSocket.instances[0]._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    TrackingWebSocket.instances[0]._close()  // reconnectAttempts=1
+    // Attempt 1 fails without JOINED so counter reaches 2
+    timeouts[0]()
+    TrackingWebSocket.instances[1]._open()
+    TrackingWebSocket.instances[1]._close()  // reconnectAttempts=2 (maxReconnectAttempts)
+    // Attempt 2 — succeeds with JOINED, counter resets to 0
+    timeouts[1]()
+    TrackingWebSocket.instances[2]._open()
+    TrackingWebSocket.instances[2]._receive({ type: 'JOINED', payload: { tableId: 'table-abc' } })
+    // reconnectAttempts is now 0 — a fresh disconnect should start a new backoff cycle
+    TrackingWebSocket.instances[2]._close()
+    assert.equal(timeouts.length, 3, 'should schedule reconnect again after counter was reset by successful rejoin')
   })
 })
 

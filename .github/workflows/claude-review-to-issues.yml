@@ -36,7 +36,6 @@ jobs:
           gh issue create \
             --title "Code Review Finding: $(echo "$COMMENT" | head -1)" \
             --body "**From PR #$PR, $FILE:$LINE**\n\n$COMMENT" \
-            --label "$LABELS" \
-            --assignee "dantonel"
+            --label "$LABELS"
         env:
           GH_TOKEN: ${{ github.token }}

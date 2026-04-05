@@ -216,7 +216,7 @@ All in-game state updates and lobby changes are delivered to clients via a persi
 
 - Clients establish an authenticated WebSocket connection on game screen mount (or lobby screen mount for lobby events).
 - Authentication occurs on the connection upgrade handshake using the player's session token (`x-session-id` header). Unauthenticated upgrade requests are rejected with HTTP 401.
-- Clients join a **room** corresponding to `table:{tableId}` upon seating or spectating. Lobby subscribers join a `lobby` channel. Each authenticated client also subscribes to their own **personal notification channel** `player:{playerId}:notify` on connect — this is the delivery rail for Friends-Only table events and Slice 4 social notifications (friend requests, in-app invites).
+- Clients join a **room** corresponding to `table:{tableId}` upon seating or spectating. Lobby subscribers join a `lobby` channel. Each authenticated client also subscribes to their own **personal notification channel** `player:{playerId}:notify` on connect — this is the delivery rail for Friends-Only table events and social notifications (friend requests, in-app invites).
 - The server emits a heartbeat ping every 30 seconds; clients must respond with a pong within 10 seconds or the connection is considered dead.
 - On reconnect, clients call `GET /api/tables/:tableId/state` to re-hydrate from authoritative server state, then resume listening for WebSocket events.
 

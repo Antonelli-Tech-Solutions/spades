@@ -26,7 +26,12 @@ import { getSession } from '../auth/session.js'
  * @returns {WebSocketServer}
  */
 export function createWsServer(httpServer, opts = {}) {
-  const { redis = null, pingIntervalMs = 30_000, pongTimeoutMs = 10_000 } = opts
+  const {
+    redis = null,
+    pingIntervalMs = 30_000,
+    pongTimeoutMs = 10_000,
+    reconnectWindowMs = 60_000,
+  } = opts
 
   const wss = new WebSocketServer({ noServer: true })
 
@@ -34,6 +39,10 @@ export function createWsServer(httpServer, opts = {}) {
   const rooms = new Map()
   // playerConnections[playerId] = Set<ws>
   const playerConnections = new Map()
+
+  // disconnectWindows[`${playerId}:${tableId}`] = { timer, seat }
+  // Tracks active reconnect windows for players who have disconnected mid-game.
+  const disconnectWindows = new Map()
 
   // ── Redis pub/sub subscriber ──────────────────────────────────────────────────
   // A dedicated connection is required for pub/sub — the same client cannot be used
@@ -188,6 +197,54 @@ export function createWsServer(httpServer, opts = {}) {
 
         console.log('WebSocket JOIN:', { playerId, tableId })
         ws.send(JSON.stringify({ type: 'JOINED', payload: { tableId } }))
+
+        // Check for an active reconnect window — player may be rejoining after a disconnect.
+        const windowKey = `${playerId}:${tableId}`
+        const activeWindow = disconnectWindows.get(windowKey)
+        if (activeWindow) {
+          // Cancel the expiry timer — player reconnected in time.
+          clearTimeout(activeWindow.timer)
+          disconnectWindows.delete(windowKey)
+          const { seat } = activeWindow
+
+          // Clear any stall that may have been written already.
+          try {
+            const gameData = await redis.get(`game:${tableId}`)
+            if (gameData) {
+              const gameState = JSON.parse(gameData)
+              if (gameState.waitingForReconnect) {
+                delete gameState.waitingForReconnect
+                await redis.set(`game:${tableId}`, JSON.stringify(gameState), { KEEPTTL: true })
+              }
+            }
+          } catch (err) {
+            console.error('Error clearing reconnect stall:', { playerId, tableId, error: err.message })
+          }
+
+          console.log('WebSocket reconnected within window:', { playerId, tableId, seat })
+          wss.broadcast(tableId, 'PLAYER_RECONNECTED', { seat })
+        } else {
+          // No active window — check whether the game is stalled for this player's seat.
+          // This handles reconnects after the window has expired (game stalled but player returns).
+          try {
+            const gameData = await redis.get(`game:${tableId}`)
+            if (gameData) {
+              const gameState = JSON.parse(gameData)
+              if (gameState.waitingForReconnect) {
+                const seat = Object.entries(
+                  JSON.parse((await redis.get(`table:${tableId}`)) ?? '{}').seats ?? {},
+                ).find(([, id]) => id === playerId)?.[0]
+                if (seat && gameState.waitingForReconnect.seat === seat) {
+                  delete gameState.waitingForReconnect
+                  await redis.set(`game:${tableId}`, JSON.stringify(gameState), { KEEPTTL: true })
+                  console.log('Game stall cleared after late reconnect:', { playerId, tableId, seat })
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error checking stall on late reconnect:', { playerId, tableId, error: err.message })
+          }
+        }
         return
       }
 
@@ -251,9 +308,13 @@ export function createWsServer(httpServer, opts = {}) {
     })
 
     // ── Close / cleanup ──────────────────────────────────────────────────────
-    ws.on('close', () => {
+    ws.on('close', async () => {
       clearInterval(pingTimer)
       clearTimeout(ws._pongTimeout)
+
+      // Capture the table rooms before mutating so we can check them below.
+      const closedTableRooms = new Set(ws._tableRooms)
+
       for (const roomKey of ws._tableRooms) {
         rooms.get(roomKey)?.delete(ws)
         if (rooms.get(roomKey)?.size === 0) {
@@ -282,6 +343,62 @@ export function createWsServer(httpServer, opts = {}) {
         playerConnections.delete(playerId)
       }
       console.log('WebSocket disconnected:', { playerId })
+
+      // ── Disconnect detection: emit PLAYER_DISCONNECTED for in-progress games ──
+      // Only emit if this was the player's last connection in the table room
+      // (handles multiple browser tabs gracefully).
+      if (!redis) return
+
+      for (const roomKey of closedTableRooms) {
+        const tableId = roomKey.slice('table:'.length)
+
+        // Check whether the player still has another connection in this room.
+        const room = rooms.get(roomKey)
+        const playerStillInRoom = room ? [...room].some((c) => c._playerId === playerId) : false
+        if (playerStillInRoom) continue
+
+        // Skip if there is already an active reconnect window for this player+table.
+        const windowKey = `${playerId}:${tableId}`
+        if (disconnectWindows.has(windowKey)) continue
+
+        try {
+          const tableData = await redis.get(`table:${tableId}`)
+          if (!tableData) continue
+
+          const table = JSON.parse(tableData)
+          if (table.status !== 'playing') continue
+
+          const seat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
+          if (!seat) continue
+
+          const reconnectWindowSeconds = Math.ceil(reconnectWindowMs / 1000)
+          console.log('Player disconnected from in-progress game:', { playerId, tableId, seat })
+          wss.broadcast(tableId, 'PLAYER_DISCONNECTED', { seat, reconnectWindowSeconds })
+
+          // Start the reconnect window timer.
+          const timer = setTimeout(async () => {
+            disconnectWindows.delete(windowKey)
+            console.log('Reconnect window expired:', { playerId, tableId, seat })
+
+            // Stall the game — mark game state so play/bid endpoints can reject actions.
+            try {
+              const gameData = await redis.get(`game:${tableId}`)
+              if (!gameData) return
+              const gameState = JSON.parse(gameData)
+              if (gameState.waitingForReconnect) return // already stalled
+              gameState.waitingForReconnect = { seat, expiresAt: Date.now() }
+              await redis.set(`game:${tableId}`, JSON.stringify(gameState), { KEEPTTL: true })
+              console.log('Game stalled waiting for reconnect:', { tableId, seat })
+            } catch (err) {
+              console.error('Error stalling game on reconnect window expiry:', { tableId, error: err.message })
+            }
+          }, reconnectWindowMs)
+
+          disconnectWindows.set(windowKey, { timer, seat, tableId })
+        } catch (err) {
+          console.error('Error handling player disconnect:', { playerId, tableId, error: err.message })
+        }
+      }
     })
 
     ws.on('error', (err) => {

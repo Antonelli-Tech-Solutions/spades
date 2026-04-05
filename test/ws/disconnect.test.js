@@ -167,15 +167,17 @@ describe('Player disconnect detection and reconnect window', { skip }, () => {
       const tableId = 'dc-table-1'
       const northPlayerId = 'dc-north-1'
       const sessionId = 'dc-session-1'
+      const southPlayerId = 'dc-south-1'
+      const southSessionId = 'dc-session-1s'
 
-      await seedFixture(redis, { tableId, northPlayerId, sessionId })
+      await seedFixture(redis, { tableId, northPlayerId, sessionId, southPlayerId, southSessionId })
 
-      // Observer stays connected throughout
-      const observer = await wsConnect(httpServer, { 'x-session-id': sessionId })
+      // Observer (south player) stays connected throughout
+      const observer = await wsConnect(httpServer, { 'x-session-id': southSessionId })
       observer.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
       await nextMessage(observer) // JOINED
 
-      // Player that will disconnect
+      // North player that will disconnect
       const player = await wsConnect(httpServer, { 'x-session-id': sessionId })
       player.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
       await nextMessage(player) // JOINED
@@ -193,7 +195,7 @@ describe('Player disconnect detection and reconnect window', { skip }, () => {
 
       observer.close()
       await waitClose(observer)
-      await cleanupFixture(redis, { tableId, sessionId })
+      await cleanupFixture(redis, { tableId, sessionId, southSessionId })
     })
 
     it('does NOT broadcast PLAYER_DISCONNECTED when the table is not in playing status', { timeout: 15000 }, async () => {
@@ -245,10 +247,13 @@ describe('Player disconnect detection and reconnect window', { skip }, () => {
       const tableId = 'dc-table-3'
       const northPlayerId = 'dc-north-3'
       const sessionId = 'dc-session-3'
+      const southPlayerId = 'dc-south-3'
+      const southSessionId = 'dc-session-3s'
 
-      await seedFixture(redis, { tableId, northPlayerId, sessionId })
+      await seedFixture(redis, { tableId, northPlayerId, sessionId, southPlayerId, southSessionId })
 
-      const observer = await wsConnect(httpServer, { 'x-session-id': sessionId })
+      // Observer is the south player — different playerId from north
+      const observer = await wsConnect(httpServer, { 'x-session-id': southSessionId })
       observer.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
       await nextMessage(observer) // JOINED
 
@@ -276,17 +281,20 @@ describe('Player disconnect detection and reconnect window', { skip }, () => {
       playerBack.close()
       observer.close()
       await Promise.all([waitClose(playerBack), waitClose(observer)])
-      await cleanupFixture(redis, { tableId, sessionId })
+      await cleanupFixture(redis, { tableId, sessionId, southSessionId })
     })
 
     it('does NOT broadcast PLAYER_RECONNECTED when the player reconnects after window expires', { timeout: 15000 }, async () => {
       const tableId = 'dc-table-4'
       const northPlayerId = 'dc-north-4'
       const sessionId = 'dc-session-4'
+      const southPlayerId = 'dc-south-4'
+      const southSessionId = 'dc-session-4s'
 
-      await seedFixture(redis, { tableId, northPlayerId, sessionId })
+      await seedFixture(redis, { tableId, northPlayerId, sessionId, southPlayerId, southSessionId })
 
-      const observer = await wsConnect(httpServer, { 'x-session-id': sessionId })
+      // Observer is the south player — different playerId from north
+      const observer = await wsConnect(httpServer, { 'x-session-id': southSessionId })
       observer.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
       await nextMessage(observer) // JOINED
 
@@ -320,7 +328,7 @@ describe('Player disconnect detection and reconnect window', { skip }, () => {
       playerLate.close()
       observer.close()
       await Promise.all([waitClose(playerLate), waitClose(observer)])
-      await cleanupFixture(redis, { tableId, sessionId })
+      await cleanupFixture(redis, { tableId, sessionId, southSessionId })
     })
   })
 
@@ -331,15 +339,17 @@ describe('Player disconnect detection and reconnect window', { skip }, () => {
       const tableId = 'dc-table-5'
       const northPlayerId = 'dc-north-5'
       const sessionId = 'dc-session-5'
+      const southPlayerId = 'dc-south-5'
+      const southSessionId = 'dc-session-5s'
 
-      await seedFixture(redis, { tableId, northPlayerId, sessionId })
+      await seedFixture(redis, { tableId, northPlayerId, sessionId, southPlayerId, southSessionId })
 
       const player = await wsConnect(httpServer, { 'x-session-id': sessionId })
       player.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
       await nextMessage(player) // JOINED
 
-      // Disconnect
-      const observer = await wsConnect(httpServer, { 'x-session-id': sessionId })
+      // Observer is the south player — different playerId so disconnect event can fire
+      const observer = await wsConnect(httpServer, { 'x-session-id': southSessionId })
       observer.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
       await nextMessage(observer) // JOINED
 
@@ -360,17 +370,20 @@ describe('Player disconnect detection and reconnect window', { skip }, () => {
 
       observer.close()
       await waitClose(observer)
-      await cleanupFixture(redis, { tableId, sessionId })
+      await cleanupFixture(redis, { tableId, sessionId, southSessionId })
     })
 
     it('clears waitingForReconnect when player reconnects (even after window expiry)', { timeout: 15000 }, async () => {
       const tableId = 'dc-table-6'
       const northPlayerId = 'dc-north-6'
       const sessionId = 'dc-session-6'
+      const southPlayerId = 'dc-south-6'
+      const southSessionId = 'dc-session-6s'
 
-      await seedFixture(redis, { tableId, northPlayerId, sessionId })
+      await seedFixture(redis, { tableId, northPlayerId, sessionId, southPlayerId, southSessionId })
 
-      const observer = await wsConnect(httpServer, { 'x-session-id': sessionId })
+      // Observer is the south player — different playerId so disconnect event can fire
+      const observer = await wsConnect(httpServer, { 'x-session-id': southSessionId })
       observer.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
       await nextMessage(observer) // JOINED
 
@@ -405,7 +418,7 @@ describe('Player disconnect detection and reconnect window', { skip }, () => {
       playerBack.close()
       observer.close()
       await Promise.all([waitClose(playerBack), waitClose(observer)])
-      await cleanupFixture(redis, { tableId, sessionId })
+      await cleanupFixture(redis, { tableId, sessionId, southSessionId })
     })
   })
 })

@@ -19,6 +19,7 @@ jobs:
     #   github.event.pull_request.user.login == 'new-developer' ||
     #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
 
+    timeout-minutes: 15  # Kill after 15 minutes
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -411,6 +411,8 @@ Returns a player-specific view of the game. Cards in other players' hands are ne
 
 The game state view includes: `phase`, `hand` (own cards only), `bids`, `tricks`, `scores`, `bags`, `currentPlayerSeat`, `currentBidderSeat`, `isHost`, and other phase-specific fields. It never includes another player's hand.
 
+During the `playing` phase, when it is the requesting player's turn to play, the response also includes `validCards`: an array of card objects representing the legal plays available to that player (computed server-side via `getLegalPlays`). This field is omitted when it is not the player's turn. Clients may use it to highlight or restrict UI affordances, but the server re-validates every play regardless.
+
 #### `POST /api/tables/:tableId/bid`
 
 **Headers:** `x-session-id`, `x-player-id`

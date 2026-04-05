@@ -11,6 +11,7 @@ const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
  * @property {'waiting'|'playing'} status
  * @property {string|null} gameId
  * @property {string} createdAt
+ * @property {'public'|'friends-only'|'private'} visibility
  */
 
 /**
@@ -20,7 +21,7 @@ const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
  * @param {{ hostPlayerId: string, name?: string }} opts
  * @returns {Promise<TableState>}
  */
-export async function createTable(redis, { hostPlayerId, name = null }) {
+export async function createTable(redis, { hostPlayerId, name = null, visibility = 'public' }) {
   const tableId = uuidv4()
   const table = {
     tableId,
@@ -30,6 +31,7 @@ export async function createTable(redis, { hostPlayerId, name = null }) {
     status: 'waiting',
     gameId: null,
     createdAt: new Date().toISOString(),
+    visibility,
   }
 
   const key = `table:${tableId}`

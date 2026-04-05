@@ -182,6 +182,49 @@ function advanceBotsWithEvents(state, wss, tableId) {
   return current
 }
 
+// ── Lobby event helpers ───────────────────────────────────────────────────────
+
+/**
+ * Emit TABLE_CREATED to the lobby channel for a Public table.
+ * No-ops when wss is not configured or the table is not public.
+ */
+function emitLobbyTableCreated(wss, table) {
+  if (!wss || table.visibility !== 'public') return
+  wss.broadcastLobby('TABLE_CREATED', {
+    tableId: table.tableId,
+    name: table.name,
+    host: table.hostPlayerId,
+    seats: table.seats,
+    visibility: table.visibility,
+  })
+}
+
+/**
+ * Emit TABLE_UPDATED to the lobby channel for a Public table.
+ * No-ops when wss is not configured or the table is not public.
+ */
+function emitLobbyTableUpdated(wss, table) {
+  if (!wss || table.visibility !== 'public') return
+  wss.broadcastLobby('TABLE_UPDATED', {
+    tableId: table.tableId,
+    name: table.name,
+    host: table.hostPlayerId,
+    seats: table.seats,
+    status: table.status,
+    visibility: table.visibility,
+  })
+}
+
+/**
+ * Emit TABLE_REMOVED to the lobby channel. Called before the table is deleted,
+ * using the stored visibility to decide whether to broadcast.
+ * No-ops when wss is not configured or the table was not public.
+ */
+function emitLobbyTableRemoved(wss, table) {
+  if (!wss || table.visibility !== 'public') return
+  wss.broadcastLobby('TABLE_REMOVED', { tableId: table.tableId })
+}
+
 /**
  * Register all API route handlers on the given Express app.
  *
@@ -392,6 +435,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const session = await validateAuthHeaders(redisClient, req)
       const resolvedName = (typeof name === 'string' && name.trim()) ? name.trim() : null
       const table = await createTable(redisClient, { hostPlayerId: session.playerId, name: resolvedName })
+      emitLobbyTableCreated(wss, table)
       sendJSON(res, 201, { tableId: table.tableId, name: table.name })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
@@ -416,11 +460,14 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         if (wss) emitHandDealt(wss, gameState)
         gameState = advanceBotsWithEvents(gameState, wss, tableId)
         await saveGameState(redisClient, tableId, gameState)
-        await markTablePlaying(redisClient, tableId, gameState.gameId)
+        const playingTable = await markTablePlaying(redisClient, tableId, gameState.gameId)
+        emitLobbyTableUpdated(wss, playingTable)
         if (wss) {
           wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(gameState), phase: gameState.phase })
         }
         console.log('Game started:', { tableId, gameId: gameState.gameId })
+      } else {
+        emitLobbyTableUpdated(wss, table)
       }
 
       sendJSON(res, 200, { tableId, seat })
@@ -458,11 +505,14 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         if (wss) emitHandDealt(wss, gameState)
         gameState = advanceBotsWithEvents(gameState, wss, tableId)
         await saveGameState(redisClient, tableId, gameState)
-        await markTablePlaying(redisClient, tableId, gameState.gameId)
+        const playingTable = await markTablePlaying(redisClient, tableId, gameState.gameId)
+        emitLobbyTableUpdated(wss, playingTable)
         if (wss) {
           wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(gameState), phase: gameState.phase })
         }
         console.log('Game started with bots:', { tableId, gameId: gameState.gameId })
+      } else {
+        emitLobbyTableUpdated(wss, updated)
       }
 
       sendJSON(res, 200, { tableId, seat })
@@ -489,6 +539,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         return sendJSON(res, 403, { error: 'Only the host can terminate the game' })
       }
       await terminateTable(redisClient, tableId)
+      emitLobbyTableRemoved(wss, table)
       console.log('Game terminated by host:', { tableId, playerId: session.playerId })
       sendJSON(res, 200, { message: 'Game terminated.' })
     } catch (err) {
@@ -510,6 +561,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (table.status === 'playing') {
         const result = await leaveInProgressGame(redisClient, tableId, session.playerId)
         if (result.terminated) {
+          emitLobbyTableRemoved(wss, table)
           console.log('Player left in-progress game, table terminated:', { tableId, playerId: session.playerId })
           return sendJSON(res, 200, { message: 'Left game. No human players remain — table terminated.' })
         }
@@ -522,7 +574,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         return sendJSON(res, 200, { message: 'Left game. A bot has taken your place.' })
       }
 
-      await leaveTable(redisClient, tableId, session.playerId)
+      const leftTable = await leaveTable(redisClient, tableId, session.playerId)
+      emitLobbyTableUpdated(wss, leftTable.table)
       console.log('Player left table:', { tableId, playerId: session.playerId })
       sendJSON(res, 200, { message: 'Left table.' })
     } catch (err) {

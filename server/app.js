@@ -29,25 +29,27 @@ app.use((req, res, next) => {
 })
 
 const redis = process.env.REDIS_URL ? await getRedis() : null
-handler(app, { redis })
 
 // Serve the web client as static files
 app.use(express.static(join(__dirname, '..', 'client', 'web')))
 
 const httpServer = createServer(app)
 
+let wss
 if (WS_PORT === PORT) {
   // Share the HTTP server when ports match
-  createWsServer(httpServer, { redis })
+  wss = createWsServer(httpServer, { redis })
   console.log(`WebSocket server sharing HTTP server on port ${PORT}`)
 } else {
   // Run WebSocket on its own dedicated server
   const wsHttpServer = createServer()
-  createWsServer(wsHttpServer, { redis })
+  wss = createWsServer(wsHttpServer, { redis })
   wsHttpServer.listen(WS_PORT, () => {
     console.log(`WebSocket server listening on port ${WS_PORT}`)
   })
 }
+
+handler(app, { redis, wss })
 
 httpServer.listen(PORT, () => {
   console.log(`Spades Online server listening on port ${PORT}`)

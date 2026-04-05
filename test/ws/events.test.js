@@ -257,6 +257,117 @@ describe('In-game WebSocket events', { skip }, () => {
       await cleanupGameFixture(redis, { tableId, sessionId })
     })
 
+    it('all 4 seated players receive CARD_PLAYED and payload contains no hand data', { timeout: 15000 }, async () => {
+      const tableId = 'ws-events-table-6'
+      const players = {
+        north: { playerId: 'ws-events-p6-north', sessionId: 'ws-events-sess-6-north' },
+        east:  { playerId: 'ws-events-p6-east',  sessionId: 'ws-events-sess-6-east'  },
+        south: { playerId: 'ws-events-p6-south', sessionId: 'ws-events-sess-6-south' },
+        west:  { playerId: 'ws-events-p6-west',  sessionId: 'ws-events-sess-6-west'  },
+      }
+
+      // Seed a session for each of the 4 human players
+      await Promise.all(Object.entries(players).map(([seat, { playerId, sessionId }]) =>
+        redis.set(`session:${sessionId}`, JSON.stringify({ playerId, username: seat })),
+      ))
+
+      // Build game state with all 4 seats occupied by human players
+      const initialState = createGame(tableId, {
+        north: players.north.playerId,
+        east:  players.east.playerId,
+        south: players.south.playerId,
+        west:  players.west.playerId,
+      })
+      const gameState = {
+        ...initialState,
+        phase: 'playing',
+        bids: { north: 3, east: 4, south: 3, west: 4 },
+        teamBids: { ns: 3, ew: 4 },
+        currentBidderSeat: null,
+        currentPlayerSeat: 'north',
+        leadSeat: 'north',
+        isFirstTrick: true,
+        spadesbroken: false,
+        currentTrick: [],
+      }
+
+      // Seed table with all 4 human player IDs in seats
+      const table = {
+        tableId,
+        hostPlayerId: players.north.playerId,
+        name: null,
+        seats: {
+          north: players.north.playerId,
+          east:  players.east.playerId,
+          south: players.south.playerId,
+          west:  players.west.playerId,
+        },
+        status: 'playing',
+        gameId: gameState.gameId,
+        createdAt: new Date().toISOString(),
+      }
+      await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: TABLE_TTL })
+      await redis.set(`game:${tableId}`, JSON.stringify(gameState), { EX: TABLE_TTL })
+
+      // Connect all 4 players via WebSocket, each with their own session
+      const wsSockets = await Promise.all(
+        Object.values(players).map(({ sessionId }) =>
+          wsConnect(server.httpServer, { 'x-session-id': sessionId }),
+        ),
+      )
+      const [wsNorth, wsEast, wsSouth, wsWest] = wsSockets
+
+      // All 4 join the room
+      for (const ws of wsSockets) {
+        ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
+      }
+      await Promise.all(wsSockets.map((ws) => nextMessage(ws))) // consume JOINED acks
+
+      // Start listening for CARD_PLAYED on all 4 sockets before triggering the play
+      const waitPromises = wsSockets.map((ws) => waitForType(ws, 'CARD_PLAYED'))
+
+      // North plays a legal non-spade card (first trick, spades not broken)
+      const northHand = gameState.hands.north
+      const card = northHand.find((c) => c.suit !== 'spades') ?? northHand[0]
+
+      const res = await apiRequest(
+        server.baseUrl,
+        'POST',
+        `/api/tables/${tableId}/play`,
+        { card },
+        { 'x-session-id': players.north.sessionId, 'x-player-id': players.north.playerId },
+      )
+      assert.equal(res.status, 200, `Expected 200, got ${res.status}: ${JSON.stringify(res.body)}`)
+
+      // All 4 clients must receive CARD_PLAYED
+      const allMsgs = await Promise.all(waitPromises)
+
+      for (const [idx, msgs] of allMsgs.entries()) {
+        const seat = ['north', 'east', 'south', 'west'][idx]
+        const ev = msgs.find((m) => m.type === 'CARD_PLAYED')
+
+        assert.ok(ev, `${seat} client should receive CARD_PLAYED`)
+
+        // Payload must identify who played and which card
+        assert.equal(ev.payload.seat, 'north', `${seat}: payload.seat should be 'north'`)
+        assert.deepEqual(ev.payload.card, card, `${seat}: payload.card should match the played card`)
+
+        // Card visibility security check — payload must not leak any hand contents
+        assert.equal(ev.payload.hands,  undefined, `${seat}: payload must not include 'hands'`)
+        assert.equal(ev.payload.hand,   undefined, `${seat}: payload must not include 'hand'`)
+        assert.equal(ev.payload.myHand, undefined, `${seat}: payload must not include 'myHand'`)
+      }
+
+      // Cleanup
+      for (const ws of wsSockets) ws.close()
+      await Promise.all(wsSockets.map((ws) => waitClose(ws)))
+      await redis.del(`table:${tableId}`)
+      await redis.del(`game:${tableId}`)
+      await Promise.all(
+        Object.values(players).map(({ sessionId }) => redis.del(`session:${sessionId}`)),
+      )
+    })
+
     it('does NOT deliver CARD_PLAYED to clients not in that room', { timeout: 15000 }, async () => {
       const tableId = 'ws-events-table-2'
       const northPlayerId = 'ws-events-north-2'

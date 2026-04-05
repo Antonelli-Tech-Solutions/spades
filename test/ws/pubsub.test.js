@@ -227,7 +227,13 @@ describe('WebSocket Redis pub/sub fan-out', { skip }, () => {
     await nextMessage(ws) // JOINED_LOBBY
 
     let spuriousReceived = false
-    ws.on('message', () => { spuriousReceived = true })
+    ws.on('message', (data) => {
+      const msg = JSON.parse(data.toString())
+      // Only flag table-room event types — lobby events (TABLE_CREATED, TABLE_UPDATED,
+      // TABLE_REMOVED) may arrive from concurrent test runs that also publish to the
+      // lobby channel, and are not what this test is guarding against.
+      if (msg.type === 'TURN_CHANGED') spuriousReceived = true
+    })
 
     // Broadcast to table room — lobby subscriber should NOT receive this
     wss1.broadcast('fanout-table', 'TURN_CHANGED', { activeSeat: 'west', phase: 'play' })

@@ -651,4 +651,108 @@ describe('In-game WebSocket events', { skip }, () => {
       await redis.del('session:valid-ws-session-for-hand-dealt')
     })
   })
+
+  // ── Delta payload field tests ─────────────────────────────────────────────
+
+  describe('CARD_PLAYED delta fields', { timeout: 15000 }, () => {
+    it('CARD_PLAYED includes currentTrick, nextPlayerSeat, and spadesBroken', { timeout: 15000 }, async () => {
+      const tableId = 'ws-events-delta-cp-1'
+      const northPlayerId = 'ws-events-delta-north-1'
+      const sessionId = 'ws-events-delta-sess-1'
+
+      await redis.set(`session:${sessionId}`, JSON.stringify({ playerId: northPlayerId, username: 'North' }))
+
+      const initialState = createGame(tableId, {
+        north: northPlayerId,
+        east: 'bot:east',
+        south: 'bot:south',
+        west: 'bot:west',
+      })
+      const gameState = {
+        ...initialState,
+        phase: 'playing',
+        bids: { north: 3, east: 4, south: 3, west: 4 },
+        teamBids: { ns: 3, ew: 4 },
+        currentBidderSeat: null,
+        currentPlayerSeat: 'north',
+        leadSeat: 'north',
+        isFirstTrick: true,
+        spadesbroken: false,
+        currentTrick: [],
+      }
+      await seedGameFixture(redis, { tableId, northPlayerId, gameState })
+
+      const ws = await wsConnect(server.httpServer, { 'x-session-id': sessionId })
+      ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
+      await nextMessage(ws) // JOINED
+
+      const northHand = gameState.hands.north
+      const card = northHand.find((c) => c.suit !== 'spades') ?? northHand[0]
+
+      const p = waitForType(ws, 'CARD_PLAYED')
+      await apiRequest(server.baseUrl, 'POST', `/api/tables/${tableId}/play`, { card },
+        { 'x-session-id': sessionId, 'x-player-id': northPlayerId })
+
+      const msgs = await p
+      const ev = msgs.find((m) => m.type === 'CARD_PLAYED')
+      assert.ok(ev, 'Should receive CARD_PLAYED')
+
+      // Delta fields must be present
+      assert.ok(Array.isArray(ev.payload.currentTrick), 'CARD_PLAYED should include currentTrick array')
+      assert.ok(ev.payload.currentTrick.length >= 1, 'currentTrick should contain at least the played card')
+      assert.ok(
+        ev.payload.currentTrick.some((p) => p.seat === 'north' && p.card.suit === card.suit && p.card.rank === card.rank),
+        'currentTrick should include the played card',
+      )
+      assert.ok('nextPlayerSeat' in ev.payload, 'CARD_PLAYED should include nextPlayerSeat')
+      assert.ok('spadesBroken' in ev.payload, 'CARD_PLAYED should include spadesBroken')
+      assert.equal(typeof ev.payload.spadesBroken, 'boolean', 'spadesBroken should be a boolean')
+
+      ws.close()
+      await waitClose(ws)
+      await cleanupGameFixture(redis, { tableId, sessionId })
+    })
+  })
+
+  describe('BID_PLACED delta fields', { timeout: 15000 }, () => {
+    it('BID_PLACED includes bid value for numeric bids', { timeout: 15000 }, async () => {
+      const tableId = 'ws-events-delta-bp-1'
+      const northPlayerId = 'ws-events-delta-north-bp-1'
+      const sessionId = 'ws-events-delta-sess-bp-1'
+
+      await redis.set(`session:${sessionId}`, JSON.stringify({ playerId: northPlayerId, username: 'North' }))
+
+      const gameState = createGame(tableId, {
+        north: northPlayerId,
+        east: 'bot:east',
+        south: 'bot:south',
+        west: 'bot:west',
+      })
+      const testState = {
+        ...gameState,
+        biddingOrder: ['north', 'east', 'south', 'west'],
+        currentBidderSeat: 'north',
+      }
+      await seedGameFixture(redis, { tableId, northPlayerId, gameState: testState })
+
+      const ws = await wsConnect(server.httpServer, { 'x-session-id': sessionId })
+      ws.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
+      await nextMessage(ws) // JOINED
+
+      const p = waitForType(ws, 'BID_PLACED')
+      await apiRequest(server.baseUrl, 'POST', `/api/tables/${tableId}/bid`, { bid: 3 },
+        { 'x-session-id': sessionId, 'x-player-id': northPlayerId })
+
+      const msgs = await p
+      const ev = msgs.find((m) => m.type === 'BID_PLACED')
+      assert.ok(ev, 'Should receive BID_PLACED')
+      assert.equal(ev.payload.seat, 'north')
+      assert.equal(ev.payload.bidType, 'number')
+      assert.equal(ev.payload.bid, 3, 'BID_PLACED should include the numeric bid value')
+
+      ws.close()
+      await waitClose(ws)
+      await cleanupGameFixture(redis, { tableId, sessionId })
+    })
+  })
 })

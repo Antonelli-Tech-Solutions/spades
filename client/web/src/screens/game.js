@@ -22,29 +22,138 @@ const RED_SUIT = new Set(['hearts', 'diamonds'])
 const PARTNER = { north: 'south', south: 'north', east: 'west', west: 'east' }
 
 /**
- * Set of WebSocket event types that should trigger a full state refresh and
- * re-render. Covers all PRD §6.4.3 in-game events and §6.4.4 lobby/pre-game
- * events so the waiting-room phase stays live without polling.
+ * Structural transition events that require a full server state fetch.
+ * These events change large amounts of state at once (e.g. new hand dealt,
+ * hand scored, game over) where a delta is insufficient.
  */
-export const GAME_REFRESH_EVENTS = new Set([
-  // In-game events (PRD §6.4.3)
+export const FULL_REFRESH_EVENTS = new Set([
+  // In-game structural transitions (PRD §6.4.3)
   'HAND_DEALT',
-  'BID_PLACED',
-  'HAND_REVEALED',
-  'BLIND_NIL_EXCHANGE_PROMPT',
-  'CARD_PLAYED',
-  'TRICK_COMPLETE',
   'HAND_SCORED',
   'GAME_OVER',
-  'TURN_CHANGED',
-  'PLAYER_DISCONNECTED',
-  'PLAYER_RECONNECTED',
   // Lobby/pre-game events (PRD §6.4.4) — needed for waiting-room phase
+  'GAME_STARTED',
   'TABLE_UPDATED',
   'SEAT_TAKEN',
   'SEAT_VACATED',
-  'GAME_STARTED',
 ])
+
+/**
+ * In-flight game events that carry a delta payload describing exactly what
+ * changed. The client applies the payload directly to state instead of
+ * fetching the full server state. Server emitters must include the fields
+ * listed in the issue #239 hybrid spec for each event type.
+ */
+export const DELTA_EVENTS = new Set([
+  'CARD_PLAYED',         // { seat, card, currentTrick, nextPlayerSeat, spadesBroken }
+  'BID_PLACED',          // { seat, bidType[, bid] }
+  'TRICK_COMPLETE',      // { winnerSeat, plays }
+  'TURN_CHANGED',        // { activeSeat, phase }
+  'HAND_REVEALED',       // { myHand, seat }
+  'BLIND_NIL_EXCHANGE_PROMPT', // { direction, count, step, currentBlindNilSeat }
+  'PLAYER_DISCONNECTED', // { seat, reconnectWindowSeconds }
+  'PLAYER_RECONNECTED',  // { seat }
+])
+
+/**
+ * Union of FULL_REFRESH_EVENTS and DELTA_EVENTS.
+ * Kept for backward compatibility — any event in this set causes the game
+ * screen to update (either via delta or full fetch).
+ */
+export const GAME_REFRESH_EVENTS = new Set([...FULL_REFRESH_EVENTS, ...DELTA_EVENTS])
+
+/**
+ * Apply a WebSocket delta event payload directly to the current game state,
+ * returning a new state object. For events whose payload does not carry enough
+ * data to update state (e.g. old server without delta fields), the original
+ * state reference is returned unchanged.
+ *
+ * @param {object|null} state - Current client-side game state
+ * @param {{ type: string, payload: object }} msg - WebSocket message
+ * @param {string} playerId - The current player's ID (used to detect own cards)
+ * @returns {object|null} Updated state (new object) or original state if no change
+ */
+export function applyDelta(state, msg, playerId) {
+  if (!state) return state
+  const { type, payload } = msg
+
+  switch (type) {
+    case 'CARD_PLAYED': {
+      const { seat, card, currentTrick, nextPlayerSeat, spadesBroken } = payload
+      let myHand = state.myHand
+      if (myHand && state.players) {
+        const mySeat = Object.entries(state.players).find(([, id]) => id === playerId)?.[0]
+        if (seat === mySeat) {
+          const cardKey = `${card.suit}-${card.rank}`
+          myHand = myHand.filter((c) => `${c.suit}-${c.rank}` !== cardKey)
+        }
+      }
+      return {
+        ...state,
+        currentTrick: currentTrick ?? state.currentTrick,
+        currentPlayerSeat: nextPlayerSeat ?? state.currentPlayerSeat,
+        spadesbroken: spadesBroken ?? state.spadesbroken,
+        myHand,
+      }
+    }
+
+    case 'BID_PLACED': {
+      const { seat, bidType, bid } = payload
+      let bidValue
+      if (bidType === 'nil') bidValue = 'nil'
+      else if (bidType === 'blindNil') bidValue = 'blind_nil'
+      else if (bidType === 'number' && bid !== undefined) bidValue = bid
+      else return state  // numeric bid without value — cannot apply delta
+      return { ...state, bids: { ...state.bids, [seat]: bidValue } }
+    }
+
+    case 'TRICK_COMPLETE': {
+      const { winnerSeat, plays } = payload
+      const trick = { winner: winnerSeat, plays }
+      const newTricksWon = { ...state.tricksWon }
+      newTricksWon[winnerSeat] = (newTricksWon[winnerSeat] ?? 0) + 1
+      return {
+        ...state,
+        currentTrick: [],
+        completedTricks: [...(state.completedTricks || []), trick],
+        tricksWon: newTricksWon,
+      }
+    }
+
+    case 'TURN_CHANGED': {
+      const { activeSeat, phase } = payload
+      const update = { ...state, phase }
+      if (phase === 'bidding') {
+        update.currentBidderSeat = activeSeat
+        update.currentPlayerSeat = null
+      } else if (phase === 'playing') {
+        update.currentPlayerSeat = activeSeat
+        update.currentBidderSeat = null
+      }
+      return update
+    }
+
+    case 'HAND_REVEALED':
+      return { ...state, myHand: payload.myHand, blindNilEligible: false }
+
+    case 'BLIND_NIL_EXCHANGE_PROMPT': {
+      const { step, currentBlindNilSeat } = payload
+      if (step === undefined || currentBlindNilSeat === undefined) return state
+      return {
+        ...state,
+        phase: 'blind_nil_exchange',
+        blindNilExchange: { ...(state.blindNilExchange || {}), step, currentBlindNilSeat },
+      }
+    }
+
+    case 'PLAYER_DISCONNECTED':
+    case 'PLAYER_RECONNECTED':
+      return state  // no state change — re-render for visual update only
+
+    default:
+      return state
+  }
+}
 const TEAM = { north: 'ns', south: 'ns', east: 'ew', west: 'ew' }
 
 function esc(s) {
@@ -787,12 +896,31 @@ export function renderGameScreen(container) {
       onEvent: async (msg) => {
         console.log('GameSocket event:', { type: msg.type, tableId })
         if (!mounted || acting) return
-        if (!GAME_REFRESH_EVENTS.has(msg.type)) return
+
+        // ── Delta events: apply payload directly to state ──────────────────────
+        if (DELTA_EVENTS.has(msg.type)) {
+          const newState = applyDelta(state, msg, playerId)
+
+          if (msg.type === 'TRICK_COMPLETE') {
+            // Trigger the hold so all players see the completed trick before clearing it.
+            const trick = { winner: msg.payload.winnerSeat, plays: msg.payload.plays }
+            state = newState
+            startHold(trick)  // startHold calls render() internally
+          } else {
+            state = newState
+            if (!holdActive) render()
+          }
+          return
+        }
+
+        // ── Full-refresh events: fetch complete server state ────────────────────
+        if (!FULL_REFRESH_EVENTS.has(msg.type)) return
         try {
           const s = await getGameState({ tableId, sessionId, playerId })
           if (!mounted) return
           if (holdActive) {
-            // Queue the update — apply it after the hold window expires
+            // Queue the update — apply it after the hold window expires.
+            // This covers HAND_SCORED arriving during the trick hold on the 13th trick.
             queuedState = s
           } else {
             const prevState = state

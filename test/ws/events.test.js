@@ -516,8 +516,9 @@ describe('In-game WebSocket events', { skip }, () => {
     it('sends HAND_DEALT only to the target player (not broadcast)', { timeout: 15000 }, async () => {
       // Verify sendToPlayer delivers to the right player.
       // We test this by checking HAND_DEALT arrives after wss.sendToPlayer is called directly.
-      const ws = await wsConnect(server.httpServer, { 'x-session-id': 'valid-ws-session-for-hand-dealt' })
+      // Session must be set before connecting — WS auth runs during the HTTP upgrade.
       await redis.set('session:valid-ws-session-for-hand-dealt', JSON.stringify({ playerId: 'hand-dealt-player', username: 'HDPlayer' }))
+      const ws = await wsConnect(server.httpServer, { 'x-session-id': 'valid-ws-session-for-hand-dealt' })
 
       const p = waitForType(ws, 'HAND_DEALT')
       server.wss.sendToPlayer('hand-dealt-player', 'HAND_DEALT', {

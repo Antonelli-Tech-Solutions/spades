@@ -18,7 +18,6 @@ import { endOfHandSummaryHtml } from '../endOfHandSummary.js'
 import { BAG_ICON } from '../icons.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
-const RED_SUIT = new Set(['hearts', 'diamonds'])
 const PARTNER = { north: 'south', south: 'north', east: 'west', west: 'east' }
 
 /**
@@ -155,6 +154,35 @@ export function applyDelta(state, msg, playerId) {
   }
 }
 const TEAM = { north: 'ns', south: 'ns', east: 'ew', west: 'ew' }
+
+/**
+ * Render the team bid target and current tricks bar shown below the scoreboard during play.
+ * Provides a quick at-a-glance view: each team's bid target vs. tricks taken this hand.
+ * @param {object} state
+ * @returns {string} HTML string
+ */
+function teamBidTricksHtml(state) {
+  const teams = [
+    { label: 'N/S', key: 'ns', seats: ['north', 'south'] },
+    { label: 'E/W', key: 'ew', seats: ['east', 'west'] },
+  ]
+
+  const cols = teams.map(({ label, key, seats }) => {
+    const bid = state.teamBids?.[key]
+    const tricks = (state.tricksWon?.[seats[0]] ?? 0) + (state.tricksWon?.[seats[1]] ?? 0)
+    const bidDisplay = bid !== null && bid !== undefined ? bid : '–'
+    const needsMore = typeof bid === 'number' && tricks < bid
+    const metBid = typeof bid === 'number' && tricks >= bid
+    const tricksCls = metBid ? ' bid-tricks--met' : (needsMore ? '' : '')
+    return `<div class="bid-tricks-team">
+      <span class="bid-tricks-label">${esc(label)}</span>
+      <span class="bid-tricks-target">Bid <strong>${bidDisplay}</strong></span>
+      <span class="bid-tricks-count${tricksCls}">Tricks <strong>${tricks}</strong></span>
+    </div>`
+  })
+
+  return `<div class="bid-tricks-bar">${cols.join('<div class="bid-tricks-sep"></div>')}</div>`
+}
 
 function esc(s) {
   return String(s ?? '')
@@ -320,8 +348,8 @@ function trickHtml(state, rel) {
     const card = bySeats[seat]
     if (!card) return '<div class="trick-slot"></div>'
     const s = SUIT_SYMBOL[card.suit]
-    const red = RED_SUIT.has(card.suit) ? ' trick-red' : ''
-    return `<div class="trick-slot"><div class="trick-card${red}">${esc(card.rank)}${s}</div></div>`
+    const colorCls = card.suit ? ` trick-${card.suit}` : ''
+    return `<div class="trick-slot"><div class="trick-card${colorCls}">${esc(card.rank)}${s}</div></div>`
   }
 
   return `
@@ -549,8 +577,14 @@ export function renderGameScreen(container) {
 
     function cardExtraCls(card) {
       const key = `${card.suit}-${card.rank}`
-      if (isMyPlayTurn && !inputBlocker.isBlocked()) return 'card-play'
       if (isMyExchangeTurn) return selectedSet.has(key) ? 'card-sel' : 'card-exch'
+      if (isMyPlayTurn && !inputBlocker.isBlocked()) {
+        if (state.validCards) {
+          const isValid = state.validCards.some((c) => `${c.suit}-${c.rank}` === key)
+          return isValid ? 'card-valid' : 'card-invalid'
+        }
+        return 'card-play'  // fallback when server hasn't sent validCards
+      }
       return ''
     }
 
@@ -640,6 +674,7 @@ export function renderGameScreen(container) {
           </div>
         </div>
         ${teamBidSummaryHtml(state)}
+        ${state.phase === 'playing' || state.phase === 'blind_nil_exchange' ? teamBidTricksHtml(state) : ''}
 
         <div class="game-table">
           <div class="table-top">
@@ -758,6 +793,11 @@ export function renderGameScreen(container) {
 
           if (isMyPlayTurn) {
             if (acting || inputBlocker.isBlocked()) return
+            // Silently block clicks on cards that are not legal plays
+            if (state.validCards) {
+              const isValid = state.validCards.some((c) => c.suit === card.suit && c.rank === card.rank)
+              if (!isValid) return
+            }
             acting = true
             inputBlocker.block()
             const prevState = state

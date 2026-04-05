@@ -20,6 +20,31 @@ import { BAG_ICON } from '../icons.js'
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const RED_SUIT = new Set(['hearts', 'diamonds'])
 const PARTNER = { north: 'south', south: 'north', east: 'west', west: 'east' }
+
+/**
+ * Set of WebSocket event types that should trigger a full state refresh and
+ * re-render. Covers all PRD §6.4.3 in-game events and §6.4.4 lobby/pre-game
+ * events so the waiting-room phase stays live without polling.
+ */
+export const GAME_REFRESH_EVENTS = new Set([
+  // In-game events (PRD §6.4.3)
+  'HAND_DEALT',
+  'BID_PLACED',
+  'HAND_REVEALED',
+  'BLIND_NIL_EXCHANGE_PROMPT',
+  'CARD_PLAYED',
+  'TRICK_COMPLETE',
+  'HAND_SCORED',
+  'GAME_OVER',
+  'TURN_CHANGED',
+  'PLAYER_DISCONNECTED',
+  'PLAYER_RECONNECTED',
+  // Lobby/pre-game events (PRD §6.4.4) — needed for waiting-room phase
+  'TABLE_UPDATED',
+  'SEAT_TAKEN',
+  'SEAT_VACATED',
+  'GAME_STARTED',
+])
 const TEAM = { north: 'ns', south: 'ns', east: 'ew', west: 'ew' }
 
 function esc(s) {
@@ -204,7 +229,7 @@ function trickHtml(state, rel) {
 
 /**
  * Render the full game screen into `container`.
- * Polls the server every 2 seconds for state updates.
+ * Game state updates are driven by incoming WebSocket events — no polling.
  *
  * @param {HTMLElement} container
  */
@@ -224,7 +249,6 @@ export function renderGameScreen(container) {
   let handMode = 'diagram'
   let selectedCards = []
   let showLastTrick = false
-  let pollTimer = null
   let acting = false
   let mounted = true
   let holdActive = false
@@ -237,7 +261,6 @@ export function renderGameScreen(container) {
 
   function cleanup() {
     mounted = false
-    clearTimeout(pollTimer)
     clearTimeout(holdTimer)
     gameSocket?.close()
     gameSocket = null
@@ -265,57 +288,6 @@ export function renderGameScreen(container) {
     }, HOLD_DURATIONS.normal)
   }
   window.addEventListener('hashchange', cleanup, { once: true })
-
-  function schedulePoll() {
-    clearTimeout(pollTimer)
-    if (!mounted) return
-    pollTimer = setTimeout(async () => {
-      if (!mounted || acting) return
-      try {
-        const s = await getGameState({ tableId, sessionId, playerId })
-        if (!mounted) return
-        if (holdActive) {
-          // Queue the update — apply it after the hold window expires
-          queuedState = s
-        } else {
-          const prevState = state
-          const completedTrick = detectCompletedTrick(prevState, s)
-          if (completedTrick) {
-            // A trick completed while we were polling — trigger the hold so all
-            // players (not just the one who played the last card) see the result.
-            //
-            // If this was the 13th trick of a non-final hand (handHistory grew
-            // and state advanced to the next hand's bidding phase), keep rendering
-            // prevState during the hold so the player sees the 13th trick in its
-            // original hand context rather than the new hand's bidding screen.
-            // For game_over the 13th trick is detected via completedTricks growth
-            // (not reset), so state = s is safe there.
-            if (!isHandTransition(prevState, s)) {
-              state = s
-            }
-            startHold(completedTrick)
-            if (isHandTransition(prevState, s)) {
-              // startHold clears queuedState; override it with the new state so
-              // the hold timer applies it after expiry.
-              queuedState = s
-            }
-          } else {
-            state = s
-            render()
-          }
-        }
-      } catch (err) {
-        if (err.status === 404) {
-          // Table was terminated — redirect to lobby
-          cleanup()
-          navigate('#/lobby')
-          return
-        }
-        // silent — retry on next poll
-      }
-      schedulePoll()
-    }, 2000)
-  }
 
   function renderWaiting() {
     const seats = state.seats || {}
@@ -362,7 +334,6 @@ export function renderGameScreen(container) {
         // Fetch updated state (game should have started)
         state = await getGameState({ tableId, sessionId, playerId })
         render()
-        schedulePoll()
       } catch (err) {
         errEl.textContent = err.message || 'Failed to add bots.'
         btn.disabled = false
@@ -650,7 +621,6 @@ export function renderGameScreen(container) {
         btn.addEventListener('click', async () => {
           if (acting) return
           acting = true
-          clearTimeout(pollTimer)
           const raw = btn.dataset.bid
           const bid = /^\d+$/.test(raw) ? Number(raw) : raw
           try {
@@ -665,7 +635,6 @@ export function renderGameScreen(container) {
             if (errEl) errEl.textContent = err.message || 'Failed to place bid.'
           } finally {
             acting = false
-            schedulePoll()
           }
         })
       })
@@ -682,7 +651,6 @@ export function renderGameScreen(container) {
             if (acting || inputBlocker.isBlocked()) return
             acting = true
             inputBlocker.block()
-            clearTimeout(pollTimer)
             const prevState = state
             try {
               const s = await apiPlay({ tableId, card, sessionId, playerId })
@@ -715,7 +683,6 @@ export function renderGameScreen(container) {
               if (errEl) errEl.textContent = err.message || 'Cannot play that card.'
             } finally {
               acting = false
-              schedulePoll()
             }
           } else if (isMyExchangeTurn) {
             const key = `${card.suit}-${card.rank}`
@@ -735,7 +702,6 @@ export function renderGameScreen(container) {
     container.querySelector('#exchange-submit-btn')?.addEventListener('click', async () => {
       if (acting || selectedCards.length !== 2) return
       acting = true
-      clearTimeout(pollTimer)
       try {
         const s = await apiExchange({ tableId, cards: [...selectedCards], sessionId, playerId })
         if (!mounted) return
@@ -748,7 +714,6 @@ export function renderGameScreen(container) {
         if (errEl) errEl.textContent = err.message || 'Failed to exchange cards.'
       } finally {
         acting = false
-        schedulePoll()
       }
     })
 
@@ -756,7 +721,6 @@ export function renderGameScreen(container) {
     container.querySelector('#blind-nil-reveal-btn')?.addEventListener('click', async () => {
       if (acting) return
       acting = true
-      clearTimeout(pollTimer)
       try {
         const s = await apiRevealHand({ tableId, sessionId, playerId })
         if (!mounted) return
@@ -768,7 +732,6 @@ export function renderGameScreen(container) {
         if (errEl) errEl.textContent = err.message || 'Failed to reveal hand.'
       } finally {
         acting = false
-        schedulePoll()
       }
     })
 
@@ -776,7 +739,6 @@ export function renderGameScreen(container) {
     container.querySelector('#blind-nil-bid-btn')?.addEventListener('click', async () => {
       if (acting) return
       acting = true
-      clearTimeout(pollTimer)
       try {
         const s = await apiBid({ tableId, bid: 'blind_nil', sessionId, playerId })
         if (!mounted) return
@@ -789,7 +751,6 @@ export function renderGameScreen(container) {
         if (errEl) errEl.textContent = err.message || 'Failed to place bid.'
       } finally {
         acting = false
-        schedulePoll()
       }
     })
   }
@@ -802,19 +763,61 @@ export function renderGameScreen(container) {
     // On (re)load, skip any summaries for hands already completed before this session
     dismissedHandCount = s.handHistory?.length ?? 0
     render()
-    schedulePoll()
 
     // Establish authenticated WebSocket connection and subscribe to the table room.
-    // Events are logged for now; the polling loop will be replaced by WS-driven
-    // re-renders in the next Slice 2 task.
+    // All game and lobby events trigger a getGameState() fetch + re-render so that
+    // every client stays in sync without a polling loop.
     gameSocket = createGameSocket({
       wsUrl: buildWsUrl(sessionId),
       tableId,
       onOpen: () => {
         console.log('GameSocket joined table room:', { tableId })
       },
-      onEvent: (msg) => {
+      onEvent: async (msg) => {
         console.log('GameSocket event:', { type: msg.type, tableId })
+        if (!mounted || acting) return
+        if (!GAME_REFRESH_EVENTS.has(msg.type)) return
+        try {
+          const s = await getGameState({ tableId, sessionId, playerId })
+          if (!mounted) return
+          if (holdActive) {
+            // Queue the update — apply it after the hold window expires
+            queuedState = s
+          } else {
+            const prevState = state
+            const completedTrick = detectCompletedTrick(prevState, s)
+            if (completedTrick) {
+              // A trick completed — trigger the hold so all players see the result.
+              //
+              // If this was the 13th trick of a non-final hand (handHistory grew
+              // and state advanced to the next hand's bidding phase), keep rendering
+              // prevState during the hold so the player sees the 13th trick in its
+              // original hand context rather than the new hand's bidding screen.
+              // For game_over the 13th trick is detected via completedTricks growth
+              // (not reset), so state = s is safe there.
+              if (!isHandTransition(prevState, s)) {
+                state = s
+              }
+              startHold(completedTrick)
+              if (isHandTransition(prevState, s)) {
+                // startHold clears queuedState; override it with the new state so
+                // the hold timer applies it after expiry.
+                queuedState = s
+              }
+            } else {
+              state = s
+              render()
+            }
+          }
+        } catch (err) {
+          if (err.status === 404) {
+            // Table was terminated — redirect to lobby
+            cleanup()
+            navigate('#/lobby')
+            return
+          }
+          // silent — next event will trigger another refresh
+        }
       },
       onClose: () => {
         console.log('GameSocket closed:', { tableId })

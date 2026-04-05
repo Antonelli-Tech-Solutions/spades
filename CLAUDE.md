@@ -42,7 +42,7 @@ Spades Online is a real-time multiplayer card game (web + mobile) built with a N
 
 Unless an issue explicitly states otherwise:
 1. Complete the work for the issue
-2. Create a PR targeting `dev` branch with a clear description
+2. Create a PR targeting `dev` branch with a clear description always including "Closes #<issue-number>" so the merged PR can be traced back to its issue.
 3. Poll CI status using `gh pr checks <PR_NUMBER> --watch`
 4. If any checks fail, download logs, diagnose, fix, and wait for all checks to pass
 5. Once all checks pass, merge with: `gh pr merge <PR_NUMBER> --squash --delete-branch`

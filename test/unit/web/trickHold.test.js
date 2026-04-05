@@ -213,14 +213,16 @@ describe('trickHoldHtml', { timeout: 2000 }, () => {
     assert.ok(html.includes('trick-winner-banner'), 'should include winner banner element')
   })
 
-  it('applies trick-red to red-suit cards only', { timeout: 2000 }, () => {
+  it('applies suit-specific trick class to each suit', { timeout: 2000 }, () => {
     const html = trickHoldHtml(trick, rel)
-    // hearts (K) and diamonds (Q) should have trick-red — spades and clubs should not
-    const redCount = (html.match(/trick-red/g) || []).length
-    assert.equal(redCount, 2, 'exactly 2 red-suit cards should have trick-red')
+    // spades (A), clubs (2), hearts (K), diamonds (Q) should each have their own class
+    assert.ok(html.includes('trick-spades'), 'spades card should have trick-spades class')
+    assert.ok(html.includes('trick-clubs'), 'clubs card should have trick-clubs class')
+    assert.ok(html.includes('trick-hearts'), 'hearts card should have trick-hearts class')
+    assert.ok(html.includes('trick-diamonds'), 'diamonds card should have trick-diamonds class')
   })
 
-  it('does not apply trick-red to black-suit cards', { timeout: 2000 }, () => {
+  it('does not apply trick-hearts or trick-diamonds to black-suit cards', { timeout: 2000 }, () => {
     const blackOnly = {
       winner: 'north',
       plays: [
@@ -231,7 +233,10 @@ describe('trickHoldHtml', { timeout: 2000 }, () => {
       ],
     }
     const html = trickHoldHtml(blackOnly, rel)
-    assert.equal((html.match(/trick-red/g) || []).length, 0, 'no red class for black suits')
+    assert.equal((html.match(/trick-hearts/g) || []).length, 0, 'no hearts class for black suits')
+    assert.equal((html.match(/trick-diamonds/g) || []).length, 0, 'no diamonds class for black suits')
+    assert.ok(html.includes('trick-spades'), 'spades cards should still have trick-spades')
+    assert.ok(html.includes('trick-clubs'), 'clubs cards should still have trick-clubs')
   })
 
   it('escapes HTML special characters in card ranks', { timeout: 2000 }, () => {

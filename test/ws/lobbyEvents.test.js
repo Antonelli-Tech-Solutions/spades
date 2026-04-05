@@ -24,13 +24,17 @@ const skip = !process.env.REDIS_URL ? 'REDIS_URL must be set' : false
  * Resolves with all lobby-event messages received within `waitMs`.
  * Returns an empty array if no TABLE_CREATED/TABLE_UPDATED/TABLE_REMOVED arrive.
  */
-function collectLobbyEvents(ws, waitMs = 500) {
+function collectLobbyEvents(ws, waitMs = 500, tableIdFilter = null) {
   return new Promise((resolve) => {
     const LOBBY_EVENTS = new Set(['TABLE_CREATED', 'TABLE_UPDATED', 'TABLE_REMOVED'])
     const received = []
     function onMsg(data) {
       const msg = JSON.parse(data.toString())
-      if (LOBBY_EVENTS.has(msg.type)) received.push(msg)
+      if (LOBBY_EVENTS.has(msg.type)) {
+        if (!tableIdFilter || msg.payload?.tableId === tableIdFilter) {
+          received.push(msg)
+        }
+      }
     }
     ws.on('message', onMsg)
     setTimeout(() => {
@@ -386,7 +390,7 @@ describe('Lobby WebSocket visibility enforcement — Friends-Only and Private ta
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     await waitForType(ws, 'JOINED_LOBBY')
 
-    const collectPromise = collectLobbyEvents(ws, 500)
+    const collectPromise = collectLobbyEvents(ws, 500, tableId)
 
     // Seed the non-public table directly — API always creates public tables.
     await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: 3600 })
@@ -418,7 +422,7 @@ describe('Lobby WebSocket visibility enforcement — Friends-Only and Private ta
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     await waitForType(ws, 'JOINED_LOBBY')
 
-    const collectPromise = collectLobbyEvents(ws, 500)
+    const collectPromise = collectLobbyEvents(ws, 500, tableId)
 
     await apiRequest(
       server.baseUrl,
@@ -456,7 +460,7 @@ describe('Lobby WebSocket visibility enforcement — Friends-Only and Private ta
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     await waitForType(ws, 'JOINED_LOBBY')
 
-    const collectPromise = collectLobbyEvents(ws, 500)
+    const collectPromise = collectLobbyEvents(ws, 500, tableId)
 
     await apiRequest(
       server.baseUrl,
@@ -492,7 +496,7 @@ describe('Lobby WebSocket visibility enforcement — Friends-Only and Private ta
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     await waitForType(ws, 'JOINED_LOBBY')
 
-    const collectPromise = collectLobbyEvents(ws, 500)
+    const collectPromise = collectLobbyEvents(ws, 500, tableId)
 
     await redis.set(`table:${tableId}`, JSON.stringify(table), { EX: 3600 })
 
@@ -523,7 +527,7 @@ describe('Lobby WebSocket visibility enforcement — Friends-Only and Private ta
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     await waitForType(ws, 'JOINED_LOBBY')
 
-    const collectPromise = collectLobbyEvents(ws, 500)
+    const collectPromise = collectLobbyEvents(ws, 500, tableId)
 
     await apiRequest(
       server.baseUrl,
@@ -561,7 +565,7 @@ describe('Lobby WebSocket visibility enforcement — Friends-Only and Private ta
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     await waitForType(ws, 'JOINED_LOBBY')
 
-    const collectPromise = collectLobbyEvents(ws, 500)
+    const collectPromise = collectLobbyEvents(ws, 500, tableId)
 
     await apiRequest(
       server.baseUrl,

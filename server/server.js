@@ -75,11 +75,11 @@ function emitBlindNilExchangePrompts(wss, state) {
   const partnerSeat = getPartnerSeat(currentBlindNilSeat)
 
   if (step === 'blind_to_partner') {
-    wss.sendToPlayer(state.players[currentBlindNilSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'send', count: 2 })
-    wss.sendToPlayer(state.players[partnerSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'receive', count: 2 })
+    wss.sendToPlayer(state.players[currentBlindNilSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'send', count: 2, step, currentBlindNilSeat })
+    wss.sendToPlayer(state.players[partnerSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'receive', count: 2, step, currentBlindNilSeat })
   } else {
     // step === 'partner_to_blind': partner now sends cards back
-    wss.sendToPlayer(state.players[partnerSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'send', count: 2 })
+    wss.sendToPlayer(state.players[partnerSeat], 'BLIND_NIL_EXCHANGE_PROMPT', { direction: 'send', count: 2, step, currentBlindNilSeat })
   }
 }
 
@@ -120,7 +120,8 @@ function advanceBotsWithEvents(state, wss, tableId) {
       current = placeBid(current, seat, bid)
       if (wss) {
         const bidType = bid === 'nil' ? 'nil' : bid === 'blind_nil' ? 'blindNil' : 'number'
-        wss.broadcast(tableId, 'BID_PLACED', { seat, bidType })
+        const bidPayload = bidType === 'number' ? { seat, bidType, bid } : { seat, bidType }
+        wss.broadcast(tableId, 'BID_PLACED', bidPayload)
         if (current.phase === 'blind_nil_exchange') {
           emitBlindNilExchangePrompts(wss, current)
         }
@@ -132,10 +133,11 @@ function advanceBotsWithEvents(state, wss, tableId) {
       const card = botPlay(current.hands[seat], current.currentTrick, current.spadesbroken, current.isFirstTrick)
       const prevCompletedLen = current.completedTricks.length
       const prevPhase = current.phase
+      const trickWithCard = [...current.currentTrick, { seat, card }]
       console.log('Bot play:', { seat, card, tableId: current.tableId })
       current = playCard(current, seat, card)
       if (wss) {
-        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card })
+        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card, currentTrick: trickWithCard, nextPlayerSeat: current.currentPlayerSeat, spadesBroken: current.spadesbroken })
         // trickJustCompleted: tricks 1-12 AND 13th trick when game-over (length grows 12→13)
         const trickJustCompleted = current.completedTricks.length > prevCompletedLen
         // handJustScored: phase left 'playing' — either new hand or game over
@@ -631,7 +633,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       let newState = placeBid(gameState, seat, bid)
       if (wss) {
         const bidType = bid === 'nil' ? 'nil' : bid === 'blind_nil' ? 'blindNil' : 'number'
-        wss.broadcast(tableId, 'BID_PLACED', { seat, bidType })
+        const bidPayload = bidType === 'number' ? { seat, bidType, bid } : { seat, bidType }
+        wss.broadcast(tableId, 'BID_PLACED', bidPayload)
         if (newState.phase === 'blind_nil_exchange') {
           emitBlindNilExchangePrompts(wss, newState)
         }
@@ -710,7 +713,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const newState = revealHand(gameState, seat)
       await saveGameState(redisClient, tableId, newState)
       if (wss) {
-        wss.sendToPlayer(session.playerId, 'HAND_REVEALED', { myHand: newState.hands[seat] })
+        wss.sendToPlayer(session.playerId, 'HAND_REVEALED', { myHand: newState.hands[seat], seat })
       }
       sendJSON(res, 200, getPlayerView(newState, seat))
     } catch (err) {
@@ -743,9 +746,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       validateCardPlay(gameState, seat, card)
       const prevCompletedLen = gameState.completedTricks.length
       const prevPhase = gameState.phase
+      const trickWithCard = [...gameState.currentTrick, { seat, card }]
       let newState = playCard(gameState, seat, card)
       if (wss) {
-        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card })
+        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card, currentTrick: trickWithCard, nextPlayerSeat: newState.currentPlayerSeat, spadesBroken: newState.spadesbroken })
         // trickJustCompleted: tricks 1-12 AND 13th trick when game-over (length grows 12→13)
         const trickJustCompleted = newState.completedTricks.length > prevCompletedLen
         // handJustScored: phase left 'playing' — either new hand or game over

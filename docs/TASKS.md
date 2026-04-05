@@ -85,7 +85,7 @@
 - [x] `P0` Implement Redis pub/sub fan-out: each `table:{tableId}` room and the `lobby` channel map to a Redis pub/sub channel so all server instances can broadcast to connected clients
 - [x] `P0` Emit in-game events after each validated state mutation: `HAND_DEALT` (per-player), `BID_PLACED`, `BLIND_NIL_EXCHANGE_PROMPT`, `CARD_PLAYED`, `TRICK_COMPLETE`, `HAND_SCORED`, `GAME_OVER`, `TURN_CHANGED`
 - [x] `P0` Implement player disconnect detection: emit `PLAYER_DISCONNECTED` with a 60 s reconnect window on ping failure or clean close; emit `PLAYER_RECONNECTED` when the player re-joins within the window; stall game with "waiting for reconnect" indicator if window expires
-- [ ] `P1` Emit lobby events to the `lobby` channel for **Public tables only**: `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED` — visibility-aware routing (Friends-Only → `player:{id}:notify`, transitions on visibility change, friend-list side effects) is implemented in Slice 3 alongside the full visibility model
+- [x] `P1` Emit lobby events to the `lobby` channel for **Public tables only**: `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED` — visibility-aware routing (Friends-Only → `player:{id}:notify`, transitions on visibility change, friend-list side effects) is implemented in Slice 3 alongside the full visibility model
 
 ### Web Client
 
@@ -99,7 +99,7 @@
 - [ ] `P0` Unit tests (`test/ws/`): connection authentication, room join/leave, event emission after each game action, ping/pong lifecycle
 - [ ] `P0` Integration test: play a card action triggers `CARD_PLAYED` event received by all players in the room
 - [ ] `P0` Integration test: disconnect within reconnect window resumes game; expired window stalls game
-- [ ] `P1` Integration test: `TABLE_CREATED` / `TABLE_UPDATED` / `TABLE_REMOVED` events delivered to lobby channel subscribers
+- [x] `P1` Integration test: `TABLE_CREATED` / `TABLE_UPDATED` / `TABLE_REMOVED` events delivered to lobby channel subscribers
 
 ---
 

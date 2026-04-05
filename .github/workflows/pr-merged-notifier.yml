@@ -36,15 +36,29 @@ jobs:
 
             const issueNumber = parseInt(match[1]);
 
+            // Get issue and all comments
             const issue = await github.rest.issues.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber
             });
-
-            const issueBody = issue.data.body || '';
-            const hasHandoff = /when this issue is completed/i.test(issueBody);
-
+            
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            
+            // Check issue body and all comments for handoff instruction
+            const allText = [
+              issue.data.body || '',
+              ...comments.data.map(c => c.body)
+            ];
+            
+            const hasHandoff = allText.some(text => 
+              text.toLowerCase().includes('when this issue is completed')
+            );
+            
             if (!hasHandoff) {
               console.log('No handoff instruction found in issue body, skipping');
               return;

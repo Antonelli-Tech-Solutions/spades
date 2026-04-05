@@ -96,9 +96,9 @@
 
 ### Testing
 
-- [ ] `P0` Unit tests (`test/ws/`): connection authentication, room join/leave, event emission after each game action, ping/pong lifecycle
-- [ ] `P0` Integration test: play a card action triggers `CARD_PLAYED` event received by all players in the room
-- [ ] `P0` Integration test: disconnect within reconnect window resumes game; expired window stalls game
+- [x] `P0` Unit tests (`test/ws/`): connection authentication, room join/leave, event emission after each game action, ping/pong lifecycle
+- [x] `P0` Integration test: play a card action triggers `CARD_PLAYED` event received by all players in the room
+- [x] `P0` Integration test: disconnect within reconnect window resumes game; expired window stalls game
 - [x] `P1` Integration test: `TABLE_CREATED` / `TABLE_UPDATED` / `TABLE_REMOVED` events delivered to lobby channel subscribers
 
 ---

@@ -3,10 +3,24 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.ts'
+      - '**/*.jsx'
+      - '**/*.tsx'
+      - '**/*.json'
+      - '**/*.md'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '**/*.sql'
+      - '**/*.env.example'
+      - 'package.json'
+      - 'package-lock.json'
 
 jobs:
   claude-review:
-    if: github.event.pull_request.changed_files > 0 && github.actor != 'claude-bot-dom[bot]'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:

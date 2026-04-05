@@ -73,7 +73,11 @@ export function createWsServer(httpServer, opts = {}) {
 
   // ── Upgrade / authentication ────────────────────────────────────────────────
   httpServer.on('upgrade', async (req, socket, head) => {
-    const sessionId = req.headers['x-session-id']
+    // Accept the session token from the x-session-id header (server-to-server /
+    // Node.js ws clients) or from the `sessionId` URL query parameter (browser
+    // clients, which cannot set custom headers on the WebSocket upgrade).
+    const reqUrl = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`)
+    const sessionId = req.headers['x-session-id'] ?? reqUrl.searchParams.get('sessionId')
     if (!sessionId) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
       socket.destroy()

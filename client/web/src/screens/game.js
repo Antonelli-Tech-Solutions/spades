@@ -8,6 +8,7 @@ import {
   terminateGame as apiTerminate,
   leaveTable as apiLeaveTable,
 } from '../api.js'
+import { createGameSocket, buildWsUrl } from '../gameSocket.js'
 import { navigate } from '../router.js'
 import { handSpreadHtml, handDiagramHtml, lastTrickHtml } from '../hand.js'
 import { relSeats } from '../seatUtils.js'
@@ -231,12 +232,15 @@ export function renderGameScreen(container) {
   let holdTimer = null
   let queuedState = null
   let dismissedHandCount = 0
+  let gameSocket = null
   const inputBlocker = createInputBlocker()
 
   function cleanup() {
     mounted = false
     clearTimeout(pollTimer)
     clearTimeout(holdTimer)
+    gameSocket?.close()
+    gameSocket = null
     if (appEl) appEl.classList.remove('app--game')
     sessionStorage.removeItem('currentTableId')
   }
@@ -799,6 +803,26 @@ export function renderGameScreen(container) {
     dismissedHandCount = s.handHistory?.length ?? 0
     render()
     schedulePoll()
+
+    // Establish authenticated WebSocket connection and subscribe to the table room.
+    // Events are logged for now; the polling loop will be replaced by WS-driven
+    // re-renders in the next Slice 2 task.
+    gameSocket = createGameSocket({
+      wsUrl: buildWsUrl(sessionId),
+      tableId,
+      onOpen: () => {
+        console.log('GameSocket joined table room:', { tableId })
+      },
+      onEvent: (msg) => {
+        console.log('GameSocket event:', { type: msg.type, tableId })
+      },
+      onClose: () => {
+        console.log('GameSocket closed:', { tableId })
+      },
+      onError: (err) => {
+        console.log('GameSocket error:', { tableId, error: err?.message })
+      },
+    })
   }).catch((err) => {
     if (!mounted) return
     if (err.status === 401) { navigate('#/login'); return }

@@ -616,10 +616,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const result = await changeSeat(redisClient, tableId, session.playerId, seat)
-      emitLobbyTableUpdated(wss, result.table)
-      if (wss) {
-        wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.oldSeat })
-        wss.broadcast(tableId, 'SEAT_TAKEN', { seat: result.newSeat })
+      if (result.oldSeat !== result.newSeat) {
+        emitLobbyTableUpdated(wss, result.table)
+        if (wss) {
+          wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.oldSeat })
+          wss.broadcast(tableId, 'SEAT_TAKEN', { seat: result.newSeat })
+        }
       }
       sendJSON(res, 200, { tableId, seat: result.newSeat })
     } catch (err) {

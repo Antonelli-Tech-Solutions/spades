@@ -447,6 +447,37 @@ describe('buildWsUrl', { timeout: 2000 }, () => {
     const url = buildWsUrl('session with spaces')
     assert.ok(!url.includes(' '), 'URL should not contain unencoded spaces')
   })
+
+  it('uses window.__WS_URL__ when set', { timeout: 2000 }, () => {
+    globalThis.__WS_URL__ = 'wss://my-railway-app.up.railway.app'
+    try {
+      const url = buildWsUrl('abc')
+      assert.equal(url, 'wss://my-railway-app.up.railway.app?sessionId=abc')
+    } finally {
+      delete globalThis.__WS_URL__
+    }
+  })
+
+  it('strips trailing slash from __WS_URL__', { timeout: 2000 }, () => {
+    globalThis.__WS_URL__ = 'wss://my-railway-app.up.railway.app/'
+    try {
+      const url = buildWsUrl('abc')
+      assert.equal(url, 'wss://my-railway-app.up.railway.app?sessionId=abc')
+    } finally {
+      delete globalThis.__WS_URL__
+    }
+  })
+
+  it('URL-encodes sessionId when __WS_URL__ is set', { timeout: 2000 }, () => {
+    globalThis.__WS_URL__ = 'wss://my-railway-app.up.railway.app'
+    try {
+      const url = buildWsUrl('session with spaces')
+      assert.ok(!url.includes(' '), 'URL should not contain unencoded spaces')
+      assert.ok(url.includes('sessionId=session%20with%20spaces'), `expected encoded sessionId, got: ${url}`)
+    } finally {
+      delete globalThis.__WS_URL__
+    }
+  })
 })
 
 // --- createLobbySocket -------------------------------------------------------

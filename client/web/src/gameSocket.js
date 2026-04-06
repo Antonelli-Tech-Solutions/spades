@@ -247,6 +247,14 @@ export function createLobbySocket({
  * @returns {string}
  */
 export function buildWsUrl(sessionId) {
+  // Allow deployments that split the frontend (e.g. Vercel) from the WebSocket
+  // server (e.g. Railway) to override the WS base URL at runtime by setting
+  // window.__WS_URL__ = 'wss://your-railway-app.up.railway.app' in index.html.
+  // Falls back to the current page origin for local / single-host deployments.
+  if (globalThis.__WS_URL__) {
+    const base = globalThis.__WS_URL__.replace(/\/$/, '')
+    return `${base}?sessionId=${encodeURIComponent(sessionId)}`
+  }
   const protocol = globalThis.location?.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = globalThis.location?.host ?? 'localhost'
   return `${protocol}//${host}?sessionId=${encodeURIComponent(sessionId)}`

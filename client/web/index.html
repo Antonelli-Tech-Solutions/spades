@@ -1374,6 +1374,17 @@
   </head>
   <body>
     <div id="app"></div>
+    <!--
+      Split-deployment config: set window.__WS_URL__ to your WebSocket server's
+      URL when the frontend is served from a different host than the backend
+      (e.g. frontend on Vercel, WebSocket server on Railway).
+
+      Example (add this BEFORE the module script):
+        <script>window.__WS_URL__ = 'wss://your-app.up.railway.app';</script>
+
+      Leave this comment in place and omit the script tag for local / single-host
+      deployments — buildWsUrl() will fall back to window.location.host.
+    -->
     <script type="module" src="src/main.js"></script>
   </body>
 </html>

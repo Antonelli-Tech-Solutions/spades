@@ -47,6 +47,7 @@ npm start
 | `REDIS_URL` | Yes | — | Redis connection string |
 | `PORT` | No | `3000` | HTTP server port |
 | `WS_PORT` | No | Same as `PORT` | WebSocket server port. Defaults to sharing the HTTP server. Set to a different port to run WebSocket on a dedicated server (requires a reverse proxy to route WebSocket upgrades from the HTTP port). |
+| `WS_URL` | No | Derived from request origin | Full WebSocket base URL (e.g. `wss://my-app.up.railway.app`). Set this in split-host deployments where the WebSocket server is on a different host than the frontend (e.g. Vercel + Railway). The server injects this as `window.__WS_URL__` in the served HTML so the client connects to the correct host. |
 | `NODE_ENV` | No | — | Environment name (`development`, `production`) |
 | `APP_URL` | No | `http://localhost:3000` | Public base URL (used in verification emails) |
 | `EMAIL_HOST` | No | — | SMTP host. If unset, verification emails are logged to stdout |

@@ -62,6 +62,14 @@ export const DELTA_EVENTS = new Set([
 export const GAME_REFRESH_EVENTS = new Set([...FULL_REFRESH_EVENTS, ...DELTA_EVENTS])
 
 /**
+ * Returns the HTML for the in-game Leave Game button.
+ * Exported for unit testing.
+ */
+export function leaveGameButtonHtml() {
+  return `<button class="btn-secondary btn-sm" id="leave-game-btn">Leave Game</button>`
+}
+
+/**
  * Apply a WebSocket delta event payload directly to the current game state,
  * returning a new state object. For events whose payload does not carry enough
  * data to update state (e.g. old server without delta fields), the original
@@ -721,7 +729,10 @@ export function renderGameScreen(container) {
           ? lastTrickHtml(state.completedTricks[state.completedTricks.length - 1], rel)
           : ''}
 
-        ${state.isHost ? '<div class="host-controls"><button class="btn-danger btn-sm" id="terminate-btn">Terminate Game</button></div>' : ''}
+        <div class="game-controls">
+          ${state.isHost ? '<button class="btn-danger btn-sm" id="terminate-btn">Terminate Game</button>' : ''}
+          ${leaveGameButtonHtml()}
+        </div>
       </div>`
 
     // Mode toggle
@@ -758,6 +769,23 @@ export function renderGameScreen(container) {
       } catch (err) {
         btn.disabled = false
         console.log('Terminate failed:', { error: err.message })
+      }
+    })
+
+    // Leave game button (all players, in-game)
+    container.querySelector('#leave-game-btn')?.addEventListener('click', async () => {
+      if (!confirm('Leave the game? A bot will take your place until the game ends.')) return
+      const btn = container.querySelector('#leave-game-btn')
+      btn.disabled = true
+      btn.textContent = 'Leaving\u2026'
+      try {
+        await apiLeaveTable({ tableId, sessionId, playerId })
+        cleanup()
+        navigate('#/lobby')
+      } catch (err) {
+        btn.disabled = false
+        btn.textContent = 'Leave Game'
+        console.log('Leave game failed:', { error: err.message })
       }
     })
 

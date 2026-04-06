@@ -473,6 +473,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         console.log('Game started:', { tableId, gameId: gameState.gameId })
       } else {
         emitLobbyTableUpdated(wss, table)
+        if (wss) wss.broadcast(tableId, 'SEAT_TAKEN', { seat })
       }
 
       sendJSON(res, 200, { tableId, seat })
@@ -518,6 +519,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         console.log('Game started with bots:', { tableId, gameId: gameState.gameId })
       } else {
         emitLobbyTableUpdated(wss, updated)
+        if (wss) wss.broadcast(tableId, 'SEAT_TAKEN', { seat })
       }
 
       sendJSON(res, 200, { tableId, seat })
@@ -581,6 +583,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
       const leftTable = await leaveTable(redisClient, tableId, session.playerId)
       emitLobbyTableUpdated(wss, leftTable.table)
+      if (wss) wss.broadcast(tableId, 'SEAT_VACATED', { seat: leftTable.seat })
       console.log('Player left table:', { tableId, playerId: session.playerId })
       sendJSON(res, 200, { message: 'Left table.' })
     } catch (err) {

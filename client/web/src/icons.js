@@ -44,6 +44,15 @@ export const DUNCE_CAP_ICON = [
   '</svg>',
 ].join('')
 
+export const CROWN_ICON = [
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" style="vertical-align:-1px">',
+  // Crown points — five-point crown shape
+  '<path d="M2 18h20l2.5-10L17 12 12 2 7 12 1.5 8z" fill="#ffd54f" stroke="#b8860b" stroke-width="1" stroke-linejoin="round"/>',
+  // Base bar
+  '<rect x="2" y="18.5" width="20" height="2.5" rx="1.25" fill="#ffd54f" stroke="#b8860b" stroke-width="0.75"/>',
+  '</svg>',
+].join('')
+
 export const EMBARRASSED_FACE_ICON = [
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-2px">',
   // Face

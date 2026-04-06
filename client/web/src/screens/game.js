@@ -15,7 +15,7 @@ import { relSeats } from '../seatUtils.js'
 import { HOLD_DURATIONS, detectCompletedTrick, isHandTransition, trickHoldHtml } from '../trickHold.js'
 import { createInputBlocker } from '../inputBlock.js'
 import { endOfHandSummaryHtml } from '../endOfHandSummary.js'
-import { BAG_ICON } from '../icons.js'
+import { BAG_ICON, CROWN_ICON } from '../icons.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const PARTNER = { north: 'south', south: 'north', east: 'west', west: 'east' }
@@ -330,9 +330,10 @@ function seatInfoHtml(state, seat, label, isWinner = false) {
   const isActive = state.currentBidderSeat === seat || state.currentPlayerSeat === seat
   const activeCls = isActive ? ' seat-active' : ''
   const winnerCls = isWinner ? ' seat-winner' : ''
+  const crownHtml = state.hostSeat === seat ? `<span class="seat-host-crown" title="Host">${CROWN_ICON}</span>` : ''
   return `
     <div class="seat-info${activeCls}${winnerCls}">
-      <span class="seat-name">${esc(label)}</span>
+      <span class="seat-name">${esc(label)}${crownHtml}</span>
       <div class="seat-stats">
         <span>Bid: ${esc(bidLabel(bid))}</span>
         <span>Tricks: ${tricks}</span>
@@ -435,7 +436,8 @@ export function renderGameScreen(container) {
       const cls = occupied ? 'waiting-seat waiting-seat--taken' : 'waiting-seat waiting-seat--empty'
       const label = s.charAt(0).toUpperCase() + s.slice(1)
       const status = occupied ? (seats[s].startsWith('bot:') ? 'Bot' : 'Joined') : 'Empty'
-      return `<div class="${cls}"><span>${esc(label)}</span><span class="waiting-seat-status">${status}</span></div>`
+      const crownHtml = state.hostSeat === s ? `<span class="seat-host-crown" title="Host">${CROWN_ICON}</span>` : ''
+      return `<div class="${cls}"><span>${crownHtml}${esc(label)}</span><span class="waiting-seat-status">${status}</span></div>`
     }).join('')
 
     const fillBotsBtn = state.isHost && emptySeats.length > 0

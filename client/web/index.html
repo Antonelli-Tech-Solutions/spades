@@ -170,6 +170,51 @@
         color: #81c784;
       }
 
+      .btn-danger {
+        padding: 0.75rem;
+        background: #c62828;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .btn-danger:hover:not(:disabled) {
+        background: #d32f2f;
+      }
+
+      .btn-danger:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .btn-sm {
+        padding: 0.35rem 0.75rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+
+      /* In-game controls bar (leave + host terminate) */
+      .game-controls {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-top: 1px solid #2a2a2a;
+        max-width: 640px;
+        width: 100%;
+        margin: 0 auto;
+      }
+
+      .game-controls .btn-secondary {
+        width: auto;
+        margin-bottom: 0;
+      }
+
       .auth-resend {
         margin-bottom: 0.75rem;
       }

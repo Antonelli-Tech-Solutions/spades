@@ -602,9 +602,11 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
 
       const gameState = await getGameState(redisClient, tableId)
-      if (!gameState) return sendJSON(res, 200, { status: 'waiting', seats: table.seats, isHost: table.hostPlayerId === session.playerId })
+      const hostSeatWaiting = Object.entries(table.seats).find(([, pid]) => pid === table.hostPlayerId)?.[0] ?? null
+      if (!gameState) return sendJSON(res, 200, { status: 'waiting', seats: table.seats, isHost: table.hostPlayerId === session.playerId, hostSeat: hostSeatWaiting })
 
-      sendJSON(res, 200, { ...getPlayerView(gameState, seat), isHost: table.hostPlayerId === session.playerId })
+      const hostSeat = Object.entries(gameState.players).find(([, pid]) => pid === table.hostPlayerId)?.[0] ?? null
+      sendJSON(res, 200, { ...getPlayerView(gameState, seat), isHost: table.hostPlayerId === session.playerId, hostSeat })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Get game state error:', { tableId, error: err.message })

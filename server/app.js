@@ -1,5 +1,6 @@
 import express from 'express'
 import { createServer } from 'http'
+import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { handler } from './server.js'
@@ -34,8 +35,27 @@ app.use((req, res, next) => {
 
 const redis = process.env.REDIS_URL ? await getRedis() : null
 
-// Serve the web client as static files
-app.use(express.static(join(__dirname, '..', 'client', 'web')))
+// Serve index.html dynamically so the server can inject window.__WS_URL__ from
+// the WS_URL environment variable.  This allows split-host deployments (e.g.
+// Vercel frontend + Railway WebSocket server) to configure the WebSocket URL
+// via an environment variable rather than hardcoding it in the source.
+const indexPath = join(__dirname, '..', 'client', 'web', 'index.html')
+const rawIndex = readFileSync(indexPath, 'utf-8')
+
+app.get('/', (req, res) => {
+  const wsUrl = process.env.WS_URL
+  const html = wsUrl
+    ? rawIndex.replace(
+        '</head>',
+        `  <script>window.__WS_URL__ = ${JSON.stringify(wsUrl)};</script>\n  </head>`,
+      )
+    : rawIndex
+  res.setHeader('Content-Type', 'text/html')
+  res.send(html)
+})
+
+// Serve remaining static assets (JS, CSS, images, etc.)
+app.use(express.static(join(__dirname, '..', 'client', 'web'), { index: false }))
 
 // Inject runtime configuration as a JS file so client-side code can read
 // environment-specific values (e.g. WS_URL for split-host deployments where

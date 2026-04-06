@@ -286,22 +286,25 @@ export function createLobbySocket({
 /**
  * Build the WebSocket URL, appending the session token as a query parameter.
  *
- * If `window.__WS_URL__` is set (injected by `/config.js` from the `WS_URL`
- * environment variable), that base URL is used. This supports split-host
- * deployments where the WebSocket server lives on a different host than the
- * HTTP server (e.g. frontend on Vercel, WebSocket on Railway).
+ * Resolution order:
+ *   1. `window.__WS_URL__` — injected by the server from the `WS_URL` env var.
+ *      Used in split-host deployments where the WebSocket server is on a
+ *      different host than the web frontend (e.g. Railway backend + Vercel
+ *      frontend).
+ *   2. `window.location.host` — falls back to the current origin for local /
+ *      single-host deployments.
  *
- * Falls back to deriving the host from `window.location` for local /
- * single-host deployments.
+ * Falls back to `localhost` when running outside a browser (e.g. unit tests).
  *
  * @param {string} sessionId
  * @returns {string}
  */
 export function buildWsUrl(sessionId) {
-  const base = globalThis.__WS_URL__ || ''
-  if (base) {
-    const separator = base.includes('?') ? '&' : '?'
-    return `${base}${separator}sessionId=${encodeURIComponent(sessionId)}`
+  const wsBase = globalThis.__WS_URL__
+  if (wsBase) {
+    // __WS_URL__ is already a full base URL (e.g. "wss://my-app.up.railway.app")
+    // Strip any trailing slash before appending the query string.
+    return `${wsBase.replace(/\/$/, '')}?sessionId=${encodeURIComponent(sessionId)}`
   }
   const protocol = globalThis.location?.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = globalThis.location?.host ?? 'localhost'

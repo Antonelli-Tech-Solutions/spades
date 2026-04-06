@@ -656,10 +656,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const result = await changeSeat(redisClient, tableId, session.playerId, seat)
-      emitLobbyTableUpdated(wss, result.table)
-      if (wss) {
-        wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.oldSeat })
-        wss.broadcast(tableId, 'SEAT_TAKEN', { seat: result.newSeat })
+      if (result.oldSeat !== result.newSeat) {
+        emitLobbyTableUpdated(wss, result.table)
+        if (wss) {
+          wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.oldSeat })
+          wss.broadcast(tableId, 'SEAT_TAKEN', { seat: result.newSeat })
+        }
       }
       sendJSON(res, 200, { tableId, seat: result.newSeat })
     } catch (err) {
@@ -669,6 +671,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 503, { error: err.message })
       console.error('Change seat error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }

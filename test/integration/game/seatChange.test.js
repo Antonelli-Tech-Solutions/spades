@@ -4,6 +4,7 @@
  *   - Table is deleted when no players remain
  *   - Host is transferred when host leaves a waiting table
  *   - POST /api/tables/:tableId/change-seat
+ *   - TOCTOU race: changeSeat does not overwrite a concurrently-started game
  *
  * Requires a real Redis instance (REDIS_URL) and database (DATABASE_URL).
  * Tests are skipped when either is not set.
@@ -15,6 +16,7 @@ import bcrypt from 'bcryptjs'
 import { handler } from '../../../server/server.js'
 import { getDb, closeDb } from '../../../server/db.js'
 import { getRedis, closeRedis } from '../../../server/redis.js'
+import { createTable, markTablePlaying, changeSeat, getTable } from '../../../server/lobby/table.js'
 
 const skip =
   !process.env.DATABASE_URL || !process.env.REDIS_URL
@@ -295,6 +297,58 @@ describe('Table seating updates', { skip }, () => {
 
     const { body: state } = await getStateApi(server.baseUrl, tableId, host.sessionId, host.playerId)
     assert.equal(state.seats.north.playerId, host.playerId, 'host should still be at north')
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+  })
+
+  it('change-seat returns 409 when game is in progress', { timeout: 10000 }, async () => {
+    const host = players[0]
+    const { body: createBody } = await createTableApi(server.baseUrl, host.sessionId, host.playerId)
+    const tableId = createBody.tableId
+
+    // Transition table to playing state directly
+    await markTablePlaying(redis, tableId, 'test-game-id')
+
+    const { status, body } = await changeSeatApi(server.baseUrl, tableId, 'east', host.sessionId, host.playerId)
+    assert.equal(status, 409)
+    assert.ok(body.error, 'should return an error message')
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+  })
+
+  // Regression test for TOCTOU race condition (issue #282):
+  // changeSeat must not overwrite a table that transitions to 'playing' between the read
+  // and the write inside changeSeat.  The fix uses WATCH/MULTI/EXEC so the write is aborted
+  // when the key changes concurrently.
+  it('changeSeat does not overwrite playing state when game starts concurrently', { timeout: 15000 }, async () => {
+    const host = players[0]
+
+    // Create a fresh waiting table directly via the table module so we control the exact state
+    const table = await createTable(redis, { hostPlayerId: host.playerId })
+    const tableId = table.tableId
+    // Host is auto-seated north by the API — here we set seats directly
+    const waitingTable = { ...table, seats: { north: host.playerId, east: null, south: null, west: null } }
+    await redis.set(`table:${tableId}`, JSON.stringify(waitingTable), { EX: 3600 })
+
+    // Simulate the race: markTablePlaying runs after changeSeat reads 'waiting' but before it writes.
+    // We run both concurrently — with WATCH/MULTI/EXEC the changeSeat write is aborted when it
+    // detects the key was modified, and it retries / surfaces GAME_IN_PROGRESS. Without the fix,
+    // changeSeat silently overwrites the 'playing' state with the stale 'waiting' snapshot.
+    const gameId = 'race-test-game-id'
+    let changeSeatErr = null
+    await Promise.all([
+      changeSeat(redis, tableId, host.playerId, 'east').catch((err) => { changeSeatErr = err }),
+      markTablePlaying(redis, tableId, gameId),
+    ])
+
+    const finalTable = await getTable(redis, tableId)
+    assert.ok(finalTable, 'table should still exist after the race')
+    assert.equal(finalTable.status, 'playing', 'table must remain in playing state after concurrent game start')
+    assert.equal(finalTable.gameId, gameId, 'gameId must not be clobbered by changeSeat')
 
     // Cleanup
     await redis.del(`table:${tableId}`)

@@ -365,6 +365,11 @@ export async function findTableForPlayer(redis, playerId) {
  * Move a seated player from their current seat to a different empty seat.
  * Only allowed while the table is in 'waiting' status.
  *
+ * Uses WATCH/MULTI/EXEC (optimistic locking) to prevent a TOCTOU race where a
+ * concurrent `markTablePlaying` call could transition the table to 'playing' between
+ * our read and write — which would otherwise cause changeSeat to silently overwrite
+ * the in-progress game state with a stale 'waiting' snapshot.
+ *
  * @param {import('redis').RedisClientType} redis
  * @param {string} tableId
  * @param {string} playerId
@@ -378,30 +383,72 @@ export async function changeSeat(redis, tableId, playerId, newSeat) {
     throw Object.assign(new Error(`Invalid seat: ${newSeat}`), { code: 'INVALID_SEAT' })
   }
 
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
-  }
-  if (table.status === 'playing') {
-    throw Object.assign(new Error('Cannot change seats once the game has started'), { code: 'GAME_IN_PROGRESS' })
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      // WATCH the table key — if anything modifies it before EXEC, the transaction aborts
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+
+      if (table.status === 'playing') {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Cannot change seats once the game has started'), { code: 'GAME_IN_PROGRESS' })
+      }
+
+      const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
+      if (!currentSeat) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('You are not seated at this table'), { code: 'NOT_SEATED' })
+      }
+
+      if (currentSeat === newSeat) {
+        await isolatedClient.unwatch()
+        return { table, oldSeat: currentSeat, newSeat }
+      }
+
+      if (table.seats[newSeat] !== null) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+      }
+
+      const updatedSeats = { ...table.seats, [currentSeat]: null, [newSeat]: playerId }
+      const updated = { ...table, seats: updatedSeats }
+
+      // Atomically write — exec() returns null if the key was modified since WATCH
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        // Key was modified concurrently (e.g., game started) — signal caller to retry
+        return null
+      }
+
+      console.log('Player changed seat:', { tableId, playerId, oldSeat: currentSeat, newSeat })
+      return { table: updated, oldSeat: currentSeat, newSeat }
+    })
+
+    if (result !== null) {
+      return result
+    }
+    // result === null means the transaction was aborted — retry
   }
 
-  const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
-  if (!currentSeat) {
-    throw Object.assign(new Error('You are not seated at this table'), { code: 'NOT_SEATED' })
-  }
-  if (currentSeat === newSeat) {
-    return { table, oldSeat: currentSeat, newSeat }
-  }
-  if (table.seats[newSeat] !== null) {
-    throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
-  }
-
-  const updatedSeats = { ...table.seats, [currentSeat]: null, [newSeat]: playerId }
-  const updated = { ...table, seats: updatedSeats }
-  await saveTable(redis, updated)
-  console.log('Player changed seat:', { tableId, playerId, oldSeat: currentSeat, newSeat })
-  return { table: updated, oldSeat: currentSeat, newSeat }
+  throw Object.assign(
+    new Error('Seat change could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
 }
 
 /**

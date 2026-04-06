@@ -283,6 +283,24 @@ describe('Table seating updates', { skip }, () => {
     assert.equal(res.status, 401)
   })
 
+  it('change-seat with same seat is a no-op and returns 200 with unchanged seat', { timeout: 10000 }, async () => {
+    const host = players[0]
+    const { body: createBody } = await createTableApi(server.baseUrl, host.sessionId, host.playerId)
+    const tableId = createBody.tableId
+
+    // Host is at north — change to north again (same seat)
+    const { status, body } = await changeSeatApi(server.baseUrl, tableId, 'north', host.sessionId, host.playerId)
+    assert.equal(status, 200)
+    assert.equal(body.seat, 'north')
+
+    const { body: state } = await getStateApi(server.baseUrl, tableId, host.sessionId, host.playerId)
+    assert.equal(state.seats.north.playerId, host.playerId, 'host should still be at north')
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+  })
+
   it('GET /api/tables/:tableId/state returns enriched seat data with username and isBot', { timeout: 10000 }, async () => {
     const host = players[0]
     const { body: createBody } = await createTableApi(server.baseUrl, host.sessionId, host.playerId)

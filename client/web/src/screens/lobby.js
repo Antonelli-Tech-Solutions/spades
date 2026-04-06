@@ -114,8 +114,20 @@ export async function renderLobbyScreen(container) {
   // Subscribe to the lobby WebSocket channel for real-time updates
   const lobbySocket = createLobbySocket({
     wsUrl: buildWsUrl(sessionId),
-    onOpen: () => {
+    onOpen: async () => {
       console.log('Lobby WebSocket connected')
+      // Re-sync table list now that the WebSocket is subscribed, to close the race window
+      // between the initial fetch and when JOIN_LOBBY is acknowledged by the server.
+      try {
+        const { tables: freshTables } = await listTables({ sessionId, playerId })
+        tables = {}
+        for (const t of freshTables) {
+          tables[t.tableId] = t
+        }
+        renderTableList()
+      } catch (err) {
+        console.log('Failed to sync tables on WebSocket connect:', { error: err.message })
+      }
     },
     onEvent: (event) => {
       console.log('Lobby event:', { type: event.type, tableId: event.payload?.tableId })

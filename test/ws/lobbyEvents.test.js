@@ -310,6 +310,60 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     await waitClose(ws)
   })
 
+  it('TABLE_UPDATED is emitted to the lobby channel when a seated player logs out', { timeout: 15000 }, async () => {
+    // Create a waiting table
+    const createRes = await apiRequest(
+      server.baseUrl,
+      'POST',
+      '/api/tables',
+      { name: 'Logout Test Table' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    assert.equal(createRes.status, 201)
+    const { tableId } = createRes.body
+
+    // PLAYER_A sits at the table
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'north' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+
+    // PLAYER_B subscribes to the lobby
+    const ws = await wsConnect(server, { 'x-session-id': SESSION_B })
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+    await waitForType(ws, 'JOINED_LOBBY')
+
+    const msgPromise = waitForType(ws, 'TABLE_UPDATED')
+
+    // PLAYER_A logs out — seat should be freed and TABLE_UPDATED emitted
+    const logoutRes = await apiRequest(
+      server.baseUrl,
+      'POST',
+      '/api/auth/logout',
+      null,
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    assert.equal(logoutRes.status, 200)
+
+    const [msg] = await msgPromise
+    assert.equal(msg.type, 'TABLE_UPDATED')
+    assert.equal(msg.payload.tableId, tableId)
+    assert.equal(msg.payload.seats.north, null, 'north seat should be freed after logout')
+
+    // Re-seed session for cleanup (session was deleted by logout)
+    await redis.set(`session:${SESSION_A}`, JSON.stringify({ playerId: PLAYER_A, username: 'LobbyEvtHostA' }))
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+
+    ws.close()
+    await waitClose(ws)
+  })
+
   it('TABLE_REMOVED is emitted when last human leaves an in-progress game (table auto-terminates)', { timeout: 15000 }, async () => {
     // Seed a table directly in Redis with all-bot seats (so player leaving terminates it)
     const tableId = 'lobby-evt-terminate-test'

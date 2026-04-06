@@ -188,6 +188,7 @@ export async function saveGameState(redis, tableId, gameState) {
  */
 export async function removePlayerFromTables(redis, playerId) {
   const raw = await redis.hGetAll('lobby:tables')
+  const updatedTables = []
   for (const json of Object.values(raw)) {
     const entry = JSON.parse(json)
     if (entry.status !== 'waiting') continue
@@ -198,8 +199,10 @@ export async function removePlayerFromTables(redis, playerId) {
     const [seat] = seatEntry
     const updated = { ...table, seats: { ...table.seats, [seat]: null } }
     await saveTable(redis, updated)
+    updatedTables.push(updated)
     console.log('Player removed from table on logout:', { tableId: table.tableId, playerId, seat })
   }
+  return updatedTables
 }
 
 /**

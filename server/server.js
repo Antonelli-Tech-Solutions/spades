@@ -382,7 +382,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redis = await getRedis()
       const session = await getSession(redis, sessionId)
       if (session) {
-        await removePlayerFromTables(redis, session.playerId)
+        const updatedTables = await removePlayerFromTables(redis, session.playerId)
+        for (const table of updatedTables) {
+          emitLobbyTableUpdated(wss, table)
+        }
       }
       await deleteSession(redis, sessionId)
       sendJSON(res, 200, { message: 'Logged out successfully.' })

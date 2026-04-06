@@ -137,6 +137,7 @@ The following are coding-specific gotchas that are easy to misimplement even whe
 - Test locations:
   - `test/unit/game/` — pure game logic (scoring, bidding, trick resolution, bag counting)
   - `test/unit/anticheat/` — move validation logic
+  - `test/unit/web/` — client-side web UI logic (React components, socket handling, utilities)
   - `test/integration/` — API routes and Redis behaviour
   - `test/ws/` — WebSocket event flow
 - Every new API route must have at least one integration test

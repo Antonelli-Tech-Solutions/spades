@@ -631,6 +631,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 503, { error: err.message })
       console.error('Change seat error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }

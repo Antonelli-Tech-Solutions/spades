@@ -57,6 +57,17 @@ app.get('/', (req, res) => {
 // Serve remaining static assets (JS, CSS, images, etc.)
 app.use(express.static(join(__dirname, '..', 'client', 'web'), { index: false }))
 
+// Inject runtime configuration as a JS file so client-side code can read
+// environment-specific values (e.g. WS_URL for split-host deployments where
+// the WebSocket server lives on a different host than the HTTP server).
+// Configure WS_URL in Vercel (or your host's env settings) — do not hardcode it.
+app.get('/config.js', (req, res) => {
+  const wsUrl = process.env.WS_URL || ''
+  res.setHeader('Content-Type', 'application/javascript')
+  res.setHeader('Cache-Control', 'no-store')
+  res.send(`window.__WS_URL__ = ${JSON.stringify(wsUrl)};`)
+})
+
 const httpServer = createServer(app)
 
 let wss

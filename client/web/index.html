@@ -1374,6 +1374,10 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- Runtime config: sets window.__WS_URL__ from the WS_URL environment variable.
+         Configure WS_URL in your host's env settings (e.g. Vercel) — do not hardcode it here.
+         Required for split-host deployments (e.g. frontend on Vercel, WebSocket on Railway). -->
+    <script src="/config.js"></script>
     <script type="module" src="src/main.js"></script>
   </body>
 </html>

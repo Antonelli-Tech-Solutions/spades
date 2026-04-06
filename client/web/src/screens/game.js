@@ -356,6 +356,17 @@ export function getDisplayBid(state, seat) {
   return bid
 }
 
+/**
+ * Returns the display name for a seat during an active game.
+ * Uses playerNames from the game state if available, falling back to the
+ * capitalized seat direction (e.g. "North").
+ */
+function seatDisplayName(state, seat) {
+  const info = state.playerNames?.[seat]
+  if (info) return info.isBot ? 'Bot' : (info.username ?? seat.charAt(0).toUpperCase() + seat.slice(1))
+  return seat.charAt(0).toUpperCase() + seat.slice(1)
+}
+
 function seatInfoHtml(state, seat, label, isWinner = false) {
   const bid = getDisplayBid(state, seat)
   const tricks = state.tricksWon[seat]
@@ -464,15 +475,25 @@ export function renderGameScreen(container) {
     const SEAT_NAMES = ['north', 'east', 'south', 'west']
     const emptySeats = SEAT_NAMES.filter((s) => seats[s] === null)
     const rows = SEAT_NAMES.map((s) => {
-      const occupied = seats[s] !== null
+      const seatInfo = seats[s]
+      const occupied = seatInfo !== null
       const cls = occupied ? 'waiting-seat waiting-seat--taken' : 'waiting-seat waiting-seat--empty'
       const label = s.charAt(0).toUpperCase() + s.slice(1)
-      const status = occupied ? (seats[s].startsWith('bot:') ? 'Bot' : 'Joined') : 'Empty'
+      let status = 'Empty'
+      if (occupied) {
+        if (seatInfo.isBot) {
+          status = '<span class="seat-bot-badge">BOT</span>'
+        } else if (seatInfo.playerId === playerId) {
+          status = `${esc(seatInfo.username)} <span class="seat-you-badge">(you)</span>`
+        } else {
+          status = esc(seatInfo.username)
+        }
+      }
       const crownHtml = state.hostSeat === s ? `<span class="seat-host-crown" title="Host">${CROWN_ICON}</span>` : ''
       return `<div class="${cls}"><span>${crownHtml}${esc(label)}</span><span class="waiting-seat-status">${status}</span></div>`
     }).join('')
 
-    const mySeat = Object.entries(state.seats).find(([, id]) => id === playerId)?.[0]
+    const mySeat = Object.entries(state.seats).find(([, s]) => s?.playerId === playerId)?.[0]
     const changeSeatBtns = mySeat
       ? emptySeats.map((s) => `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move to ${s.charAt(0).toUpperCase() + s.slice(1)}</button>`).join('')
       : ''
@@ -717,11 +738,11 @@ export function renderGameScreen(container) {
 
         <div class="game-table">
           <div class="table-top">
-            ${seatInfoHtml(state, rel.across, rel.across.charAt(0).toUpperCase() + rel.across.slice(1), holdActive && holdTrick?.winner === rel.across)}
+            ${seatInfoHtml(state, rel.across, seatDisplayName(state, rel.across), holdActive && holdTrick?.winner === rel.across)}
           </div>
           <div class="table-middle">
             <div class="table-side table-left">
-              ${seatInfoHtml(state, rel.left, rel.left.charAt(0).toUpperCase() + rel.left.slice(1), holdActive && holdTrick?.winner === rel.left)}
+              ${seatInfoHtml(state, rel.left, seatDisplayName(state, rel.left), holdActive && holdTrick?.winner === rel.left)}
             </div>
             <div class="trick-wrap">
               ${holdActive ? trickHoldHtml(holdTrick, rel) : trickHtml(state, rel)}
@@ -730,7 +751,7 @@ export function renderGameScreen(container) {
                 : ''}
             </div>
             <div class="table-side table-right">
-              ${seatInfoHtml(state, rel.right, rel.right.charAt(0).toUpperCase() + rel.right.slice(1), holdActive && holdTrick?.winner === rel.right)}
+              ${seatInfoHtml(state, rel.right, seatDisplayName(state, rel.right), holdActive && holdTrick?.winner === rel.right)}
             </div>
           </div>
           <div class="table-bottom">

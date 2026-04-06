@@ -11,6 +11,24 @@ export function isValidUuid(value) {
 }
 
 /**
+ * Fetch usernames for a batch of player IDs from the database.
+ * Returns a map of playerId → username. Missing IDs are omitted.
+ *
+ * @param {object} db - pg Pool (or compatible query interface)
+ * @param {string[]} playerIds - Array of player UUID strings
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function getPlayerUsernames(db, playerIds) {
+  const validIds = playerIds.filter(isValidUuid)
+  if (validIds.length === 0) return {}
+  const result = await db.query(
+    `SELECT id, username FROM players WHERE id = ANY($1::uuid[])`,
+    [validIds],
+  )
+  return Object.fromEntries(result.rows.map((row) => [row.id, row.username]))
+}
+
+/**
  * Fetch the public profile for a player.
  *
  * @param {object} db - pg Pool (or compatible query interface)

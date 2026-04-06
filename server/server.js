@@ -1,7 +1,7 @@
 import { registerPlayer, verifyEmailToken, resendVerificationEmail } from './auth/registration.js'
 import { forgotPassword, resetPassword } from './auth/passwordReset.js'
 import { sendVerificationEmail as defaultMailer, sendPasswordResetEmail as defaultPasswordResetMailer } from './auth/email.js'
-import { getPlayerProfile, isValidUuid } from './social/profile.js'
+import { getPlayerProfile, getPlayerUsernames, isValidUuid } from './social/profile.js'
 import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession, getSession, validateAuthHeaders } from './auth/session.js'
 import { getDb } from './db.js'
@@ -229,6 +229,42 @@ function emitLobbyTableRemoved(wss, table) {
 }
 
 /**
+ * Enrich raw seat data (seat → playerId | null) with player names and bot flags.
+ * Returns a new object with the same keys but values of:
+ *   - null for empty seats
+ *   - { playerId, username, isBot: true } for bot seats
+ *   - { playerId, username, isBot: false } for human seats
+ *
+ * @param {object} db - pg Pool
+ * @param {{ [seat: string]: string|null }} seats
+ * @returns {Promise<{ [seat: string]: { playerId: string, username: string, isBot: boolean }|null }>}
+ */
+async function enrichSeats(db, seats) {
+  const enriched = {}
+  const humanEntries = []
+
+  for (const [seat, playerId] of Object.entries(seats)) {
+    if (playerId === null) {
+      enriched[seat] = null
+    } else if (playerId.startsWith('bot:')) {
+      enriched[seat] = { playerId, username: 'Bot', isBot: true }
+    } else {
+      humanEntries.push([seat, playerId])
+    }
+  }
+
+  if (humanEntries.length > 0) {
+    const playerIds = humanEntries.map(([, id]) => id)
+    const usernames = await getPlayerUsernames(db, playerIds)
+    for (const [seat, playerId] of humanEntries) {
+      enriched[seat] = { playerId, username: usernames[playerId] ?? null, isBot: false }
+    }
+  }
+
+  return enriched
+}
+
+/**
  * Register all API route handlers on the given Express app.
  *
  * @param {import('express').Application} app
@@ -409,7 +445,11 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       await validateAuthHeaders(redisClient, req)
       const tables = await listTables(redisClient)
-      sendJSON(res, 200, { tables })
+      const db = getDb()
+      const enrichedTables = await Promise.all(
+        tables.map(async (t) => ({ ...t, seats: await enrichSeats(db, t.seats) })),
+      )
+      sendJSON(res, 200, { tables: enrichedTables })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('List tables error:', { error: err.message })
@@ -649,12 +689,17 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const seat = getSeatForPlayer(table.seats, session.playerId)
       if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
 
+      const db = getDb()
       const gameState = await getGameState(redisClient, tableId)
       const hostSeatWaiting = Object.entries(table.seats).find(([, pid]) => pid === table.hostPlayerId)?.[0] ?? null
-      if (!gameState) return sendJSON(res, 200, { status: 'waiting', seats: table.seats, isHost: table.hostPlayerId === session.playerId, hostSeat: hostSeatWaiting })
+      if (!gameState) {
+        const enrichedSeats = await enrichSeats(db, table.seats)
+        return sendJSON(res, 200, { status: 'waiting', seats: enrichedSeats, isHost: table.hostPlayerId === session.playerId, hostSeat: hostSeatWaiting })
+      }
 
       const hostSeat = Object.entries(gameState.players).find(([, pid]) => pid === table.hostPlayerId)?.[0] ?? null
-      sendJSON(res, 200, { ...getPlayerView(gameState, seat), isHost: table.hostPlayerId === session.playerId, hostSeat })
+      const playerNames = await enrichSeats(db, gameState.players)
+      sendJSON(res, 200, { ...getPlayerView(gameState, seat), playerNames, isHost: table.hostPlayerId === session.playerId, hostSeat })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Get game state error:', { tableId, error: err.message })

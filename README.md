@@ -280,6 +280,8 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `200` | Body: `{ tables: [{ tableId, name, seats, hostPlayerId }] }` — only waiting (not yet started) tables |
 | `401` | Missing or invalid session |
 
+`seats` is an object keyed by seat name (`north`, `east`, `south`, `west`). Each value is either `null` (empty) or `{ playerId, username, isBot }`.
+
 #### `GET /api/player/table`
 
 **Headers:** `x-session-id`, `x-player-id`
@@ -405,7 +407,7 @@ Returns a player-specific view of the game. Cards in other players' hands are ne
 
 | Status | Meaning |
 |---|---|
-| `200` | Body: game state view (see below), or `{ status: "waiting", seats, isHost, hostSeat }` if the game has not started yet |
+| `200` | Body: game state view (see below), or `{ status: "waiting", seats, isHost, hostSeat }` if the game has not started yet. `seats` is an object keyed by seat name; each value is `null` (empty) or `{ playerId, username, isBot }`. |
 | `401` | Missing or invalid session |
 | `403` | Player is not seated at this table |
 | `404` | Table not found |

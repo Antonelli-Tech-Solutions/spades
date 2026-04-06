@@ -110,6 +110,22 @@ async function sitAtTableApi(baseUrl, tableId, seat, sessionId, playerId) {
   return { status: res.status, body: await res.json() }
 }
 
+async function addBotApi(baseUrl, tableId, seat, sessionId, playerId) {
+  const res = await fetch(`${baseUrl}/api/tables/${tableId}/add-bot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId, 'x-player-id': playerId },
+    body: JSON.stringify({ seat }),
+  })
+  return { status: res.status, body: await res.json() }
+}
+
+async function listTablesApi(baseUrl, sessionId, playerId) {
+  const res = await fetch(`${baseUrl}/api/tables`, {
+    headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+  })
+  return { status: res.status, body: await res.json() }
+}
+
 describe('Table seating updates', { skip }, () => {
   let server, db, redis
   const players = []
@@ -265,5 +281,73 @@ describe('Table seating updates', { skip }, () => {
       body: JSON.stringify({ seat: 'east' }),
     })
     assert.equal(res.status, 401)
+  })
+
+  it('GET /api/tables/:tableId/state returns enriched seat data with username and isBot', { timeout: 10000 }, async () => {
+    const host = players[0]
+    const { body: createBody } = await createTableApi(server.baseUrl, host.sessionId, host.playerId)
+    const tableId = createBody.tableId
+
+    const { status, body: state } = await getStateApi(server.baseUrl, tableId, host.sessionId, host.playerId)
+    assert.equal(status, 200)
+    assert.equal(state.status, 'waiting')
+
+    // North seat should be enriched with host's username
+    const northSeat = state.seats.north
+    assert.ok(northSeat !== null, 'north seat should be occupied')
+    assert.equal(northSeat.playerId, host.playerId, 'seat should have playerId')
+    assert.equal(northSeat.username, 'sctest_player1', 'seat should have username')
+    assert.equal(northSeat.isBot, false, 'seat should not be a bot')
+
+    // Empty seats should remain null
+    assert.equal(state.seats.east, null)
+    assert.equal(state.seats.south, null)
+    assert.equal(state.seats.west, null)
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+  })
+
+  it('bot seats in /state have isBot true and username Bot', { timeout: 10000 }, async () => {
+    const host = players[0]
+    const { body: createBody } = await createTableApi(server.baseUrl, host.sessionId, host.playerId)
+    const tableId = createBody.tableId
+
+    await addBotApi(server.baseUrl, tableId, 'east', host.sessionId, host.playerId)
+
+    const { body: state } = await getStateApi(server.baseUrl, tableId, host.sessionId, host.playerId)
+
+    const eastSeat = state.seats.east
+    assert.ok(eastSeat !== null, 'east seat should be occupied by bot')
+    assert.equal(eastSeat.playerId, 'bot:east')
+    assert.equal(eastSeat.username, 'Bot')
+    assert.equal(eastSeat.isBot, true)
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+  })
+
+  it('GET /api/tables returns enriched seat data with username and isBot', { timeout: 10000 }, async () => {
+    const host = players[0]
+    const { body: createBody } = await createTableApi(server.baseUrl, host.sessionId, host.playerId)
+    const tableId = createBody.tableId
+
+    const { status, body } = await listTablesApi(server.baseUrl, host.sessionId, host.playerId)
+    assert.equal(status, 200)
+
+    const table = body.tables.find((t) => t.tableId === tableId)
+    assert.ok(table, 'table should be in the list')
+
+    const northSeat = table.seats.north
+    assert.ok(northSeat !== null)
+    assert.equal(northSeat.playerId, host.playerId)
+    assert.equal(northSeat.username, 'sctest_player1')
+    assert.equal(northSeat.isBot, false)
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
   })
 })

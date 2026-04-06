@@ -206,7 +206,14 @@ function renderSeatButton(seat, occupant) {
   const taken = occupant !== null
   const disabled = taken ? 'disabled' : ''
   const cls = taken ? 'seat-btn seat-btn--taken' : 'seat-btn seat-btn--available'
-  const text = taken ? 'Taken' : label
+  let text = label
+  if (taken) {
+    if (occupant && typeof occupant === 'object') {
+      text = occupant.isBot ? 'Bot' : escapeHtml(occupant.username ?? 'Taken')
+    } else {
+      text = 'Taken'
+    }
+  }
   return `<button class="${cls}" data-seat="${seat}" ${disabled}>${text}</button>`
 }
 

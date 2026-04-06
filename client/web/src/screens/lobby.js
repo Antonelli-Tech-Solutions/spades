@@ -152,17 +152,47 @@ export async function renderLobbyScreen(container) {
   }, { once: true })
 }
 
+/**
+ * Normalize a seat value to a consistent shape.
+ * Handles both the enriched object format { playerId, username, isBot }
+ * and the legacy raw string format (player ID or null).
+ */
+function normalizeSeat(v) {
+  if (v === null || v === undefined) return null
+  if (typeof v === 'object') return v
+  // Legacy string: either a human player ID or 'bot:<seat>'
+  const isBot = v.startsWith('bot:')
+  return { playerId: v, username: null, isBot }
+}
+
 function tableRowHtml(table) {
   const name = escapeHtml(table.name) || '<em>Unnamed Table</em>'
   const seats = table.seats || {}
-  const occupied = Object.values(seats).filter((v) => v !== null).length
+  const normalized = Object.values(seats).map(normalizeSeat)
+  const occupied = normalized.filter((v) => v !== null).length
+  const botCount = normalized.filter((v) => v?.isBot).length
   const available = 4 - occupied
   const disabled = available === 0 ? ' disabled' : ''
+
+  let seatsLabel = `${occupied}/4 seats filled`
+  if (botCount > 0) {
+    seatsLabel += ` (${botCount} bot${botCount !== 1 ? 's' : ''})`
+  }
+
+  const occupantNames = normalized
+    .filter((v) => v !== null && !v.isBot && v.username)
+    .map((v) => escapeHtml(v.username))
+
+  const occupantSummary = occupantNames.length > 0
+    ? `<span class="table-row-players">${occupantNames.join(', ')}</span>`
+    : ''
+
   return `
     <div class="table-row" data-table-id="${escapeHtml(table.tableId)}">
       <div class="table-row-info">
         <span class="table-row-name">${name}</span>
-        <span class="table-row-seats">${occupied}/4 seats filled</span>
+        <span class="table-row-seats">${seatsLabel}</span>
+        ${occupantSummary}
       </div>
       <button class="btn-secondary join-seat-btn" data-table-id="${escapeHtml(table.tableId)}"${disabled}>Join</button>
     </div>

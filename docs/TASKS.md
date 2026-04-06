@@ -94,8 +94,8 @@
 ### Web Client
 
 - [x] `P0` Establish authenticated WSS connection on game screen mount; tear down on unmount
-- [ ] `P0` Remove `schedulePoll()` timeout loop from `client/web/src/screens/game.js`; re-render on incoming WebSocket events instead
-- [ ] `P0` On reconnect: call `GET /api/tables/:tableId/state` to re-hydrate, then resume WS event listener
+- [x] `P0` Remove `schedulePoll()` timeout loop from `client/web/src/screens/game.js`; re-render on incoming WebSocket events instead
+- [x] `P0` On reconnect: call `GET /api/tables/:tableId/state` to re-hydrate, then resume WS event listener
 - [x] `P1` Subscribe to lobby channel on lobby screen mount; update table list on `TABLE_CREATED`, `TABLE_UPDATED`, `TABLE_REMOVED` — eliminating the manual-refresh requirement for Public tables (Friends-Only table events arrive on the personal notification channel added in Slice 3) (issue #122)
 
 ### Testing

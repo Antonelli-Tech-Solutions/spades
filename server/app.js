@@ -10,7 +10,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3000', 10)
-const WS_PORT = parseInt(process.env.WS_PORT || '3001', 10)
+// Default WS_PORT to PORT so the WebSocket server shares the HTTP server by default.
+// The client's buildWsUrl() connects to window.location.host (the HTTP port), so they
+// must match unless a reverse proxy is routing WebSocket upgrades to a separate port.
+// Set WS_PORT explicitly to a different value to run WebSocket on a dedicated server.
+const WS_PORT = process.env.WS_PORT ? parseInt(process.env.WS_PORT, 10) : PORT
 
 app.use(express.json())
 

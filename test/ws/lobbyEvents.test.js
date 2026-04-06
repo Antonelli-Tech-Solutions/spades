@@ -291,16 +291,17 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
 
     const msgPromise = waitForType(ws, 'TABLE_UPDATED')
 
+    // PLAYER_A is already at north (auto-seated); PLAYER_B sits at east to trigger TABLE_UPDATED
     await apiRequest(
       server.baseUrl,
       'POST',
       `/api/tables/${tableId}/sit`,
-      { seat: 'west' },
-      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+      { seat: 'east' },
+      { 'x-session-id': SESSION_B, 'x-player-id': PLAYER_B },
     )
 
     const [msg] = await msgPromise
-    assert.equal(msg.payload.seats.west, PLAYER_A, 'west seat should be occupied by PLAYER_A')
+    assert.equal(msg.payload.seats.east, PLAYER_B, 'east seat should be occupied by PLAYER_B')
 
     // Cleanup
     await redis.del(`table:${tableId}`)
@@ -311,7 +312,7 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
   })
 
   it('TABLE_UPDATED is emitted to the lobby channel when a seated player logs out', { timeout: 15000 }, async () => {
-    // Create a waiting table
+    // Create a waiting table — PLAYER_A auto-seated at north
     const createRes = await apiRequest(
       server.baseUrl,
       'POST',
@@ -322,23 +323,23 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     assert.equal(createRes.status, 201)
     const { tableId } = createRes.body
 
-    // PLAYER_A sits at the table
+    // PLAYER_B sits at east so the table persists when PLAYER_A logs out
     await apiRequest(
       server.baseUrl,
       'POST',
       `/api/tables/${tableId}/sit`,
-      { seat: 'north' },
-      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+      { seat: 'east' },
+      { 'x-session-id': SESSION_B, 'x-player-id': PLAYER_B },
     )
 
-    // PLAYER_B subscribes to the lobby
+    // Connect a WS subscriber
     const ws = await wsConnect(server, { 'x-session-id': SESSION_B })
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     await waitForType(ws, 'JOINED_LOBBY')
 
     const msgPromise = waitForType(ws, 'TABLE_UPDATED')
 
-    // PLAYER_A logs out — seat should be freed and TABLE_UPDATED emitted
+    // PLAYER_A logs out — seat should be freed and TABLE_UPDATED emitted (PLAYER_B still at east)
     const logoutRes = await apiRequest(
       server.baseUrl,
       'POST',

@@ -22,6 +22,7 @@ import {
   findTableForPlayer,
   leaveTable,
   leaveInProgressGame,
+  changeSeat,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -382,9 +383,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redis = await getRedis()
       const session = await getSession(redis, sessionId)
       if (session) {
-        const updatedTables = await removePlayerFromTables(redis, session.playerId)
-        for (const table of updatedTables) {
+        const { updated, terminated } = await removePlayerFromTables(redis, session.playerId)
+        for (const table of updated) {
           emitLobbyTableUpdated(wss, table)
+        }
+        for (const table of terminated) {
+          emitLobbyTableRemoved(wss, table)
         }
       }
       await deleteSession(redis, sessionId)
@@ -440,7 +444,9 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const session = await validateAuthHeaders(redisClient, req)
       const resolvedName = (typeof name === 'string' && name.trim()) ? name.trim() : null
       const table = await createTable(redisClient, { hostPlayerId: session.playerId, name: resolvedName })
-      emitLobbyTableCreated(wss, table)
+      // Auto-seat the host at north
+      const seatedTable = await sitAtTable(redisClient, table.tableId, session.playerId, 'north')
+      emitLobbyTableCreated(wss, seatedTable)
       sendJSON(res, 201, { tableId: table.tableId, name: table.name })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
@@ -583,9 +589,14 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         return sendJSON(res, 200, { message: 'Left game. A bot has taken your place.' })
       }
 
-      const leftTable = await leaveTable(redisClient, tableId, session.playerId)
-      emitLobbyTableUpdated(wss, leftTable.table)
-      if (wss) wss.broadcast(tableId, 'SEAT_VACATED', { seat: leftTable.seat })
+      const leftResult = await leaveTable(redisClient, tableId, session.playerId)
+      if (leftResult.terminated) {
+        emitLobbyTableRemoved(wss, table)
+        console.log('Player left waiting table, table terminated:', { tableId, playerId: session.playerId })
+        return sendJSON(res, 200, { message: 'Left table. No players remain — table deleted.' })
+      }
+      emitLobbyTableUpdated(wss, leftResult.table)
+      if (wss) wss.broadcast(tableId, 'SEAT_VACATED', { seat: leftResult.seat })
       console.log('Player left table:', { tableId, playerId: session.playerId })
       sendJSON(res, 200, { message: 'Left table.' })
     } catch (err) {
@@ -593,6 +604,32 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
       console.error('Leave table error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/change-seat — move to a different empty seat (waiting only)
+  app.post('/api/tables/:tableId/change-seat', async (req, res) => {
+    const { tableId } = req.params
+    const { seat } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const result = await changeSeat(redisClient, tableId, session.playerId, seat)
+      emitLobbyTableUpdated(wss, result.table)
+      if (wss) {
+        wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.oldSeat })
+        wss.broadcast(tableId, 'SEAT_TAKEN', { seat: result.newSeat })
+      }
+      sendJSON(res, 200, { tableId, seat: result.newSeat })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      console.error('Change seat error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

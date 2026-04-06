@@ -5,7 +5,7 @@ import {
   submitBlindNilExchange as apiExchange,
   addBotToTable as apiAddBot,
   revealHand as apiRevealHand,
-  terminateGame as apiTerminate,
+  changeSeat as apiChangeSeat,
   leaveTable as apiLeaveTable,
 } from '../api.js'
 import { createGameSocket, buildWsUrl } from '../gameSocket.js'
@@ -448,12 +448,13 @@ export function renderGameScreen(container) {
       return `<div class="${cls}"><span>${crownHtml}${esc(label)}</span><span class="waiting-seat-status">${status}</span></div>`
     }).join('')
 
-    const fillBotsBtn = state.isHost && emptySeats.length > 0
-      ? `<button class="btn-primary" id="fill-bots-btn">Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})</button>`
+    const mySeat = Object.entries(state.seats).find(([, id]) => id === playerId)?.[0]
+    const changeSeatBtns = mySeat
+      ? emptySeats.map((s) => `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move to ${s.charAt(0).toUpperCase() + s.slice(1)}</button>`).join('')
       : ''
 
-    const terminateBtn = state.isHost
-      ? `<button class="btn-danger" id="terminate-btn">Terminate Game</button>`
+    const fillBotsBtn = state.isHost && emptySeats.length > 0
+      ? `<button class="btn-primary" id="fill-bots-btn">Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})</button>`
       : ''
 
     container.innerHTML = `
@@ -462,11 +463,30 @@ export function renderGameScreen(container) {
           <h2 class="waiting-title">Waiting for players\u2026</h2>
           <div class="waiting-seats">${rows}</div>
           <div class="form-error waiting-err" role="alert" aria-live="polite"></div>
+          ${changeSeatBtns}
           ${fillBotsBtn}
-          ${terminateBtn}
           <button class="btn-secondary" id="leave-table-btn">Leave Table</button>
         </div>
       </div>`
+
+    container.querySelectorAll('.change-seat-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const newSeat = btn.dataset.seat
+        const errEl = container.querySelector('.waiting-err')
+        errEl.textContent = ''
+        container.querySelectorAll('.change-seat-btn').forEach((b) => { b.disabled = true })
+        btn.textContent = 'Moving\u2026'
+        try {
+          await apiChangeSeat({ tableId, seat: newSeat, sessionId, playerId })
+          state = await getGameState({ tableId, sessionId, playerId })
+          render()
+        } catch (err) {
+          errEl.textContent = err.message || 'Failed to change seat.'
+          container.querySelectorAll('.change-seat-btn').forEach((b) => { b.disabled = false })
+          btn.textContent = `Move to ${newSeat.charAt(0).toUpperCase() + newSeat.slice(1)}`
+        }
+      })
+    })
 
     container.querySelector('#fill-bots-btn')?.addEventListener('click', async () => {
       const btn = container.querySelector('#fill-bots-btn')
@@ -485,21 +505,6 @@ export function renderGameScreen(container) {
         errEl.textContent = err.message || 'Failed to add bots.'
         btn.disabled = false
         btn.textContent = `Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})`
-      }
-    })
-
-    container.querySelector('#terminate-btn')?.addEventListener('click', async () => {
-      if (!confirm('Are you sure you want to terminate this game? This cannot be undone.')) return
-      const btn = container.querySelector('#terminate-btn')
-      const errEl = container.querySelector('.waiting-err')
-      btn.disabled = true
-      try {
-        await apiTerminate({ tableId, sessionId, playerId })
-        cleanup()
-        navigate('#/lobby')
-      } catch (err) {
-        errEl.textContent = err.message || 'Failed to terminate game.'
-        btn.disabled = false
       }
     })
 
@@ -730,7 +735,6 @@ export function renderGameScreen(container) {
           : ''}
 
         <div class="game-controls">
-          ${state.isHost ? '<button class="btn-danger btn-sm" id="terminate-btn">Terminate Game</button>' : ''}
           ${leaveGameButtonHtml()}
         </div>
       </div>`
@@ -754,21 +758,6 @@ export function renderGameScreen(container) {
       if (e.target.id === 'last-trick-overlay' || e.target.id === 'last-trick-close') {
         showLastTrick = false
         render()
-      }
-    })
-
-    // Terminate game button (host only, in-game)
-    container.querySelector('#terminate-btn')?.addEventListener('click', async () => {
-      if (!confirm('Are you sure you want to terminate this game? This cannot be undone.')) return
-      const btn = container.querySelector('#terminate-btn')
-      btn.disabled = true
-      try {
-        await apiTerminate({ tableId, sessionId, playerId })
-        cleanup()
-        navigate('#/lobby')
-      } catch (err) {
-        btn.disabled = false
-        console.log('Terminate failed:', { error: err.message })
       }
     })
 

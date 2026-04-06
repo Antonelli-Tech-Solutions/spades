@@ -90,13 +90,17 @@ export async function sitAtTable(redis, tableId, playerId, seat) {
   if (table.status === 'playing') {
     throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
   }
+  // Check idempotent same-seat before checking seat occupancy
+  const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
+  if (currentSeat === seat) {
+    // Already at this exact seat — no-op, return current state
+    return table
+  }
+  if (currentSeat) {
+    throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
+  }
   if (table.seats[seat] !== null) {
     throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
-  }
-  // Check player isn't already seated
-  const alreadySeated = Object.values(table.seats).includes(playerId)
-  if (alreadySeated) {
-    throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
   }
 
   const updated = {
@@ -189,6 +193,7 @@ export async function saveGameState(redis, tableId, gameState) {
 export async function removePlayerFromTables(redis, playerId) {
   const raw = await redis.hGetAll('lobby:tables')
   const updatedTables = []
+  const terminatedTables = []
   for (const json of Object.values(raw)) {
     const entry = JSON.parse(json)
     if (entry.status !== 'waiting') continue
@@ -197,12 +202,25 @@ export async function removePlayerFromTables(redis, playerId) {
     const seatEntry = Object.entries(table.seats).find(([, id]) => id === playerId)
     if (!seatEntry) continue
     const [seat] = seatEntry
-    const updated = { ...table, seats: { ...table.seats, [seat]: null } }
+    const updatedSeats = { ...table.seats, [seat]: null }
+
+    // If no human players remain, terminate the table
+    const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
+    if (!remainingHuman) {
+      terminatedTables.push(table)
+      await terminateTable(redis, table.tableId)
+      console.log('Table terminated on logout — no human players remain:', { tableId: table.tableId, playerId, seat })
+      continue
+    }
+
+    // Transfer host if the departing player was the host
+    const newHostId = table.hostPlayerId === playerId ? remainingHuman : table.hostPlayerId
+    const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId }
     await saveTable(redis, updated)
     updatedTables.push(updated)
     console.log('Player removed from table on logout:', { tableId: table.tableId, playerId, seat })
   }
-  return updatedTables
+  return { updated: updatedTables, terminated: terminatedTables }
 }
 
 /**
@@ -237,7 +255,24 @@ export async function leaveTable(redis, tableId, playerId) {
     return { table: updated, seat, wasPlaying: true }
   }
 
-  const updated = { ...table, seats: { ...table.seats, [seat]: null } }
+  const updatedSeats = { ...table.seats, [seat]: null }
+
+  // If no human players remain after this seat is vacated, terminate the table
+  const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
+  if (!remainingHuman) {
+    await terminateTable(redis, tableId)
+    console.log('Table terminated — no human players remain:', { tableId, playerId, seat })
+    return { terminated: true, seat }
+  }
+
+  // If the departing player was the host, transfer host to the next seated human
+  let newHostId = table.hostPlayerId
+  if (table.hostPlayerId === playerId) {
+    newHostId = remainingHuman
+    console.log('Host left table, transferring host:', { tableId, oldHost: playerId, newHost: newHostId })
+  }
+
+  const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId }
   await saveTable(redis, updated)
   console.log('Player left waiting table:', { tableId, playerId, seat })
   return { table: updated, seat, wasPlaying: false }
@@ -324,6 +359,49 @@ export async function findTableForPlayer(redis, playerId) {
     return entry.tableId
   }
   return null
+}
+
+/**
+ * Move a seated player from their current seat to a different empty seat.
+ * Only allowed while the table is in 'waiting' status.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @param {'north'|'east'|'south'|'west'} newSeat
+ * @returns {Promise<{ table: TableState, oldSeat: string, newSeat: string }>}
+ * @throws {Error} If the table is not found, game already started, new seat is taken, or player not seated
+ */
+export async function changeSeat(redis, tableId, playerId, newSeat) {
+  const validSeats = ['north', 'east', 'south', 'west']
+  if (!validSeats.includes(newSeat)) {
+    throw Object.assign(new Error(`Invalid seat: ${newSeat}`), { code: 'INVALID_SEAT' })
+  }
+
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.status === 'playing') {
+    throw Object.assign(new Error('Cannot change seats once the game has started'), { code: 'GAME_IN_PROGRESS' })
+  }
+
+  const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
+  if (!currentSeat) {
+    throw Object.assign(new Error('You are not seated at this table'), { code: 'NOT_SEATED' })
+  }
+  if (currentSeat === newSeat) {
+    return { table, oldSeat: currentSeat, newSeat }
+  }
+  if (table.seats[newSeat] !== null) {
+    throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+  }
+
+  const updatedSeats = { ...table.seats, [currentSeat]: null, [newSeat]: playerId }
+  const updated = { ...table, seats: updatedSeats }
+  await saveTable(redis, updated)
+  console.log('Player changed seat:', { tableId, playerId, oldSeat: currentSeat, newSeat })
+  return { table: updated, oldSeat: currentSeat, newSeat }
 }
 
 /**

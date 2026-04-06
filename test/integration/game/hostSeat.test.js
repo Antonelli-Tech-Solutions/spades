@@ -180,23 +180,18 @@ describe('GET /api/tables/:tableId/state — hostSeat field', { skip }, () => {
     await redis.hDel('lobby:tables', tableId)
   })
 
-  it('hostSeat is null when host has not yet taken a seat', { timeout: 10000 }, async () => {
+  it('host is auto-seated at north on creation — hostSeat is north immediately', { timeout: 10000 }, async () => {
     const { sessionId, playerId } = await loginPlayer(
       server.baseUrl,
       'hs_player1@hstest.spades.invalid',
       'password123',
     )
     const { tableId } = await createTableApi(server.baseUrl, sessionId, playerId)
-    // Seat a different player (not the host) so we can query the state
-    const guest = await loginPlayer(server.baseUrl, 'hs_player2@hstest.spades.invalid', 'password123')
-    await sitAtTable(server.baseUrl, tableId, 'east', guest.sessionId, guest.playerId)
 
-    // Host hasn't sat yet — but we can only query if seated. Seat the host too.
-    await sitAtTable(server.baseUrl, tableId, 'south', sessionId, playerId)
-
+    // Host is already seated at north after creation
     const state = await getGameStateApi(server.baseUrl, tableId, sessionId, playerId)
-    // Host is at south
-    assert.equal(state.hostSeat, 'south')
+    assert.equal(state.status, 'waiting')
+    assert.equal(state.hostSeat, 'north', 'host should be auto-seated at north')
 
     // Cleanup
     await redis.del(`table:${tableId}`)

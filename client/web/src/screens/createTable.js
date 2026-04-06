@@ -66,7 +66,8 @@ export async function renderCreateTableScreen(container) {
     try {
       const { tableId } = await createTable({ name: name || null, sessionId, playerId })
       console.log('Table created:', { tableId, name: name || null })
-      navigate(`#/join?tableId=${tableId}`)
+      sessionStorage.setItem('currentTableId', tableId)
+      navigate(`#/table?tableId=${tableId}`)
     } catch (err) {
       errorEl.textContent = err.message
       btn.disabled = false

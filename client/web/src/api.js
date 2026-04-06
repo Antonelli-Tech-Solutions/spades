@@ -335,6 +335,31 @@ export async function leaveTable({ tableId, sessionId, playerId }, fetchFn = glo
 }
 
 /**
+ * Change the player's seat to a different empty seat (waiting tables only).
+ * @param {{ tableId: string, seat: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tableId: string, seat: string }>}
+ */
+export async function changeSeat({ tableId, seat, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/change-seat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ seat }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to change seat.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Terminate a game (host only). Works in both waiting and playing phases.
  * @param {{ tableId: string, sessionId: string, playerId: string }} data
  * @param {typeof fetch} [fetchFn]

@@ -164,6 +164,29 @@ export function applyDelta(state, msg, playerId) {
 const TEAM = { north: 'ns', south: 'ns', east: 'ew', west: 'ew' }
 
 /**
+ * Determine the CSS modifier class for the tricks-taken count based on bid progress.
+ *
+ * Priority (highest → lowest):
+ *   bid-tricks--met        : tricks >= bid (team already made their bid)
+ *   bid-tricks--impossible : tricks + remaining < bid (cannot make bid)
+ *   bid-tricks--needs-all  : tricks + remaining === bid (must win every remaining trick)
+ *   ''                     : still achievable with tricks to spare
+ *
+ * @param {number|null|undefined} bid - Team's bid target
+ * @param {number} tricks - Tricks taken so far this hand
+ * @param {number} completedCount - Number of tricks completed so far (0–13)
+ * @returns {string} CSS class modifier (without leading space)
+ */
+export function tricksCountClass(bid, tricks, completedCount) {
+  if (typeof bid !== 'number') return ''
+  if (tricks >= bid) return 'bid-tricks--met'
+  const remaining = 13 - completedCount
+  if (tricks + remaining < bid) return 'bid-tricks--impossible'
+  if (tricks + remaining === bid) return 'bid-tricks--needs-all'
+  return ''
+}
+
+/**
  * Render the team bid target and current tricks bar shown below the scoreboard during play.
  * Provides a quick at-a-glance view: each team's bid target vs. tricks taken this hand.
  * @param {object} state
@@ -175,13 +198,14 @@ function teamBidTricksHtml(state) {
     { label: 'E/W', key: 'ew', seats: ['east', 'west'] },
   ]
 
+  const completedCount = state.completedTricks?.length ?? 0
+
   const cols = teams.map(({ label, key, seats }) => {
     const bid = state.teamBids?.[key]
     const tricks = (state.tricksWon?.[seats[0]] ?? 0) + (state.tricksWon?.[seats[1]] ?? 0)
     const bidDisplay = bid !== null && bid !== undefined ? bid : '–'
-    const needsMore = typeof bid === 'number' && tricks < bid
-    const metBid = typeof bid === 'number' && tricks >= bid
-    const tricksCls = metBid ? ' bid-tricks--met' : (needsMore ? '' : '')
+    const cls = tricksCountClass(bid, tricks, completedCount)
+    const tricksCls = cls ? ` ${cls}` : ''
     return `<div class="bid-tricks-team">
       <span class="bid-tricks-label">${esc(label)}</span>
       <span class="bid-tricks-target">Bid <strong>${bidDisplay}</strong></span>

@@ -572,21 +572,133 @@ describe('createLobbySocket', { timeout: 2000 }, () => {
   it('close() is safe to call when connection is already closed', { timeout: 2000 }, () => {
     const { close } = createLobbySocket({
       wsUrl: 'ws://localhost?sessionId=s1',
+      maxReconnectAttempts: 0,
       WebSocketClass: MockWebSocket,
+      setTimeoutFn: () => {},
+      clearTimeoutFn: () => {},
     })
     MockWebSocket.lastInstance._close()
     assert.doesNotThrow(() => close())
   })
 
-  it('calls onClose when the socket closes', { timeout: 2000 }, () => {
+  it('calls onClose when the socket closes with maxReconnectAttempts=0', { timeout: 2000 }, () => {
     let closed = false
     createLobbySocket({
       wsUrl: 'ws://localhost?sessionId=s1',
       onClose: () => { closed = true },
+      maxReconnectAttempts: 0,
       WebSocketClass: MockWebSocket,
+      setTimeoutFn: () => {},
+      clearTimeoutFn: () => {},
     })
     MockWebSocket.lastInstance._close()
     assert.equal(closed, true)
+  })
+
+  it('does not call onClose immediately on unexpected close — schedules reconnect instead', { timeout: 2000 }, () => {
+    let closed = false
+    const timers = []
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onClose: () => { closed = true },
+      maxReconnectAttempts: 1,
+      WebSocketClass: MockWebSocket,
+      setTimeoutFn: (fn, delay) => { timers.push({ fn, delay }); return timers.length },
+      clearTimeoutFn: () => {},
+    })
+    MockWebSocket.lastInstance._close()
+    assert.equal(closed, false, 'onClose should not fire before reconnect attempts exhausted')
+    assert.equal(timers.length, 1, 'a reconnect timer should be scheduled')
+  })
+
+  it('calls onClose after maxReconnectAttempts are exhausted', { timeout: 2000 }, () => {
+    let closed = false
+    const timers = []
+    const noop = () => {}
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onClose: () => { closed = true },
+      maxReconnectAttempts: 2,
+      WebSocketClass: MockWebSocket,
+      setTimeoutFn: (fn) => { timers.push(fn); return timers.length },
+      clearTimeoutFn: noop,
+    })
+    // First drop — schedules reconnect #1
+    MockWebSocket.lastInstance._close()
+    assert.equal(closed, false)
+    // Fire reconnect #1 — creates new WebSocket, drop it — schedules reconnect #2
+    timers[0]()
+    MockWebSocket.lastInstance._close()
+    assert.equal(closed, false)
+    // Fire reconnect #2 — creates new WebSocket, drop it — attempts exhausted
+    timers[1]()
+    MockWebSocket.lastInstance._close()
+    assert.equal(closed, true)
+  })
+
+  it('calls onReconnect (not onOpen) when JOINED_LOBBY is received after reconnect', { timeout: 2000 }, () => {
+    let opens = 0
+    let reconnects = 0
+    const timers = []
+    createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onOpen: () => { opens++ },
+      onReconnect: () => { reconnects++ },
+      maxReconnectAttempts: 5,
+      WebSocketClass: MockWebSocket,
+      setTimeoutFn: (fn) => { timers.push(fn); return timers.length },
+      clearTimeoutFn: () => {},
+    })
+    const firstWs = MockWebSocket.lastInstance
+    firstWs._open()
+    firstWs._receive({ type: 'JOINED_LOBBY', payload: {} })
+    assert.equal(opens, 1)
+    assert.equal(reconnects, 0)
+
+    // Unexpected drop → reconnect timer scheduled
+    firstWs._close()
+
+    // Fire the reconnect timer
+    timers[0]()
+    const secondWs = MockWebSocket.lastInstance
+    secondWs._open()
+    secondWs._receive({ type: 'JOINED_LOBBY', payload: {} })
+    assert.equal(opens, 1, 'onOpen should not fire again on reconnect')
+    assert.equal(reconnects, 1, 'onReconnect should fire once')
+  })
+
+  it('intentional close does not trigger reconnect', { timeout: 2000 }, () => {
+    let closed = false
+    const timers = []
+    const { close } = createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      onClose: () => { closed = true },
+      maxReconnectAttempts: 5,
+      WebSocketClass: MockWebSocket,
+      setTimeoutFn: (fn) => { timers.push(fn); return timers.length },
+      clearTimeoutFn: () => {},
+    })
+    const ws = MockWebSocket.lastInstance
+    ws._open()
+    close()
+    ws._close()
+    assert.equal(timers.length, 0, 'no reconnect timer should be scheduled')
+    assert.equal(closed, true, 'onClose should fire for intentional close')
+  })
+
+  it('close() during reconnect window cancels the pending timer', { timeout: 2000 }, () => {
+    let cleared = false
+    let timerHandle = null
+    const { close } = createLobbySocket({
+      wsUrl: 'ws://localhost?sessionId=s1',
+      maxReconnectAttempts: 5,
+      WebSocketClass: MockWebSocket,
+      setTimeoutFn: (fn, delay) => { timerHandle = 42; return 42 },
+      clearTimeoutFn: (id) => { if (id === timerHandle) cleared = true },
+    })
+    MockWebSocket.lastInstance._close() // unexpected → schedules reconnect
+    close()
+    assert.equal(cleared, true, 'reconnect timer should be cancelled on close()')
   })
 
   it('calls onError when the WebSocket fires an error', { timeout: 2000 }, () => {

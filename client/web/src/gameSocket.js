@@ -170,60 +170,108 @@ export function createGameSocket({
  * TABLE_CREATED, TABLE_UPDATED, and TABLE_REMOVED events are forwarded to onEvent.
  * All other handshake messages (JOINED_LOBBY, LEFT_LOBBY) are consumed internally.
  *
+ * Reconnect behaviour
+ * -------------------
+ * If the connection drops unexpectedly the socket automatically reconnects with
+ * exponential backoff. On a successful reconnect the JOINED_LOBBY ack triggers
+ * `onReconnect` (not `onOpen`).
+ *
  * @param {object} opts
  * @param {string} opts.wsUrl              - Full WS/WSS URL with `sessionId` query param
  * @param {function} [opts.onEvent]        - Called with each lobby event `{ type, payload }`
- * @param {function} [opts.onOpen]         - Called once JOINED_LOBBY is received
- * @param {function} [opts.onClose]        - Called when the socket closes
+ * @param {function} [opts.onOpen]         - Called once the initial JOINED_LOBBY is received
+ * @param {function} [opts.onReconnect]    - Called when JOINED_LOBBY is received after reconnect
+ * @param {function} [opts.onClose]        - Called when all reconnect attempts are exhausted
+ *                                           or after an intentional close
  * @param {function} [opts.onError]        - Called on WebSocket error
+ * @param {number}   [opts.maxReconnectAttempts=5] - Max automatic reconnect attempts
  * @param {typeof WebSocket} [opts.WebSocketClass] - Injected for testing; defaults to globalThis.WebSocket
+ * @param {function} [opts.setTimeoutFn]   - Injected for testing; defaults to globalThis.setTimeout
+ * @param {function} [opts.clearTimeoutFn] - Injected for testing; defaults to globalThis.clearTimeout
  * @returns {{ close: function }}
  */
 export function createLobbySocket({
   wsUrl,
   onEvent,
   onOpen,
+  onReconnect,
   onClose,
   onError,
+  maxReconnectAttempts = 5,
   WebSocketClass = globalThis.WebSocket,
+  setTimeoutFn = globalThis.setTimeout,
+  clearTimeoutFn = globalThis.clearTimeout,
 }) {
-  const ws = new WebSocketClass(wsUrl)
+  let intentionalClose = false
+  let reconnectAttempts = 0
+  let reconnectTimer = null
+  let ws = null
 
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
-  }
+  function connect() {
+    ws = new WebSocketClass(wsUrl)
+    const isReconnect = reconnectAttempts > 0
 
-  ws.onmessage = (event) => {
-    let msg
-    try {
-      msg = JSON.parse(typeof event.data === 'string' ? event.data : event.data.toString())
-    } catch {
-      return
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     }
 
-    const { type } = msg
+    ws.onmessage = (event) => {
+      let msg
+      try {
+        msg = JSON.parse(typeof event.data === 'string' ? event.data : event.data.toString())
+      } catch {
+        return
+      }
 
-    if (type === 'JOINED_LOBBY') {
-      onOpen?.()
-      return
+      const { type } = msg
+
+      if (type === 'JOINED_LOBBY') {
+        reconnectAttempts = 0
+        if (isReconnect) {
+          onReconnect?.()
+        } else {
+          onOpen?.()
+        }
+        return
+      }
+
+      if (type === 'LEFT_LOBBY') {
+        return
+      }
+
+      onEvent?.(msg)
     }
 
-    if (type === 'LEFT_LOBBY') {
-      return
+    ws.onclose = () => {
+      if (intentionalClose) {
+        onClose?.()
+        return
+      }
+
+      if (reconnectAttempts >= maxReconnectAttempts) {
+        onClose?.()
+        return
+      }
+
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s, capped at 30s
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+      reconnectAttempts++
+      reconnectTimer = setTimeoutFn(connect, delay)
     }
 
-    onEvent?.(msg)
+    ws.onerror = (err) => {
+      onError?.(err)
+    }
   }
 
-  ws.onclose = () => {
-    onClose?.()
-  }
-
-  ws.onerror = (err) => {
-    onError?.(err)
-  }
+  connect()
 
   function close() {
+    intentionalClose = true
+    if (reconnectTimer !== null) {
+      clearTimeoutFn(reconnectTimer)
+      reconnectTimer = null
+    }
     if (ws.readyState === 1 /* OPEN */) {
       ws.send(JSON.stringify({ type: 'LEAVE_LOBBY', payload: {} }))
     }

@@ -364,6 +364,57 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     await waitClose(ws)
   })
 
+  it('TABLE_UPDATED is emitted to the lobby channel when a seated player explicitly leaves a waiting table', { timeout: 15000 }, async () => {
+    // Create a waiting table
+    const createRes = await apiRequest(
+      server.baseUrl,
+      'POST',
+      '/api/tables',
+      { name: 'Leave Table Test' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    assert.equal(createRes.status, 201)
+    const { tableId } = createRes.body
+
+    // PLAYER_B sits at the table
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'east' },
+      { 'x-session-id': SESSION_B, 'x-player-id': PLAYER_B },
+    )
+
+    // PLAYER_A subscribes to the lobby
+    const ws = await wsConnect(server, { 'x-session-id': SESSION_A })
+    ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
+    await waitForType(ws, 'JOINED_LOBBY')
+
+    const msgPromise = waitForType(ws, 'TABLE_UPDATED')
+
+    // PLAYER_B explicitly clicks Leave Table
+    const leaveRes = await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/leave`,
+      null,
+      { 'x-session-id': SESSION_B, 'x-player-id': PLAYER_B },
+    )
+    assert.equal(leaveRes.status, 200)
+
+    const [msg] = await msgPromise
+    assert.equal(msg.type, 'TABLE_UPDATED')
+    assert.equal(msg.payload.tableId, tableId)
+    assert.equal(msg.payload.seats.east, null, 'east seat should be freed after player left')
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+
+    ws.close()
+    await waitClose(ws)
+  })
+
   it('TABLE_REMOVED is emitted when last human leaves an in-progress game (table auto-terminates)', { timeout: 15000 }, async () => {
     // Seed a table directly in Redis with all-bot seats (so player leaving terminates it)
     const tableId = 'lobby-evt-terminate-test'

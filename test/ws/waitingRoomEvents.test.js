@@ -115,12 +115,18 @@ describe('Waiting room WebSocket events (table room channel)', { skip }, () => {
   const PLAYER_A = 'wr-evt-player-a'
   const SESSION_B = 'wr-evt-session-b'
   const PLAYER_B = 'wr-evt-player-b'
+  const SESSION_C = 'wr-evt-session-c'
+  const PLAYER_C = 'wr-evt-player-c'
+  const SESSION_D = 'wr-evt-session-d'
+  const PLAYER_D = 'wr-evt-player-d'
 
   before(async () => {
     redis = await getRedis()
 
     await redis.set(`session:${SESSION_A}`, JSON.stringify({ playerId: PLAYER_A, username: 'WrEvtHostA' }))
     await redis.set(`session:${SESSION_B}`, JSON.stringify({ playerId: PLAYER_B, username: 'WrEvtPlayerB' }))
+    await redis.set(`session:${SESSION_C}`, JSON.stringify({ playerId: PLAYER_C, username: 'WrEvtPlayerC' }))
+    await redis.set(`session:${SESSION_D}`, JSON.stringify({ playerId: PLAYER_D, username: 'WrEvtPlayerD' }))
 
     server = await startTestServer(redis)
   })
@@ -130,6 +136,8 @@ describe('Waiting room WebSocket events (table room channel)', { skip }, () => {
 
     await redis.del(`session:${SESSION_A}`)
     await redis.del(`session:${SESSION_B}`)
+    await redis.del(`session:${SESSION_C}`)
+    await redis.del(`session:${SESSION_D}`)
 
     await closeRedis()
   })
@@ -239,5 +247,145 @@ describe('Waiting room WebSocket events (table room channel)', { skip }, () => {
 
     ws.close()
     await waitClose(ws)
+  })
+
+  it('GAME_STARTED is broadcast to the table room when the host fills with bots', { timeout: 15000 }, async () => {
+    // PLAYER_A (host) sits north, PLAYER_B sits south — two human players, two empty seats
+    const createRes = await apiRequest(
+      server.baseUrl,
+      'POST',
+      '/api/tables',
+      { name: 'WR Bot Fill Test' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    assert.equal(createRes.status, 201)
+    const { tableId } = createRes.body
+
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'north' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'south' },
+      { 'x-session-id': SESSION_B, 'x-player-id': PLAYER_B },
+    )
+
+    // PLAYER_B connects to the table room, simulating the "Waiting for players..." screen
+    const wsB = await wsConnect(server.httpServer, { 'x-session-id': SESSION_B })
+    wsB.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
+    await waitForType(wsB, 'JOINED')
+
+    const gameStartedPromise = waitForType(wsB, 'GAME_STARTED')
+
+    // Host fills empty seats with bots
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/add-bot`,
+      { seat: 'east' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    const addBotRes = await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/add-bot`,
+      { seat: 'west' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    assert.equal(addBotRes.status, 200)
+
+    // PLAYER_B should receive GAME_STARTED so their waiting screen transitions to the game
+    const msgs = await gameStartedPromise
+    const evt = msgs.find((m) => m.type === 'GAME_STARTED')
+    assert.ok(evt, 'GAME_STARTED should be broadcast to the table room when game starts')
+
+    // After GAME_STARTED, fetching state should return a playing game (not waiting)
+    const stateRes = await apiRequest(
+      server.baseUrl,
+      'GET',
+      `/api/tables/${tableId}/state`,
+      null,
+      { 'x-session-id': SESSION_B, 'x-player-id': PLAYER_B },
+    )
+    assert.equal(stateRes.status, 200)
+    assert.notEqual(stateRes.body.status, 'waiting', 'game state should no longer be waiting after GAME_STARTED')
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.del(`game:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+
+    wsB.close()
+    await waitClose(wsB)
+  })
+
+  it('GAME_STARTED is broadcast to the table room when the last human player fills the table', { timeout: 15000 }, async () => {
+    // Three humans and one bot fill the table via /sit — game starts on 4th human sitting
+    const createRes = await apiRequest(
+      server.baseUrl,
+      'POST',
+      '/api/tables',
+      { name: 'WR Human Fill Test' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    assert.equal(createRes.status, 201)
+    const { tableId } = createRes.body
+
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'north' },
+      { 'x-session-id': SESSION_A, 'x-player-id': PLAYER_A },
+    )
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'south' },
+      { 'x-session-id': SESSION_B, 'x-player-id': PLAYER_B },
+    )
+    await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'east' },
+      { 'x-session-id': SESSION_C, 'x-player-id': PLAYER_C },
+    )
+
+    // PLAYER_A connects to the table room (on the waiting screen)
+    const wsA = await wsConnect(server.httpServer, { 'x-session-id': SESSION_A })
+    wsA.send(JSON.stringify({ type: 'JOIN', payload: { tableId } }))
+    await waitForType(wsA, 'JOINED')
+
+    const gameStartedPromise = waitForType(wsA, 'GAME_STARTED')
+
+    // PLAYER_D sits — table is now full, game should start
+    const sitRes = await apiRequest(
+      server.baseUrl,
+      'POST',
+      `/api/tables/${tableId}/sit`,
+      { seat: 'west' },
+      { 'x-session-id': SESSION_D, 'x-player-id': PLAYER_D },
+    )
+    assert.equal(sitRes.status, 200)
+
+    const msgs = await gameStartedPromise
+    const evt = msgs.find((m) => m.type === 'GAME_STARTED')
+    assert.ok(evt, 'GAME_STARTED should be broadcast to the table room when the last seat is filled by a human')
+
+    // Cleanup
+    await redis.del(`table:${tableId}`)
+    await redis.del(`game:${tableId}`)
+    await redis.hDel('lobby:tables', tableId)
+
+    wsA.close()
+    await waitClose(wsA)
   })
 })

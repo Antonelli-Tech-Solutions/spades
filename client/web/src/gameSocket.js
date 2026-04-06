@@ -284,17 +284,25 @@ export function createLobbySocket({
 }
 
 /**
- * Build the WebSocket URL for the current origin, appending the session token
- * as a query parameter.
+ * Build the WebSocket URL, appending the session token as a query parameter.
  *
- * Derives the host from `window.location` so it works regardless of port.
- * Falls back to `localhost` when running outside a browser (e.g. during tests
- * that call this function directly).
+ * If `window.__WS_URL__` is set (injected by `/config.js` from the `WS_URL`
+ * environment variable), that base URL is used. This supports split-host
+ * deployments where the WebSocket server lives on a different host than the
+ * HTTP server (e.g. frontend on Vercel, WebSocket on Railway).
+ *
+ * Falls back to deriving the host from `window.location` for local /
+ * single-host deployments.
  *
  * @param {string} sessionId
  * @returns {string}
  */
 export function buildWsUrl(sessionId) {
+  const base = globalThis.__WS_URL__ || ''
+  if (base) {
+    const separator = base.includes('?') ? '&' : '?'
+    return `${base}${separator}sessionId=${encodeURIComponent(sessionId)}`
+  }
   const protocol = globalThis.location?.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = globalThis.location?.host ?? 'localhost'
   return `${protocol}//${host}?sessionId=${encodeURIComponent(sessionId)}`

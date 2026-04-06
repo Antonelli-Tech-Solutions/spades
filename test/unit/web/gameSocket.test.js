@@ -447,6 +447,36 @@ describe('buildWsUrl', { timeout: 2000 }, () => {
     const url = buildWsUrl('session with spaces')
     assert.ok(!url.includes(' '), 'URL should not contain unencoded spaces')
   })
+
+  it('uses window.__WS_URL__ as base when set', { timeout: 2000 }, () => {
+    globalThis.__WS_URL__ = 'wss://my-app.up.railway.app'
+    try {
+      const url = buildWsUrl('sess-1')
+      assert.ok(url.startsWith('wss://my-app.up.railway.app'), `expected Railway base, got: ${url}`)
+      assert.ok(url.includes('sessionId=sess-1'), `expected sessionId in URL, got: ${url}`)
+    } finally {
+      delete globalThis.__WS_URL__
+    }
+  })
+
+  it('falls back to window.location when __WS_URL__ is not set', { timeout: 2000 }, () => {
+    delete globalThis.__WS_URL__
+    const url = buildWsUrl('sess-2')
+    assert.ok(url.startsWith('ws:') || url.startsWith('wss:'), `expected ws/wss URL, got: ${url}`)
+    assert.ok(url.includes('sessionId=sess-2'), `expected sessionId in URL, got: ${url}`)
+  })
+
+  it('handles __WS_URL__ that already has a query string', { timeout: 2000 }, () => {
+    globalThis.__WS_URL__ = 'wss://my-app.up.railway.app?foo=bar'
+    try {
+      const url = buildWsUrl('sess-3')
+      assert.ok(url.includes('foo=bar'), 'should preserve existing query params')
+      assert.ok(url.includes('sessionId=sess-3'), `expected sessionId in URL, got: ${url}`)
+      assert.ok(!url.includes('??'), 'should not double up on ?')
+    } finally {
+      delete globalThis.__WS_URL__
+    }
+  })
 })
 
 // --- createLobbySocket -------------------------------------------------------

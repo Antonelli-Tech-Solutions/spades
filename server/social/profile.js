@@ -19,10 +19,11 @@ export function isValidUuid(value) {
  * @returns {Promise<Record<string, string>>}
  */
 export async function getPlayerUsernames(db, playerIds) {
-  if (playerIds.length === 0) return {}
+  const validIds = playerIds.filter(isValidUuid)
+  if (validIds.length === 0) return {}
   const result = await db.query(
     `SELECT id, username FROM players WHERE id = ANY($1::uuid[])`,
-    [playerIds],
+    [validIds],
   )
   return Object.fromEntries(result.rows.map((row) => [row.id, row.username]))
 }

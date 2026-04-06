@@ -462,12 +462,13 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (isTableFull(table)) {
         const players = table.seats // { north, east, south, west } → playerIds
         let gameState = createGame(tableId, players)
-        if (wss) emitHandDealt(wss, gameState)
         gameState = advanceBotsWithEvents(gameState, wss, tableId)
         await saveGameState(redisClient, tableId, gameState)
         const playingTable = await markTablePlaying(redisClient, tableId, gameState.gameId)
         emitLobbyTableUpdated(wss, playingTable)
         if (wss) {
+          wss.broadcast(tableId, 'GAME_STARTED', {})
+          emitHandDealt(wss, gameState)
           wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(gameState), phase: gameState.phase })
         }
         console.log('Game started:', { tableId, gameId: gameState.gameId })
@@ -508,12 +509,13 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (isTableFull(updated)) {
         const players = updated.seats
         let gameState = createGame(tableId, players)
-        if (wss) emitHandDealt(wss, gameState)
         gameState = advanceBotsWithEvents(gameState, wss, tableId)
         await saveGameState(redisClient, tableId, gameState)
         const playingTable = await markTablePlaying(redisClient, tableId, gameState.gameId)
         emitLobbyTableUpdated(wss, playingTable)
         if (wss) {
+          wss.broadcast(tableId, 'GAME_STARTED', {})
+          emitHandDealt(wss, gameState)
           wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(gameState), phase: gameState.phase })
         }
         console.log('Game started with bots:', { tableId, gameId: gameState.gameId })

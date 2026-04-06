@@ -7,7 +7,7 @@ Real-time multiplayer Spades card game — web and mobile.
 | Layer | Technology |
 |---|---|
 | Server | Node.js + Express (ES Modules, no build step) |
-| Real-time | WebSocket (WS_PORT, defaults to 3001) |
+| Real-time | WebSocket (shares HTTP server by default; configurable via WS_PORT) |
 | Session / Lobby / Presence | Redis |
 | Persistent storage | PostgreSQL |
 | Mobile | React Native / Flutter (iOS 15+, Android 10+) |
@@ -46,7 +46,7 @@ npm start
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `REDIS_URL` | Yes | — | Redis connection string |
 | `PORT` | No | `3000` | HTTP server port |
-| `WS_PORT` | No | `3001` | WebSocket server port (can share with HTTP) |
+| `WS_PORT` | No | Same as `PORT` | WebSocket server port. Defaults to sharing the HTTP server. Set to a different port to run WebSocket on a dedicated server (requires a reverse proxy to route WebSocket upgrades from the HTTP port). |
 | `NODE_ENV` | No | — | Environment name (`development`, `production`) |
 | `APP_URL` | No | `http://localhost:3000` | Public base URL (used in verification emails) |
 | `EMAIL_HOST` | No | — | SMTP host. If unset, verification emails are logged to stdout |
@@ -498,7 +498,7 @@ Card format: rank + suit initial (e.g. `AS` = Ace of Spades, `KH` = King of Hear
 
 ## Real-Time (WebSocket)
 
-The WebSocket server runs on its own port (configurable via `WS_PORT`, default `3001`). Set `WS_PORT` to the same value as `PORT` to share the HTTP server instead.
+The WebSocket server shares the HTTP server by default (same port as `PORT`). Set `WS_PORT` to a different port to run it on a dedicated server — in that case a reverse proxy must route WebSocket upgrades from the public HTTP port to `WS_PORT`.
 
 ### Connection & Authentication
 

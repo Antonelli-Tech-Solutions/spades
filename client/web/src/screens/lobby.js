@@ -111,24 +111,28 @@ export async function renderLobbyScreen(container) {
   }
   renderTableList()
 
+  // Re-sync the full table list and re-render. Called on initial connect and on reconnect
+  // to close the race window between the initial fetch and when the server acks the join,
+  // and to catch up on any events missed during a reconnect.
+  async function syncTableList(label) {
+    console.log(`Lobby WebSocket ${label}`)
+    try {
+      const { tables: freshTables } = await listTables({ sessionId, playerId })
+      tables = {}
+      for (const t of freshTables) {
+        tables[t.tableId] = t
+      }
+      renderTableList()
+    } catch (err) {
+      console.log(`Failed to sync tables on WebSocket ${label}:`, { error: err.message })
+    }
+  }
+
   // Subscribe to the lobby WebSocket channel for real-time updates
   const lobbySocket = createLobbySocket({
     wsUrl: buildWsUrl(sessionId),
-    onOpen: async () => {
-      console.log('Lobby WebSocket connected')
-      // Re-sync table list now that the WebSocket is subscribed, to close the race window
-      // between the initial fetch and when JOIN_LOBBY is acknowledged by the server.
-      try {
-        const { tables: freshTables } = await listTables({ sessionId, playerId })
-        tables = {}
-        for (const t of freshTables) {
-          tables[t.tableId] = t
-        }
-        renderTableList()
-      } catch (err) {
-        console.log('Failed to sync tables on WebSocket connect:', { error: err.message })
-      }
-    },
+    onOpen: () => syncTableList('connected'),
+    onReconnect: () => syncTableList('reconnected'),
     onEvent: (event) => {
       console.log('Lobby event:', { type: event.type, tableId: event.payload?.tableId })
       applyLobbyEvent(tables, event)

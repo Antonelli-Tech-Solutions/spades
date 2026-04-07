@@ -616,6 +616,7 @@ describe('In-game WebSocket events', { skip }, () => {
       assert.ok(ev.payload.winnerSeat, 'TRICK_COMPLETE should include winnerSeat')
       assert.ok(Array.isArray(ev.payload.plays), 'TRICK_COMPLETE should include plays array')
       assert.equal(ev.payload.plays.length, 4, 'TRICK_COMPLETE plays should have 4 entries')
+      assert.ok(ev.payload.tricksWon && typeof ev.payload.tricksWon === 'object', 'TRICK_COMPLETE should include tricksWon object')
 
       ws.close()
       await waitClose(ws)

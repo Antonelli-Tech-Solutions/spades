@@ -47,7 +47,7 @@ export const FULL_REFRESH_EVENTS = new Set([
 export const DELTA_EVENTS = new Set([
   'CARD_PLAYED',         // { seat, card, currentTrick, nextPlayerSeat, spadesBroken }
   'BID_PLACED',          // { seat, bidType[, bid] }
-  'TRICK_COMPLETE',      // { winnerSeat, plays }
+  'TRICK_COMPLETE',      // { winnerSeat, plays, tricksWon }
   'TURN_CHANGED',        // { activeSeat, phase }
   'HAND_REVEALED',       // { myHand, seat }
   'BLIND_NIL_EXCHANGE_PROMPT', // { direction, count, step, currentBlindNilSeat }
@@ -132,10 +132,8 @@ export function applyDelta(state, msg, playerId) {
     }
 
     case 'TRICK_COMPLETE': {
-      const { winnerSeat, plays } = payload
+      const { winnerSeat, plays, tricksWon } = payload
       const trick = { winner: winnerSeat, plays }
-      const newTricksWon = { ...state.tricksWon }
-      newTricksWon[winnerSeat] = (newTricksWon[winnerSeat] ?? 0) + 1
 
       // Recompute validCards for the winner who now leads the next trick.
       // After this trick completes, isFirstTrick is always false (at least one trick done).
@@ -151,7 +149,7 @@ export function applyDelta(state, msg, playerId) {
         ...state,
         currentTrick: [],
         completedTricks: [...(state.completedTricks || []), trick],
-        tricksWon: newTricksWon,
+        tricksWon,
         validCards,
       }
     }

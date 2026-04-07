@@ -217,6 +217,67 @@ describe('applyDelta', { timeout: 2000 }, () => {
       }, playerId)
       assert.equal(result.spadesbroken, true)
     })
+
+    it('sets validCards when nextPlayerSeat is the current player', { timeout: 2000 }, () => {
+      // East played a heart; north (me) is next to follow suit or play off-suit
+      const trick = [{ seat: 'east', card: { suit: 'hearts', rank: '7' } }]
+      const result = applyDelta(baseState, {
+        type: 'CARD_PLAYED',
+        payload: {
+          seat: 'east',
+          card: { suit: 'hearts', rank: '7' },
+          currentTrick: trick,
+          nextPlayerSeat: 'north',
+          spadesBroken: false,
+        },
+      }, playerId)
+      // myHand has a heart (K), so only that card should be legal
+      assert.ok(Array.isArray(result.validCards), 'validCards should be an array')
+      assert.ok(result.validCards.some((c) => c.suit === 'hearts' && c.rank === 'K'),
+        'should include the heart from hand (must follow suit)')
+      assert.ok(!result.validCards.some((c) => c.suit === 'spades'),
+        'should not include spades when hearts can be followed')
+    })
+
+    it('clears validCards when nextPlayerSeat is another player', { timeout: 2000 }, () => {
+      const trick = [{ seat: 'north', card: { suit: 'hearts', rank: 'K' } }]
+      const result = applyDelta({ ...baseState, validCards: [{ suit: 'hearts', rank: 'K' }] }, {
+        type: 'CARD_PLAYED',
+        payload: {
+          seat: 'north',
+          card: { suit: 'hearts', rank: 'K' },
+          currentTrick: trick,
+          nextPlayerSeat: 'east',
+          spadesBroken: false,
+        },
+      }, playerId)
+      assert.equal(result.validCards, undefined)
+    })
+
+    it('excludes spades from validCards when spades not broken and leading', { timeout: 2000 }, () => {
+      // Four cards played — north (me) wins and will lead next (treat 4-card trick as empty)
+      const fourCardTrick = [
+        { seat: 'east', card: { suit: 'hearts', rank: '7' } },
+        { seat: 'south', card: { suit: 'hearts', rank: '2' } },
+        { seat: 'west', card: { suit: 'hearts', rank: '3' } },
+        { seat: 'north', card: { suit: 'hearts', rank: 'K' } },
+      ]
+      const stateWithSpadeTrick = { ...baseState, completedTricks: [{ winner: 'east', plays: [] }] }
+      const result = applyDelta(stateWithSpadeTrick, {
+        type: 'CARD_PLAYED',
+        payload: {
+          seat: 'north',
+          card: { suit: 'hearts', rank: 'K' },
+          currentTrick: fourCardTrick,
+          nextPlayerSeat: 'north',
+          spadesBroken: false,
+        },
+      }, playerId)
+      // Player is about to lead; spades not broken — spade A should be excluded
+      assert.ok(Array.isArray(result.validCards))
+      assert.ok(!result.validCards.some((c) => c.suit === 'spades'),
+        'should exclude spades when not broken and player is leading')
+    })
   })
 
   describe('BID_PLACED', { timeout: 2000 }, () => {
@@ -368,6 +429,39 @@ describe('applyDelta', { timeout: 2000 }, () => {
       const twice = applyDelta(once, msg, playerId)
       assert.equal(twice.tricksWon.north, 1, 'applying TRICK_COMPLETE twice must not double-count')
       assert.equal(twice.tricksWon.east, 0)
+    })
+
+    it('sets validCards when I win the trick and will lead next', { timeout: 2000 }, () => {
+      // north (me) wins — should get validCards for leading next trick
+      const result = applyDelta({ ...playingState, spadesbroken: false }, {
+        type: 'TRICK_COMPLETE',
+        payload: { winnerSeat: 'north', plays: playingState.currentTrick },
+      }, playerId)
+      assert.ok(Array.isArray(result.validCards), 'validCards should be set for trick winner')
+      // myHand has spades A, hearts K, clubs 7. Spades not broken → spade should be excluded.
+      assert.ok(!result.validCards.some((c) => c.suit === 'spades'),
+        'should exclude spades when not broken and player leads')
+      assert.ok(result.validCards.some((c) => c.suit === 'hearts' || c.suit === 'clubs'),
+        'should include non-spade cards')
+    })
+
+    it('clears validCards when another player wins the trick', { timeout: 2000 }, () => {
+      const stateWithValidCards = { ...playingState, validCards: [{ suit: 'hearts', rank: 'K' }] }
+      const result = applyDelta(stateWithValidCards, {
+        type: 'TRICK_COMPLETE',
+        payload: { winnerSeat: 'east', plays: playingState.currentTrick },
+      }, playerId)
+      assert.equal(result.validCards, undefined)
+    })
+
+    it('includes spades in validCards when spades are broken and I lead', { timeout: 2000 }, () => {
+      const result = applyDelta({ ...playingState, spadesbroken: true }, {
+        type: 'TRICK_COMPLETE',
+        payload: { winnerSeat: 'north', plays: playingState.currentTrick },
+      }, playerId)
+      assert.ok(Array.isArray(result.validCards))
+      // All cards should be legal when leading after spades broken
+      assert.equal(result.validCards.length, playingState.myHand.length)
     })
   })
 

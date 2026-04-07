@@ -9,7 +9,7 @@ permissions:
   id-token: write
 jobs:
   create-issue:
-    if: github.event.review.user.login == 'claude-bot-dom'
+    if: github.event.comment.user.login == 'claude-bot-dom'
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App token

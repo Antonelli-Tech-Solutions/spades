@@ -288,59 +288,6 @@ export function bidContributionHint(teamTotal, partnerBid) {
 }
 
 /**
- * Renders the post-bid team summary bar once both players on a team have bid.
- * Nil and Blind Nil bids are excluded from the combined team total.
- * Returns an empty string if bidding is not yet complete for either team.
- * @param {{ bids: object, teamBids: object, biddingOrder: string[] }} state
- * @returns {string}
- */
-export function teamBidSummaryHtml(state) {
-  const teams = [
-    { label: 'N/S', seats: ['north', 'south'], teamKey: 'ns' },
-    { label: 'E/W', seats: ['east', 'west'], teamKey: 'ew' },
-  ]
-
-  const bars = []
-  for (const { label, seats, teamKey } of teams) {
-    const [a, b] = seats
-    const bidA = state.bids[a]
-    const bidB = state.bids[b]
-    if (bidA === null || bidA === undefined || bidB === null || bidB === undefined) continue
-
-    const isSpecialA = bidA === 'nil' || bidA === 'blind_nil'
-    const isSpecialB = bidB === 'nil' || bidB === 'blind_nil'
-    const nameA = a.charAt(0).toUpperCase() + a.slice(1)
-    const nameB = b.charAt(0).toUpperCase() + b.slice(1)
-
-    let summary
-    if (!isSpecialA && !isSpecialB) {
-      // Use the authoritative team total from the server; the second bidder's stored
-      // bid value is the team total, not their individual contribution.
-
-      // Fall back to the second bidder's stored bid when teamBids hasn't been
-      // populated yet (i.e. the other team hasn't finished bidding).
-      const biddingOrder = state.biddingOrder || []
-      const [firstSeat, secondSeat] = biddingOrder.filter((s) => s === a || s === b)
-      const resolvedFirst = firstSeat ?? a
-      const resolvedSecond = secondSeat ?? b
-      const teamTotal = state.teamBids[teamKey] ?? state.bids[resolvedSecond]
-      const firstName = resolvedFirst.charAt(0).toUpperCase() + resolvedFirst.slice(1)
-      const secondName = resolvedSecond.charAt(0).toUpperCase() + resolvedSecond.slice(1)
-      const firstBid = state.bids[resolvedFirst]
-      const secondIndividual = teamTotal - firstBid
-      summary = `${esc(label)}: ${teamTotal} \u2014 ${esc(firstName)} ${firstBid}, ${esc(secondName)} ${secondIndividual}`
-    } else {
-      summary = `${esc(label)}: ${esc(nameA)} ${esc(bidLabel(bidA))}, ${esc(nameB)} ${esc(bidLabel(bidB))}`
-    }
-
-    bars.push(`<div class="bid-summary-team">${summary}</div>`)
-  }
-
-  if (bars.length === 0) return ''
-  return `<div class="bid-summary">${bars.join('')}</div>`
-}
-
-/**
  * Returns the bid to display for a seat, taking partnership bidding into account.
  * For the second bidder in a numeric partnership, state.bids[seat] holds the team
  * total, not the player's individual contribution. This function converts it back.
@@ -746,7 +693,6 @@ export function renderGameScreen(container) {
             <span class="score-bags">${BAG_ICON} ${state.bags.ew} bag${state.bags.ew !== 1 ? 's' : ''}</span>
           </div>
         </div>
-        ${teamBidSummaryHtml(state)}
         ${state.phase === 'playing' || state.phase === 'blind_nil_exchange' ? teamBidTricksHtml(state) : ''}
 
         <div class="game-table">

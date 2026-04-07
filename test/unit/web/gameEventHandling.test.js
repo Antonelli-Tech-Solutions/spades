@@ -351,6 +351,7 @@ describe('applyDelta', { timeout: 2000 }, () => {
         payload: {
           winnerSeat: 'north',
           plays: playingState.currentTrick,
+          tricksWon: { north: 1, east: 0, south: 0, west: 0 },
         },
       }, playerId)
       assert.deepEqual(result.currentTrick, [])
@@ -362,6 +363,7 @@ describe('applyDelta', { timeout: 2000 }, () => {
         payload: {
           winnerSeat: 'north',
           plays: playingState.currentTrick,
+          tricksWon: { north: 1, east: 0, south: 0, west: 0 },
         },
       }, playerId)
       assert.equal(result.completedTricks.length, 1)
@@ -369,16 +371,28 @@ describe('applyDelta', { timeout: 2000 }, () => {
       assert.deepEqual(result.completedTricks[0].plays, playingState.currentTrick)
     })
 
-    it('increments tricksWon for the winner', { timeout: 2000 }, () => {
+    it('sets tricksWon from payload (not by incrementing)', { timeout: 2000 }, () => {
+      // Regression: client must SET tricksWon from authoritative server value, not increment.
+      // Incrementing caused double-counts when the event was processed more than once on a client.
+      const serverTricksWon = { north: 1, east: 0, south: 0, west: 0 }
       const result = applyDelta(playingState, {
         type: 'TRICK_COMPLETE',
         payload: {
           winnerSeat: 'north',
           plays: playingState.currentTrick,
+          tricksWon: serverTricksWon,
         },
       }, playerId)
-      assert.equal(result.tricksWon.north, 1)
-      assert.equal(result.tricksWon.east, 0)
+      assert.deepEqual(result.tricksWon, serverTricksWon)
+    })
+
+    it('is idempotent — applying TRICK_COMPLETE twice yields the same tricksWon', { timeout: 2000 }, () => {
+      // Regression: if the event fires twice on one client (race/re-render), the count must not double.
+      const serverTricksWon = { north: 1, east: 0, south: 0, west: 0 }
+      const payload = { winnerSeat: 'north', plays: playingState.currentTrick, tricksWon: serverTricksWon }
+      const after1 = applyDelta(playingState, { type: 'TRICK_COMPLETE', payload }, playerId)
+      const after2 = applyDelta(after1, { type: 'TRICK_COMPLETE', payload }, playerId)
+      assert.deepEqual(after2.tricksWon, serverTricksWon)
     })
 
     it('accumulates multiple tricks correctly', { timeout: 2000 }, () => {
@@ -390,7 +404,7 @@ describe('applyDelta', { timeout: 2000 }, () => {
       }
       const result = applyDelta(stateWith1, {
         type: 'TRICK_COMPLETE',
-        payload: { winnerSeat: 'north', plays: playingState.currentTrick },
+        payload: { winnerSeat: 'north', plays: playingState.currentTrick, tricksWon: { north: 1, east: 1, south: 0, west: 0 } },
       }, playerId)
       assert.equal(result.completedTricks.length, 2)
       assert.equal(result.tricksWon.north, 1)
@@ -401,7 +415,7 @@ describe('applyDelta', { timeout: 2000 }, () => {
       // north (me) wins — should get validCards for leading next trick
       const result = applyDelta({ ...playingState, spadesbroken: false }, {
         type: 'TRICK_COMPLETE',
-        payload: { winnerSeat: 'north', plays: playingState.currentTrick },
+        payload: { winnerSeat: 'north', plays: playingState.currentTrick, tricksWon: { north: 1, east: 0, south: 0, west: 0 } },
       }, playerId)
       assert.ok(Array.isArray(result.validCards), 'validCards should be set for trick winner')
       // myHand has spades A, hearts K, clubs 7. Spades not broken → spade should be excluded.
@@ -415,7 +429,7 @@ describe('applyDelta', { timeout: 2000 }, () => {
       const stateWithValidCards = { ...playingState, validCards: [{ suit: 'hearts', rank: 'K' }] }
       const result = applyDelta(stateWithValidCards, {
         type: 'TRICK_COMPLETE',
-        payload: { winnerSeat: 'east', plays: playingState.currentTrick },
+        payload: { winnerSeat: 'east', plays: playingState.currentTrick, tricksWon: { north: 0, east: 1, south: 0, west: 0 } },
       }, playerId)
       assert.equal(result.validCards, undefined)
     })
@@ -423,7 +437,7 @@ describe('applyDelta', { timeout: 2000 }, () => {
     it('includes spades in validCards when spades are broken and I lead', { timeout: 2000 }, () => {
       const result = applyDelta({ ...playingState, spadesbroken: true }, {
         type: 'TRICK_COMPLETE',
-        payload: { winnerSeat: 'north', plays: playingState.currentTrick },
+        payload: { winnerSeat: 'north', plays: playingState.currentTrick, tricksWon: { north: 1, east: 0, south: 0, west: 0 } },
       }, playerId)
       assert.ok(Array.isArray(result.validCards))
       // All cards should be legal when leading after spades broken

@@ -16,6 +16,7 @@ import { HOLD_DURATIONS, detectCompletedTrick, isHandTransition, trickHoldHtml }
 import { createInputBlocker } from '../inputBlock.js'
 import { endOfHandSummaryHtml } from '../endOfHandSummary.js'
 import { BAG_ICON, CROWN_ICON } from '../icons.js'
+import { getLegalPlays } from '../legalPlays.js'
 
 const SUIT_SYMBOL = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' }
 const PARTNER = { north: 'south', south: 'north', east: 'west', west: 'east' }
@@ -88,19 +89,35 @@ export function applyDelta(state, msg, playerId) {
     case 'CARD_PLAYED': {
       const { seat, card, currentTrick, nextPlayerSeat, spadesBroken } = payload
       let myHand = state.myHand
+      let mySeat
       if (myHand && state.players) {
-        const mySeat = Object.entries(state.players).find(([, id]) => id === playerId)?.[0]
+        mySeat = Object.entries(state.players).find(([, id]) => id === playerId)?.[0]
         if (seat === mySeat) {
           const cardKey = `${card.suit}-${card.rank}`
           myHand = myHand.filter((c) => `${c.suit}-${c.rank}` !== cardKey)
         }
       }
+
+      const updatedTrick = currentTrick ?? state.currentTrick
+      const updatedSpadesBroken = spadesBroken ?? state.spadesbroken
+      const isFirstTrick = (state.completedTricks?.length ?? 0) === 0
+
+      let validCards
+      if (mySeat !== undefined && nextPlayerSeat === mySeat && myHand) {
+        // It's my turn next. If the trick already has 4 cards the hand is about
+        // to complete (TRICK_COMPLETE will follow) and I will lead — treat it as
+        // an empty trick so the legal-play check is correct.
+        const trickForCheck = updatedTrick.length === 4 ? [] : updatedTrick
+        validCards = getLegalPlays(myHand, trickForCheck, updatedSpadesBroken, isFirstTrick)
+      }
+
       return {
         ...state,
-        currentTrick: currentTrick ?? state.currentTrick,
+        currentTrick: updatedTrick,
         currentPlayerSeat: nextPlayerSeat ?? state.currentPlayerSeat,
-        spadesbroken: spadesBroken ?? state.spadesbroken,
+        spadesbroken: updatedSpadesBroken,
         myHand,
+        validCards,
       }
     }
 
@@ -119,11 +136,23 @@ export function applyDelta(state, msg, playerId) {
       const trick = { winner: winnerSeat, plays }
       const newTricksWon = { ...state.tricksWon }
       newTricksWon[winnerSeat] = (newTricksWon[winnerSeat] ?? 0) + 1
+
+      // Recompute validCards for the winner who now leads the next trick.
+      // After this trick completes, isFirstTrick is always false (at least one trick done).
+      let validCards
+      if (state.players && state.myHand) {
+        const mySeat = Object.entries(state.players).find(([, id]) => id === playerId)?.[0]
+        if (winnerSeat === mySeat) {
+          validCards = getLegalPlays(state.myHand, [], state.spadesbroken, false)
+        }
+      }
+
       return {
         ...state,
         currentTrick: [],
         completedTricks: [...(state.completedTricks || []), trick],
         tricksWon: newTricksWon,
+        validCards,
       }
     }
 
@@ -603,7 +632,7 @@ export function renderGameScreen(container) {
           const isValid = state.validCards.some((c) => `${c.suit}-${c.rank}` === key)
           return isValid ? 'card-valid' : 'card-invalid'
         }
-        return 'card-play'  // fallback when server hasn't sent validCards
+        return 'card-play'  // fallback when validCards hasn't been computed yet
       }
       return ''
     }

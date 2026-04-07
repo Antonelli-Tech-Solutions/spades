@@ -217,6 +217,60 @@ describe('applyDelta', { timeout: 2000 }, () => {
       }, playerId)
       assert.equal(result.spadesbroken, true)
     })
+
+    it('sets validCards when nextPlayerSeat is the current player', { timeout: 2000 }, () => {
+      // Simulate another player just played, and now it is our turn (north)
+      const validCards = [{ suit: 'hearts', rank: 'K' }, { suit: 'clubs', rank: '7' }]
+      const result = applyDelta(baseState, {
+        type: 'CARD_PLAYED',
+        payload: {
+          seat: 'east',
+          card: { suit: 'clubs', rank: '5' },
+          currentTrick: [{ seat: 'east', card: { suit: 'clubs', rank: '5' } }],
+          nextPlayerSeat: 'north',
+          spadesBroken: false,
+          validCards,
+        },
+      }, playerId)
+      assert.deepEqual(result.validCards, validCards)
+    })
+
+    it('clears validCards when nextPlayerSeat is not the current player', { timeout: 2000 }, () => {
+      // Start with state that has validCards set (e.g. from previous turn)
+      const stateWithValidCards = {
+        ...baseState,
+        validCards: [{ suit: 'hearts', rank: 'K' }],
+      }
+      const result = applyDelta(stateWithValidCards, {
+        type: 'CARD_PLAYED',
+        payload: {
+          seat: 'north',
+          card: { suit: 'hearts', rank: 'K' },
+          currentTrick: [{ seat: 'north', card: { suit: 'hearts', rank: 'K' } }],
+          nextPlayerSeat: 'east',
+          spadesBroken: false,
+          validCards: [{ suit: 'spades', rank: '2' }],
+        },
+      }, playerId)
+      // validCards for east should not be applied to our state
+      assert.equal(result.validCards, undefined)
+    })
+
+    it('sets validCards to undefined when payload omits it (backward compatibility)', { timeout: 2000 }, () => {
+      // Old server that doesn't send validCards — should not break
+      const result = applyDelta(baseState, {
+        type: 'CARD_PLAYED',
+        payload: {
+          seat: 'east',
+          card: { suit: 'clubs', rank: '5' },
+          currentTrick: [{ seat: 'east', card: { suit: 'clubs', rank: '5' } }],
+          nextPlayerSeat: 'north',
+          spadesBroken: false,
+          // no validCards field
+        },
+      }, playerId)
+      assert.equal(result.validCards, undefined)
+    })
   })
 
   describe('BID_PLACED', { timeout: 2000 }, () => {

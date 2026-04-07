@@ -44,7 +44,7 @@ export const FULL_REFRESH_EVENTS = new Set([
  * listed in the issue #239 hybrid spec for each event type.
  */
 export const DELTA_EVENTS = new Set([
-  'CARD_PLAYED',         // { seat, card, currentTrick, nextPlayerSeat, spadesBroken }
+  'CARD_PLAYED',         // { seat, card, currentTrick, nextPlayerSeat, spadesBroken, validCards }
   'BID_PLACED',          // { seat, bidType[, bid] }
   'TRICK_COMPLETE',      // { winnerSeat, plays }
   'TURN_CHANGED',        // { activeSeat, phase }
@@ -86,21 +86,25 @@ export function applyDelta(state, msg, playerId) {
 
   switch (type) {
     case 'CARD_PLAYED': {
-      const { seat, card, currentTrick, nextPlayerSeat, spadesBroken } = payload
+      const { seat, card, currentTrick, nextPlayerSeat, spadesBroken, validCards } = payload
       let myHand = state.myHand
+      let mySeat
       if (myHand && state.players) {
-        const mySeat = Object.entries(state.players).find(([, id]) => id === playerId)?.[0]
+        mySeat = Object.entries(state.players).find(([, id]) => id === playerId)?.[0]
         if (seat === mySeat) {
           const cardKey = `${card.suit}-${card.rank}`
           myHand = myHand.filter((c) => `${c.suit}-${c.rank}` !== cardKey)
         }
       }
+      // Apply validCards only when the next turn is ours; clear it otherwise so stale data never leaks
+      const myNextValidCards = (mySeat && nextPlayerSeat === mySeat) ? validCards : undefined
       return {
         ...state,
         currentTrick: currentTrick ?? state.currentTrick,
         currentPlayerSeat: nextPlayerSeat ?? state.currentPlayerSeat,
         spadesbroken: spadesBroken ?? state.spadesbroken,
         myHand,
+        validCards: myNextValidCards,
       }
     }
 

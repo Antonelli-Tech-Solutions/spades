@@ -25,6 +25,7 @@ import {
   changeSeat,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, substitutePlayerWithBot } from './game/state.js'
+import { getLegalPlays } from './game/trick.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
 import { isBot, botBid, botPlay, botBlindNilExchange } from './game/bot.js'
 import { getPartnerSeat, isEligibleForBlindNil } from './game/bid.js'
@@ -34,6 +35,16 @@ function sendJSON(res, statusCode, data) {
 }
 
 // ── WebSocket event emission helpers ─────────────────────────────────────────
+
+/**
+ * Compute the legal plays for the next player, to be included in CARD_PLAYED payloads.
+ * Returns undefined if there is no valid next player or the game is no longer in playing phase.
+ */
+function getValidCardsForNextPlayer(state) {
+  const seat = state.currentPlayerSeat
+  if (!seat || state.phase !== 'playing' || !state.hands?.[seat]) return undefined
+  return getLegalPlays(state.hands[seat], state.currentTrick, state.spadesbroken, state.isFirstTrick)
+}
 
 /** Return the active seat for TURN_CHANGED payload. */
 function getActiveSeat(state) {
@@ -138,7 +149,7 @@ function advanceBotsWithEvents(state, wss, tableId) {
       console.log('Bot play:', { seat, card, tableId: current.tableId })
       current = playCard(current, seat, card)
       if (wss) {
-        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card, currentTrick: trickWithCard, nextPlayerSeat: current.currentPlayerSeat, spadesBroken: current.spadesbroken })
+        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card, currentTrick: trickWithCard, nextPlayerSeat: current.currentPlayerSeat, spadesBroken: current.spadesbroken, validCards: getValidCardsForNextPlayer(current) })
         // trickJustCompleted: tricks 1-12 AND 13th trick when game-over (length grows 12→13)
         const trickJustCompleted = current.completedTricks.length > prevCompletedLen
         // handJustScored: phase left 'playing' — either new hand or game over
@@ -844,7 +855,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const trickWithCard = [...gameState.currentTrick, { seat, card }]
       let newState = playCard(gameState, seat, card)
       if (wss) {
-        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card, currentTrick: trickWithCard, nextPlayerSeat: newState.currentPlayerSeat, spadesBroken: newState.spadesbroken })
+        wss.broadcast(tableId, 'CARD_PLAYED', { seat, card, currentTrick: trickWithCard, nextPlayerSeat: newState.currentPlayerSeat, spadesBroken: newState.spadesbroken, validCards: getValidCardsForNextPlayer(newState) })
         // trickJustCompleted: tricks 1-12 AND 13th trick when game-over (length grows 12→13)
         const trickJustCompleted = newState.completedTricks.length > prevCompletedLen
         // handJustScored: phase left 'playing' — either new hand or game over

@@ -335,6 +335,40 @@ describe('applyDelta', { timeout: 2000 }, () => {
       assert.equal(result.tricksWon.north, 1)
       assert.equal(result.tricksWon.east, 1)
     })
+
+    it('uses tricksWon from payload when present (SET, not increment)', { timeout: 2000 }, () => {
+      // When the server includes authoritative tricksWon in the payload,
+      // the client should SET the value rather than increment.
+      const result = applyDelta(playingState, {
+        type: 'TRICK_COMPLETE',
+        payload: {
+          winnerSeat: 'north',
+          plays: playingState.currentTrick,
+          tricksWon: { north: 3, east: 2, south: 1, west: 1 },
+        },
+      }, playerId)
+      assert.equal(result.tricksWon.north, 3)
+      assert.equal(result.tricksWon.east, 2)
+      assert.equal(result.tricksWon.south, 1)
+      assert.equal(result.tricksWon.west, 1)
+    })
+
+    it('is idempotent when tricksWon is in payload — applying twice gives same result', { timeout: 2000 }, () => {
+      // Regression: TRICK_COMPLETE could be replayed (e.g. WS reconnect buffer)
+      // causing double-counting. With payload.tricksWon as a SET operation this is safe.
+      const msg = {
+        type: 'TRICK_COMPLETE',
+        payload: {
+          winnerSeat: 'north',
+          plays: playingState.currentTrick,
+          tricksWon: { north: 1, east: 0, south: 0, west: 0 },
+        },
+      }
+      const once = applyDelta(playingState, msg, playerId)
+      const twice = applyDelta(once, msg, playerId)
+      assert.equal(twice.tricksWon.north, 1, 'applying TRICK_COMPLETE twice must not double-count')
+      assert.equal(twice.tricksWon.east, 0)
+    })
   })
 
   describe('TURN_CHANGED', { timeout: 2000 }, () => {

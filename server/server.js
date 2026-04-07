@@ -145,7 +145,7 @@ function advanceBotsWithEvents(state, wss, tableId) {
         const handJustScored = prevPhase === 'playing' && current.phase !== 'playing'
         if (trickJustCompleted) {
           const trick = current.completedTricks[current.completedTricks.length - 1]
-          wss.broadcast(tableId, 'TRICK_COMPLETE', { winnerSeat: trick.winner, plays: trick.plays })
+          wss.broadcast(tableId, 'TRICK_COMPLETE', { winnerSeat: trick.winner, plays: trick.plays, tricksWon: current.tricksWon })
         } else if (handJustScored) {
           // New-hand 13th trick: completedTricks reset to [] so trickJustCompleted is false
           const lastEntry = current.handHistory[current.handHistory.length - 1]
@@ -153,6 +153,7 @@ function advanceBotsWithEvents(state, wss, tableId) {
             wss.broadcast(tableId, 'TRICK_COMPLETE', {
               winnerSeat: lastEntry.lastTrick.winner,
               plays: lastEntry.lastTrick.plays,
+              tricksWon: lastEntry.tricksWon,
             })
           }
         }
@@ -851,7 +852,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         const handJustScored = prevPhase === 'playing' && newState.phase !== 'playing'
         if (trickJustCompleted) {
           const trick = newState.completedTricks[newState.completedTricks.length - 1]
-          wss.broadcast(tableId, 'TRICK_COMPLETE', { winnerSeat: trick.winner, plays: trick.plays })
+          wss.broadcast(tableId, 'TRICK_COMPLETE', { winnerSeat: trick.winner, plays: trick.plays, tricksWon: newState.tricksWon })
         } else if (handJustScored) {
           // New-hand 13th trick: completedTricks reset to [] so trickJustCompleted is false
           const lastEntry = newState.handHistory[newState.handHistory.length - 1]
@@ -859,6 +860,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
             wss.broadcast(tableId, 'TRICK_COMPLETE', {
               winnerSeat: lastEntry.lastTrick.winner,
               plays: lastEntry.lastTrick.plays,
+              tricksWon: lastEntry.tricksWon,
             })
           }
         }

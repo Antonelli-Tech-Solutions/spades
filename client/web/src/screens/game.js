@@ -46,7 +46,7 @@ export const FULL_REFRESH_EVENTS = new Set([
 export const DELTA_EVENTS = new Set([
   'CARD_PLAYED',         // { seat, card, currentTrick, nextPlayerSeat, spadesBroken }
   'BID_PLACED',          // { seat, bidType[, bid] }
-  'TRICK_COMPLETE',      // { winnerSeat, plays }
+  'TRICK_COMPLETE',      // { winnerSeat, plays, tricksWon }
   'TURN_CHANGED',        // { activeSeat, phase }
   'HAND_REVEALED',       // { myHand, seat }
   'BLIND_NIL_EXCHANGE_PROMPT', // { direction, count, step, currentBlindNilSeat }
@@ -115,10 +115,13 @@ export function applyDelta(state, msg, playerId) {
     }
 
     case 'TRICK_COMPLETE': {
-      const { winnerSeat, plays } = payload
+      const { winnerSeat, plays, tricksWon } = payload
       const trick = { winner: winnerSeat, plays }
-      const newTricksWon = { ...state.tricksWon }
-      newTricksWon[winnerSeat] = (newTricksWon[winnerSeat] ?? 0) + 1
+      // Prefer the authoritative tricksWon from the server payload (idempotent SET).
+      // Fall back to local increment for backward compatibility with older servers.
+      const newTricksWon = tricksWon
+        ? { ...tricksWon }
+        : { ...state.tricksWon, [winnerSeat]: (state.tricksWon[winnerSeat] ?? 0) + 1 }
       return {
         ...state,
         currentTrick: [],

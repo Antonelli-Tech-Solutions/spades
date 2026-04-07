@@ -192,17 +192,30 @@ export function tricksCountClass(bid, tricks, completedCount) {
  * @param {object} state
  * @returns {string} HTML string
  */
-function teamBidTricksHtml(state) {
+export function teamBidTricksHtml(state) {
   const teams = [
     { label: 'N/S', key: 'ns', seats: ['north', 'south'] },
     { label: 'E/W', key: 'ew', seats: ['east', 'west'] },
   ]
 
-  const completedCount = state.completedTricks?.length ?? 0
+  // Between CARD_PLAYED (4th card) and TRICK_COMPLETE, state.completedTricks and
+  // state.tricksWon are both stale by one trick. Account for an in-flight complete
+  // trick so the indicator stays accurate during that brief window.
+  // currentPlayerSeat holds the trick winner for tricks 1–12 (set by the CARD_PLAYED
+  // handler from nextPlayerSeat). On trick 13 nextPlayerSeat is null so
+  // currentPlayerSeat is not updated — skip the winner credit in that case.
+  const currentTrickLen = state.currentTrick?.length ?? 0
+  const inFlightComplete = currentTrickLen >= 4 ? 1 : 0
+  const completedCount = (state.completedTricks?.length ?? 0) + inFlightComplete
+  const priorCompleted = state.completedTricks?.length ?? 0
+  const inferredWinner = (inFlightComplete && priorCompleted < 12) ? (state.currentPlayerSeat ?? null) : null
 
   const cols = teams.map(({ label, key, seats }) => {
     const bid = state.teamBids?.[key]
-    const tricks = (state.tricksWon?.[seats[0]] ?? 0) + (state.tricksWon?.[seats[1]] ?? 0)
+    let tricks = (state.tricksWon?.[seats[0]] ?? 0) + (state.tricksWon?.[seats[1]] ?? 0)
+    if (inferredWinner && seats.includes(inferredWinner)) {
+      tricks++
+    }
     const bidDisplay = bid !== null && bid !== undefined ? bid : '–'
     const cls = tricksCountClass(bid, tricks, completedCount)
     const tricksCls = cls ? ` ${cls}` : ''

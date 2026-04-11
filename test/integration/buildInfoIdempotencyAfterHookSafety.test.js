@@ -21,15 +21,17 @@ import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 describe('after hook env restoration safely removable (issue #366)', { timeout: 10000 }, () => {
   let server
   let baseUrl
-  const savedSha = saveEnv('GIT_COMMIT_SHA')
+  let savedSha
 
   before(async () => {
+    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     const app = express()
     app.use(express.json())
     registerBuildInfoRoute(app)
 
     server = await new Promise((resolve) => {
-      const srv = app.listen(0, () => {
+      const srv = app.listen(0, '127.0.0.1', () => {
         baseUrl = `http://127.0.0.1:${srv.address().port}`
         resolve(srv)
       })

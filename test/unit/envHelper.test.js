@@ -144,4 +144,51 @@ describe('saveEnv/restoreEnv helpers (issue #377)', { timeout: 2000 }, () => {
     restoreEnv(TEST_KEY, undefined)
     assert.equal(Object.hasOwn(process.env, TEST_KEY), false)
   })
+
+  // ── Multiple independent keys ─────────────────────────────────────────
+
+  it('saveEnv/restoreEnv on one key does not affect another key', () => {
+    const KEY_A = '__ENVHELPER_UNIT_A__'
+    const KEY_B = '__ENVHELPER_UNIT_B__'
+    try {
+      process.env[KEY_A] = 'alpha'
+      process.env[KEY_B] = 'beta'
+      const savedA = saveEnv(KEY_A)
+      process.env[KEY_A] = 'changed'
+      restoreEnv(KEY_A, savedA)
+      assert.equal(process.env[KEY_A], 'alpha')
+      assert.equal(process.env[KEY_B], 'beta', 'KEY_B must be untouched')
+    } finally {
+      delete process.env[KEY_A]
+      delete process.env[KEY_B]
+    }
+  })
+
+  // ── process.env string coercion ───────────────────────────────────────
+
+  it('saveEnv returns string even when value was set as a number', () => {
+    process.env[TEST_KEY] = 42
+    const saved = saveEnv(TEST_KEY)
+    assert.equal(typeof saved, 'string')
+    assert.equal(saved, '42')
+  })
+
+  it('round-trip preserves numeric-looking string value', () => {
+    process.env[TEST_KEY] = '3000'
+    const saved = saveEnv(TEST_KEY)
+    process.env[TEST_KEY] = '9999'
+    restoreEnv(TEST_KEY, saved)
+    assert.equal(process.env[TEST_KEY], '3000')
+  })
+
+  // ── Very long value ───────────────────────────────────────────────────
+
+  it('round-trip handles very long values', () => {
+    const longVal = 'x'.repeat(10_000)
+    process.env[TEST_KEY] = longVal
+    const saved = saveEnv(TEST_KEY)
+    process.env[TEST_KEY] = 'short'
+    restoreEnv(TEST_KEY, saved)
+    assert.equal(process.env[TEST_KEY], longVal)
+  })
 })

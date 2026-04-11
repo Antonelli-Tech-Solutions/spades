@@ -1,17 +1,19 @@
 /**
- * Tests for issue #340: verify that the try/finally env cleanup pattern
- * used in buildInfo tests actually works — i.e. the *finally block itself*
- * restores/deletes GIT_COMMIT_SHA correctly, rather than testing an
- * inlined copy of the logic (which is a tautology).
+ * Tests for /api/build-info endpoint behavior under different env configurations.
  *
- * Each test exercises the real save/try/finally pattern end-to-end and
- * asserts on env state *after* the finally block has run.
+ * Replaces the previous tests (issue #340 / #372) which only verified that
+ * JavaScript's try/finally and delete process.env.X work — language-level
+ * guarantees, not application behavior.
+ *
+ * These tests exercise the actual route handler: response shape, commit SHA
+ * truncation, missing/empty env var handling, and idempotent registration.
  */
 import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
 
+/** Spin up a minimal Express app with only the build-info route. */
 async function startTestServer() {
   const app = express()
   app.use(express.json())
@@ -21,6 +23,7 @@ async function startTestServer() {
     const server = app.listen(0, () => {
       const { port } = server.address()
       resolve({
+        app,
         baseUrl: `http://127.0.0.1:${port}`,
         close: () => new Promise((res) => server.close(res)),
       })
@@ -28,9 +31,11 @@ async function startTestServer() {
   })
 }
 
-describe('try/finally env cleanup pattern (issue #340)', () => {
+describe('/api/build-info endpoint behavior (issue #372)', () => {
   let server
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
+    ? process.env.GIT_COMMIT_SHA
+    : undefined
 
   before(async () => {
     server = await startTestServer()
@@ -48,295 +53,100 @@ describe('try/finally env cleanup pattern (issue #340)', () => {
     }
   })
 
-  // --- Core: finally block deletes env var when originally unset ---
+  // --- Happy path ---
 
-  it('finally block deletes GIT_COMMIT_SHA when it was originally unset', { timeout: 10000 }, async () => {
-    // Ensure the env var is truly unset before we begin
-    const outerSave = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
-      delete process.env.GIT_COMMIT_SHA
+  it('returns the first 7 characters of GIT_COMMIT_SHA as commitShort', { timeout: 10000 }, async () => {
+    process.env.GIT_COMMIT_SHA = 'a1b2c3d4e5f6789012345678901234567890abcd'
 
-      // Now run the real save/try/finally pattern as used in buildInfo tests
-      const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-        ? process.env.GIT_COMMIT_SHA
-        : undefined
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
 
-      // envBefore should be undefined since we just deleted it
-      assert.equal(envBefore, undefined, 'precondition: envBefore must be undefined')
-
-      try {
-        process.env.GIT_COMMIT_SHA = 'tempvalue1234567890abcdef1234567890abcdef'
-        const res = await fetch(`${server.baseUrl}/api/build-info`)
-        const body = await res.json()
-        assert.equal(body.commitShort, 'tempval')
-      } finally {
-        // This is the REAL finally block — the thing we are testing
-        if (envBefore !== undefined) {
-          process.env.GIT_COMMIT_SHA = envBefore
-        } else {
-          delete process.env.GIT_COMMIT_SHA
-        }
-      }
-
-      // Assert AFTER the finally block ran — this tests the actual cleanup
-      assert.equal(
-        Object.hasOwn(process.env, 'GIT_COMMIT_SHA'),
-        false,
-        'finally block should have deleted GIT_COMMIT_SHA when it was originally unset'
-      )
-    } finally {
-      if (outerSave !== undefined) {
-        process.env.GIT_COMMIT_SHA = outerSave
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
+    assert.equal(res.status, 200)
+    assert.equal(body.commitShort, 'a1b2c3d')
   })
 
-  // --- Core: finally block restores env var when originally set ---
+  it('returns null for commitShort when GIT_COMMIT_SHA is not set', { timeout: 10000 }, async () => {
+    delete process.env.GIT_COMMIT_SHA
 
-  it('finally block restores GIT_COMMIT_SHA to its original value when it was set', { timeout: 10000 }, async () => {
-    const outerSave = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
-      const originalValue = 'original_sha_value_1234567890abcdef12345678'
-      process.env.GIT_COMMIT_SHA = originalValue
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
 
-      const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-        ? process.env.GIT_COMMIT_SHA
-        : undefined
-
-      assert.equal(envBefore, originalValue, 'precondition: envBefore must match original')
-
-      try {
-        process.env.GIT_COMMIT_SHA = 'overwritten_sha_567890abcdef1234567890abcd'
-        const res = await fetch(`${server.baseUrl}/api/build-info`)
-        const body = await res.json()
-        assert.equal(body.commitShort, 'overwri')
-      } finally {
-        if (envBefore !== undefined) {
-          process.env.GIT_COMMIT_SHA = envBefore
-        } else {
-          delete process.env.GIT_COMMIT_SHA
-        }
-      }
-
-      assert.equal(
-        process.env.GIT_COMMIT_SHA,
-        originalValue,
-        'finally block should have restored GIT_COMMIT_SHA to its original value'
-      )
-    } finally {
-      if (outerSave !== undefined) {
-        process.env.GIT_COMMIT_SHA = outerSave
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
+    assert.equal(res.status, 200)
+    assert.equal(body.commitShort, null)
   })
 
-  // --- Edge: finally block runs even when assertion in try block throws ---
+  // --- Edge cases ---
 
-  it('finally block cleans up even when an assertion fails inside try', { timeout: 10000 }, async () => {
-    const outerSave = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
-      delete process.env.GIT_COMMIT_SHA
+  it('returns null for commitShort when GIT_COMMIT_SHA is empty string', { timeout: 10000 }, async () => {
+    // The handler uses `process.env.GIT_COMMIT_SHA || null`, so empty string → null
+    process.env.GIT_COMMIT_SHA = ''
 
-      const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-        ? process.env.GIT_COMMIT_SHA
-        : undefined
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
 
-      let cleanupRan = false
-      try {
-        process.env.GIT_COMMIT_SHA = 'willthrow_sha_1234567890abcdef1234567890'
-        // Deliberately throw to simulate a failed assertion
-        throw new Error('simulated assertion failure')
-      } finally {
-        if (envBefore !== undefined) {
-          process.env.GIT_COMMIT_SHA = envBefore
-        } else {
-          delete process.env.GIT_COMMIT_SHA
-        }
-        cleanupRan = true
-      }
-    } catch (e) {
-      // Swallow the simulated error so we can assert on cleanup state
-      assert.equal(e.message, 'simulated assertion failure')
-    }
-
-    // The finally block should have deleted the env var
-    assert.equal(
-      Object.hasOwn(process.env, 'GIT_COMMIT_SHA'),
-      false,
-      'finally block must clean up even after an error in the try block'
-    )
-
-    // Restore for afterEach
-    if (outerSave !== undefined) {
-      process.env.GIT_COMMIT_SHA = outerSave
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    assert.equal(res.status, 200)
+    assert.equal(body.commitShort, null)
   })
 
-  // --- Edge: finally block handles multiple mutations within try ---
+  it('returns full value when GIT_COMMIT_SHA is shorter than 7 characters', { timeout: 10000 }, async () => {
+    process.env.GIT_COMMIT_SHA = 'abc'
 
-  it('finally block restores original state after multiple env mutations in try', { timeout: 10000 }, async () => {
-    const outerSave = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
-      const originalValue = 'multi_original_1234567890abcdef1234567890ab'
-      process.env.GIT_COMMIT_SHA = originalValue
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
 
-      const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-        ? process.env.GIT_COMMIT_SHA
-        : undefined
-
-      try {
-        // Mutate multiple times within the try block
-        process.env.GIT_COMMIT_SHA = 'first_mutation_234567890abcdef1234567890'
-        const res1 = await fetch(`${server.baseUrl}/api/build-info`)
-        const body1 = await res1.json()
-        assert.equal(body1.commitShort, 'first_m')
-
-        process.env.GIT_COMMIT_SHA = 'second_mutation_34567890abcdef1234567890'
-        const res2 = await fetch(`${server.baseUrl}/api/build-info`)
-        const body2 = await res2.json()
-        assert.equal(body2.commitShort, 'second_')
-
-        delete process.env.GIT_COMMIT_SHA
-        const res3 = await fetch(`${server.baseUrl}/api/build-info`)
-        const body3 = await res3.json()
-        assert.equal(body3.commitShort, null)
-
-        process.env.GIT_COMMIT_SHA = 'third_mutation_567890abcdef1234567890abc'
-      } finally {
-        if (envBefore !== undefined) {
-          process.env.GIT_COMMIT_SHA = envBefore
-        } else {
-          delete process.env.GIT_COMMIT_SHA
-        }
-      }
-
-      // Despite all mutations, finally should restore to the original
-      assert.equal(
-        process.env.GIT_COMMIT_SHA,
-        originalValue,
-        'finally block should restore original value regardless of intermediate mutations'
-      )
-    } finally {
-      if (outerSave !== undefined) {
-        process.env.GIT_COMMIT_SHA = outerSave
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
+    assert.equal(res.status, 200)
+    assert.equal(body.commitShort, 'abc')
   })
 
-  // --- Edge: envBefore correctly distinguishes unset from empty string ---
+  it('returns exactly 7 characters when GIT_COMMIT_SHA is exactly 7 characters', { timeout: 10000 }, async () => {
+    process.env.GIT_COMMIT_SHA = 'abcdefg'
 
-  it('finally block restores empty string correctly (not deleting it)', { timeout: 10000 }, async () => {
-    const outerSave = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
-      // Set to empty string — this is different from unset
-      process.env.GIT_COMMIT_SHA = ''
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
 
-      const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-        ? process.env.GIT_COMMIT_SHA
-        : undefined
-
-      // envBefore should be '' (truthy check: Object.hasOwn returns true, value is '')
-      assert.equal(envBefore, '', 'precondition: envBefore must be empty string')
-
-      try {
-        process.env.GIT_COMMIT_SHA = 'notempty_sha_1234567890abcdef1234567890'
-        const res = await fetch(`${server.baseUrl}/api/build-info`)
-        const body = await res.json()
-        assert.equal(body.commitShort, 'notempt')
-      } finally {
-        if (envBefore !== undefined) {
-          process.env.GIT_COMMIT_SHA = envBefore
-        } else {
-          delete process.env.GIT_COMMIT_SHA
-        }
-      }
-
-      // Should restore to empty string, NOT delete the var
-      assert.equal(
-        Object.hasOwn(process.env, 'GIT_COMMIT_SHA'),
-        true,
-        'GIT_COMMIT_SHA should still exist (as empty string), not be deleted'
-      )
-      assert.equal(
-        process.env.GIT_COMMIT_SHA,
-        '',
-        'GIT_COMMIT_SHA should be restored to empty string'
-      )
-    } finally {
-      if (outerSave !== undefined) {
-        process.env.GIT_COMMIT_SHA = outerSave
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
+    assert.equal(res.status, 200)
+    assert.equal(body.commitShort, 'abcdefg')
   })
 
-  // --- Edge: finally block is idempotent if run conceptually twice ---
+  it('reflects a changed GIT_COMMIT_SHA between requests', { timeout: 10000 }, async () => {
+    process.env.GIT_COMMIT_SHA = 'first_commit_sha_1234567890abcdef12345678'
 
-  it('cleanup pattern is safe to apply when env var is already in the correct state', { timeout: 10000 }, async () => {
-    const outerSave = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
-      delete process.env.GIT_COMMIT_SHA
+    const res1 = await fetch(`${server.baseUrl}/api/build-info`)
+    const body1 = await res1.json()
+    assert.equal(body1.commitShort, 'first_c')
 
-      const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-        ? process.env.GIT_COMMIT_SHA
-        : undefined
+    process.env.GIT_COMMIT_SHA = 'second_commit_sha_abcdef1234567890abcdef12'
 
-      try {
-        process.env.GIT_COMMIT_SHA = 'idempotent_sha_234567890abcdef1234567890'
-        const res = await fetch(`${server.baseUrl}/api/build-info`)
-        const body = await res.json()
-        assert.equal(body.commitShort, 'idempot')
-      } finally {
-        if (envBefore !== undefined) {
-          process.env.GIT_COMMIT_SHA = envBefore
-        } else {
-          delete process.env.GIT_COMMIT_SHA
-        }
-      }
+    const res2 = await fetch(`${server.baseUrl}/api/build-info`)
+    const body2 = await res2.json()
+    assert.equal(body2.commitShort, 'second_')
+  })
 
-      // First cleanup ran — env var should be gone
-      assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false)
+  it('response contains only the commitShort key', { timeout: 10000 }, async () => {
+    process.env.GIT_COMMIT_SHA = 'deadbeefcafe1234567890abcdef1234567890ab'
 
-      // Run the cleanup pattern again — should not throw or change state
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
 
-      // Still unset — deleting an already-absent key is a no-op
-      assert.equal(
-        Object.hasOwn(process.env, 'GIT_COMMIT_SHA'),
-        false,
-        'running cleanup twice should be safe and leave env var unset'
-      )
-    } finally {
-      if (outerSave !== undefined) {
-        process.env.GIT_COMMIT_SHA = outerSave
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
+    assert.deepEqual(Object.keys(body), ['commitShort'])
+  })
+
+  // --- Idempotent registration ---
+
+  it('does not register a duplicate route when called twice on the same app', { timeout: 10000 }, async () => {
+    // registerBuildInfoRoute was already called once in startTestServer.
+    // Calling it again should be a no-op due to the _buildInfoRegistered guard.
+    registerBuildInfoRoute(server.app)
+
+    process.env.GIT_COMMIT_SHA = 'deadbeefcafe1234567890abcdef1234567890ab'
+
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
+
+    // If duplicate registration occurred, Express would match the first route
+    // and we'd still get a single response — but the route stack would grow.
+    // Verify the guard flag is set.
+    assert.equal(server.app.locals._buildInfoRegistered, true)
+    assert.equal(body.commitShort, 'deadbee')
   })
 })

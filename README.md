@@ -110,6 +110,20 @@ Unit tests run without any external services. Integration tests require `DATABAS
 
 All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes use headers `x-session-id`, `x-player-id`, `x-table-id` where applicable.
 
+### Build Info
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/build-info` | None | Returns the short git commit SHA of the running server. |
+
+#### `GET /api/build-info`
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ commitShort: "<7-char SHA>" }` or `{ commitShort: null }` if `GIT_COMMIT_SHA` is not set |
+
 ### Player Profiles
 
 | Method | Path | Description |
@@ -580,7 +594,6 @@ test/
     auth/           — Auth API route tests (requires DATABASE_URL)
     social/         — Profile API route tests (requires DATABASE_URL)
     game/           — Game API route tests (requires DATABASE_URL + Redis)
-  ws/               — WebSocket event flow tests
 docs/
   spades_prd.md   — Product requirements (source of truth for all rules)
   TASKS.md        — Task checklist

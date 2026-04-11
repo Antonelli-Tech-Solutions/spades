@@ -5,7 +5,7 @@
  * handlers to Express's router stack. The guard uses app.locals to track
  * whether the route has already been registered.
  */
-import { describe, it, before, after } from 'node:test'
+import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
@@ -14,6 +14,7 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
   let app
   let server
   let baseUrl
+  const savedSha = process.env.GIT_COMMIT_SHA
 
   before(async () => {
     app = express()
@@ -35,6 +36,19 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
 
   after(async () => {
     await new Promise((res) => server.close(res))
+    if (savedSha !== undefined) {
+      process.env.GIT_COMMIT_SHA = savedSha
+    } else {
+      delete process.env.GIT_COMMIT_SHA
+    }
+  })
+
+  afterEach(() => {
+    if (savedSha !== undefined) {
+      process.env.GIT_COMMIT_SHA = savedSha
+    } else {
+      delete process.env.GIT_COMMIT_SHA
+    }
   })
 
   it('sets the _buildInfoRegistered flag on app.locals', () => {
@@ -50,15 +64,21 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
   })
 
   it('still returns a valid response after multiple registrations', async () => {
-    process.env.GIT_COMMIT_SHA = 'idempotent123456789012345678901234567890'
+    try {
+      process.env.GIT_COMMIT_SHA = 'idempotent123456789012345678901234567890'
 
-    const res = await fetch(`${baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
+      const res = await fetch(`${baseUrl}/api/build-info`)
+      assert.equal(res.status, 200)
 
-    const body = await res.json()
-    assert.equal(body.commitShort, 'idempot')
-
-    delete process.env.GIT_COMMIT_SHA
+      const body = await res.json()
+      assert.equal(body.commitShort, 'idempot')
+    } finally {
+      if (savedSha !== undefined) {
+        process.env.GIT_COMMIT_SHA = savedSha
+      } else {
+        delete process.env.GIT_COMMIT_SHA
+      }
+    }
   })
 
   it('works correctly on a fresh app instance (guard is per-app, not global)', async () => {
@@ -74,16 +94,22 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
       })
     })
 
-    const { port } = freshServer.address()
-    process.env.GIT_COMMIT_SHA = 'freshapp1234567890abcdef1234567890abcdef'
+    try {
+      const { port } = freshServer.address()
+      process.env.GIT_COMMIT_SHA = 'freshapp1234567890abcdef1234567890abcdef'
 
-    const res = await fetch(`http://127.0.0.1:${port}/api/build-info`)
-    assert.equal(res.status, 200)
+      const res = await fetch(`http://127.0.0.1:${port}/api/build-info`)
+      assert.equal(res.status, 200)
 
-    const body = await res.json()
-    assert.equal(body.commitShort, 'freshap')
-
-    delete process.env.GIT_COMMIT_SHA
-    await new Promise((res) => freshServer.close(res))
+      const body = await res.json()
+      assert.equal(body.commitShort, 'freshap')
+    } finally {
+      if (savedSha !== undefined) {
+        process.env.GIT_COMMIT_SHA = savedSha
+      } else {
+        delete process.env.GIT_COMMIT_SHA
+      }
+      await new Promise((res) => freshServer.close(res))
+    }
   })
 })

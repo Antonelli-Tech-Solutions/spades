@@ -28,7 +28,7 @@ function createApp() {
 }
 
 function listenOnRandomPort(app) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const srv = app.listen(0, () => {
       const { port } = srv.address()
       resolve({
@@ -36,6 +36,7 @@ function listenOnRandomPort(app) {
         close: () => new Promise((res) => srv.close(res)),
       })
     })
+    srv.on('error', (err) => reject(err))
   })
 }
 

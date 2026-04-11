@@ -36,11 +36,6 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
 
   after(async () => {
     await new Promise((res) => server.close(res))
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
   })
 
   afterEach(() => {

@@ -634,6 +634,8 @@ db/
     002_create_profile_and_games.sql
     003_create_password_reset_tokens.sql
 test/
+  helpers/
+    envHelper.js    — Environment variable save/restore utilities for tests
   unit/
     auth/           — Pure logic tests (no DB required)
     web/            — Web client unit tests (validation, API client)

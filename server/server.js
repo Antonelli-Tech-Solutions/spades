@@ -522,4 +522,11 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })
+
+  // GET /api/build-info
+  app.get('/api/build-info', (req, res) => {
+    const commitSha = process.env.GIT_COMMIT_SHA || null
+    const shortSha = commitSha ? commitSha.slice(0, 7) : null
+    sendJSON(res, 200, { commitShort: shortSha })
+  })
 }

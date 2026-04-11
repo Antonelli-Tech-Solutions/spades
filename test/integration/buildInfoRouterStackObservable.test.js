@@ -319,7 +319,6 @@ describe('re-registration does not affect other routes (issue #345)', { timeout:
       assert.equal(buildBody.commitShort, TEST_SHORT)
       assert.deepStrictEqual(healthBody, { ok: true })
     } finally {
-      restoreEnv(ENV_KEY, savedSha)
       await server.close()
     }
   })

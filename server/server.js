@@ -896,6 +896,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
  * be registered in isolation for lightweight testing.
  */
 export function registerBuildInfoRoute(app) {
+  // Guard against duplicate registration — skip if already registered
+  if (app.locals._buildInfoRegistered) return
+  app.locals._buildInfoRegistered = true
+
   app.get('/api/build-info', (req, res) => {
     const commitSha = process.env.GIT_COMMIT_SHA || null
     const shortSha = commitSha ? commitSha.slice(0, 7) : null

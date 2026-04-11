@@ -6,7 +6,8 @@
   "main": "server/app.js",
   "scripts": {
     "start": "node server/app.js",
-    "test": "node --test 'test/**/*.test.js'"
+    "test": "node --test 'test/**/*.test.js'",
+    "lint": "eslint ."
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -16,5 +17,8 @@
     "redis": "^4.6.10",
     "uuid": "^9.0.1",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1"
   }
 }

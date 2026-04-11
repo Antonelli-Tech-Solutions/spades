@@ -26,7 +26,7 @@ describe('afterEach cleanup removes need for redundant after hook (issue #365)',
     registerBuildInfoRoute(app)
 
     server = await new Promise((resolve) => {
-      const srv = app.listen(0, () => {
+      const srv = app.listen(0, '127.0.0.1', () => {
         baseUrl = `http://127.0.0.1:${srv.address().port}`
         resolve(srv)
       })

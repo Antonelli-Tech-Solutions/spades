@@ -71,45 +71,37 @@ describe('idempotency guard is per-app instance (issue #327)', { timeout: 10000 
   })
 
   it('both independent app instances serve the route', { timeout: 5000 }, async () => {
-    try {
-      process.env.GIT_COMMIT_SHA = 'aaaa111122223333444455556666777788889999'
+    process.env.GIT_COMMIT_SHA = 'aaaa111122223333444455556666777788889999'
 
-      const [resA, resB] = await Promise.all([
-        fetch(`${serverA.baseUrl}/api/build-info`),
-        fetch(`${serverB.baseUrl}/api/build-info`),
-      ])
+    const [resA, resB] = await Promise.all([
+      fetch(`${serverA.baseUrl}/api/build-info`),
+      fetch(`${serverB.baseUrl}/api/build-info`),
+    ])
 
-      assert.equal(resA.status, 200)
-      assert.equal(resB.status, 200)
+    assert.equal(resA.status, 200)
+    assert.equal(resB.status, 200)
 
-      const bodyA = await resA.json()
-      const bodyB = await resB.json()
-      assert.equal(bodyA.commitShort, 'aaaa111')
-      assert.equal(bodyB.commitShort, 'aaaa111')
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-    }
+    const bodyA = await resA.json()
+    const bodyB = await resB.json()
+    assert.equal(bodyA.commitShort, 'aaaa111')
+    assert.equal(bodyB.commitShort, 'aaaa111')
   })
 
   it('env change is reflected on both servers simultaneously', { timeout: 5000 }, async () => {
-    try {
-      process.env.GIT_COMMIT_SHA = 'bbbb222233334444555566667777888899990000'
-      const resA1 = await fetch(`${serverA.baseUrl}/api/build-info`)
-      const bodyA1 = await resA1.json()
-      assert.equal(bodyA1.commitShort, 'bbbb222')
+    process.env.GIT_COMMIT_SHA = 'bbbb222233334444555566667777888899990000'
+    const resA1 = await fetch(`${serverA.baseUrl}/api/build-info`)
+    const bodyA1 = await resA1.json()
+    assert.equal(bodyA1.commitShort, 'bbbb222')
 
-      process.env.GIT_COMMIT_SHA = 'cccc333344445555666677778888999900001111'
-      const [resA2, resB2] = await Promise.all([
-        fetch(`${serverA.baseUrl}/api/build-info`),
-        fetch(`${serverB.baseUrl}/api/build-info`),
-      ])
-      const bodyA2 = await resA2.json()
-      const bodyB2 = await resB2.json()
-      assert.equal(bodyA2.commitShort, 'cccc333')
-      assert.equal(bodyB2.commitShort, 'cccc333')
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-    }
+    process.env.GIT_COMMIT_SHA = 'cccc333344445555666677778888999900001111'
+    const [resA2, resB2] = await Promise.all([
+      fetch(`${serverA.baseUrl}/api/build-info`),
+      fetch(`${serverB.baseUrl}/api/build-info`),
+    ])
+    const bodyA2 = await resA2.json()
+    const bodyB2 = await resB2.json()
+    assert.equal(bodyA2.commitShort, 'cccc333')
+    assert.equal(bodyB2.commitShort, 'cccc333')
   })
 })
 
@@ -153,16 +145,13 @@ describe('re-registration on same app is a silent no-op (issue #327)', { timeout
     registerBuildInfoRoute(app)
     const server = await listenOnRandomPort(app)
 
-    try {
-      process.env.GIT_COMMIT_SHA = 'noop1111222233334444555566667777888899aa'
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
-      assert.equal(res.status, 200)
-      const body = await res.json()
-      assert.equal(body.commitShort, 'noop111')
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
+    process.env.GIT_COMMIT_SHA = 'noop1111222233334444555566667777888899aa'
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    assert.equal(res.status, 200)
+    const body = await res.json()
+    assert.equal(body.commitShort, 'noop111')
+
+    await server.close()
   })
 })
 
@@ -189,44 +178,32 @@ describe('env var is read at request time, not registration time (issue #327)', 
   })
 
   it('changing env after registration changes the response', { timeout: 5000 }, async () => {
-    try {
-      process.env.GIT_COMMIT_SHA = 'reqtime2222333344445555666677778888999900'
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
-      const body = await res.json()
-      assert.equal(body.commitShort, 'reqtime')
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-    }
+    process.env.GIT_COMMIT_SHA = 'reqtime2222333344445555666677778888999900'
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
+    assert.equal(body.commitShort, 'reqtime')
   })
 
   it('deleting env after registration returns null', { timeout: 5000 }, async () => {
-    try {
-      delete process.env.GIT_COMMIT_SHA
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
-      const body = await res.json()
-      assert.equal(body.commitShort, null)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-    }
+    delete process.env.GIT_COMMIT_SHA
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
+    assert.equal(body.commitShort, null)
   })
 
   it('multiple env changes between requests all reflected correctly', { timeout: 5000 }, async () => {
-    try {
-      const values = [
-        { sha: 'val_a_11222233334444555566667777888899001111', expected: 'val_a_1' },
-        { sha: 'val_b_22333344445555666677778888999900112222', expected: 'val_b_2' },
-        { sha: 'val_c_33444455556666777788889999000011223333', expected: 'val_c_3' },
-      ]
+    const values = [
+      { sha: 'val_a_11222233334444555566667777888899001111', expected: 'val_a_1' },
+      { sha: 'val_b_22333344445555666677778888999900112222', expected: 'val_b_2' },
+      { sha: 'val_c_33444455556666777788889999000011223333', expected: 'val_c_3' },
+    ]
 
-      for (const { sha, expected } of values) {
-        process.env.GIT_COMMIT_SHA = sha
-        const res = await fetch(`${server.baseUrl}/api/build-info`)
-        const body = await res.json()
-        assert.equal(body.commitShort, expected,
-          `Expected ${expected} but got ${body.commitShort} for SHA ${sha}`)
-      }
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
+    for (const { sha, expected } of values) {
+      process.env.GIT_COMMIT_SHA = sha
+      const res = await fetch(`${server.baseUrl}/api/build-info`)
+      const body = await res.json()
+      assert.equal(body.commitShort, expected,
+        `Expected ${expected} but got ${body.commitShort} for SHA ${sha}`)
     }
   })
 })
@@ -242,26 +219,24 @@ describe('fresh app per describe block is safe (issue #327)', { timeout: 10000 }
 
   it('sequential fresh apps each get their own working route', { timeout: 5000 }, async () => {
     const servers = []
-    try {
-      for (let i = 0; i < 3; i++) {
-        const app = createApp()
-        registerBuildInfoRoute(app)
-        const srv = await listenOnRandomPort(app)
-        servers.push(srv)
-      }
 
-      process.env.GIT_COMMIT_SHA = 'fresh_app_test_sha_1234567890abcdef1234'
-      for (const srv of servers) {
-        const res = await fetch(`${srv.baseUrl}/api/build-info`)
-        assert.equal(res.status, 200, `Server at ${srv.baseUrl} should respond 200`)
-        const body = await res.json()
-        assert.equal(body.commitShort, 'fresh_a')
-      }
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      for (const srv of servers) {
-        await srv.close()
-      }
+    for (let i = 0; i < 3; i++) {
+      const app = createApp()
+      registerBuildInfoRoute(app)
+      const srv = await listenOnRandomPort(app)
+      servers.push(srv)
+    }
+
+    process.env.GIT_COMMIT_SHA = 'fresh_app_test_sha_1234567890abcdef1234'
+    for (const srv of servers) {
+      const res = await fetch(`${srv.baseUrl}/api/build-info`)
+      assert.equal(res.status, 200, `Server at ${srv.baseUrl} should respond 200`)
+      const body = await res.json()
+      assert.equal(body.commitShort, 'fresh_a')
+    }
+
+    for (const srv of servers) {
+      await srv.close()
     }
   })
 
@@ -308,15 +283,12 @@ describe('clearing _buildInfoRegistered allows re-registration (issue #327 edge 
     registerBuildInfoRoute(app)
     const server = await listenOnRandomPort(app)
 
-    try {
-      process.env.GIT_COMMIT_SHA = 'duphandler_test_sha_234567890abcdef12345'
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
-      assert.equal(res.status, 200)
-      const body = await res.json()
-      assert.equal(body.commitShort, 'duphand')
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
+    process.env.GIT_COMMIT_SHA = 'duphandler_test_sha_234567890abcdef12345'
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    assert.equal(res.status, 200)
+    const body = await res.json()
+    assert.equal(body.commitShort, 'duphand')
+
+    await server.close()
   })
 })

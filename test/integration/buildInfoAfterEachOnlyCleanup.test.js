@@ -16,7 +16,7 @@
  * (issue #327). Keeping them here added ~180 lines of duplicate coverage
  * and extra CI time for no additional signal.
  */
-import { describe, it, afterEach } from 'node:test'
+import { describe, it, before, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
@@ -25,7 +25,11 @@ const ENV_KEY = 'GIT_COMMIT_SHA'
 // — afterEach-only cleanup is sufficient for env isolation ——————————————————
 
 describe('afterEach-only cleanup isolates env between tests (issue #389)', { timeout: 2000 }, () => {
-  const savedSha = saveEnv(ENV_KEY)
+  let savedSha
+
+  before(() => {
+    savedSha = saveEnv(ENV_KEY)
+  })
 
   afterEach(() => {
     restoreEnv(ENV_KEY, savedSha)
@@ -62,7 +66,11 @@ describe('afterEach-only cleanup isolates env between tests (issue #389)', { tim
 // — afterEach runs even after env mutation ——————————————————————————————————
 
 describe('afterEach restores env after mutation in test (issue #389)', { timeout: 2000 }, () => {
-  const savedSha = saveEnv(ENV_KEY)
+  let savedSha
+
+  before(() => {
+    savedSha = saveEnv(ENV_KEY)
+  })
 
   afterEach(() => {
     restoreEnv(ENV_KEY, savedSha)
@@ -87,7 +95,11 @@ describe('afterEach restores env after mutation in test (issue #389)', { timeout
 // — afterEach handles delete-then-restore round-trip ———————————————————————
 
 describe('afterEach restores env after deletion (issue #389)', { timeout: 2000 }, () => {
-  const savedSha = saveEnv(ENV_KEY)
+  let savedSha
+
+  before(() => {
+    savedSha = saveEnv(ENV_KEY)
+  })
 
   afterEach(() => {
     restoreEnv(ENV_KEY, savedSha)
@@ -156,8 +168,13 @@ describe('restoreEnv idempotency — double call is safe but unnecessary (issue 
 describe('afterEach isolates multiple env keys independently (issue #389)', { timeout: 2000 }, () => {
   const KEY_A = '__MULTI_KEY_A_389__'
   const KEY_B = '__MULTI_KEY_B_389__'
-  const savedA = saveEnv(KEY_A)
-  const savedB = saveEnv(KEY_B)
+  let savedA
+  let savedB
+
+  before(() => {
+    savedA = saveEnv(KEY_A)
+    savedB = saveEnv(KEY_B)
+  })
 
   afterEach(() => {
     restoreEnv(KEY_A, savedA)

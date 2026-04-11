@@ -68,7 +68,7 @@ describe('build-info env-var isolation (issue #317)', () => {
   // ---------------------------------------------------------------
 
   it('delete inside try/finally restores env var for subsequent code', { timeout: 5000 }, async () => {
-    const before = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
+    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
       ? process.env.GIT_COMMIT_SHA
       : undefined
 
@@ -84,20 +84,20 @@ describe('build-info env-var isolation (issue #317)', () => {
       const body2 = await res2.json()
       assert.equal(body2.commitShort, null)
     } finally {
-      if (before !== undefined) {
-        process.env.GIT_COMMIT_SHA = before
+      if (envBefore !== undefined) {
+        process.env.GIT_COMMIT_SHA = envBefore
       } else {
         delete process.env.GIT_COMMIT_SHA
       }
     }
 
     // After the finally block, the env var must match pre-test state
-    if (before !== undefined) {
-      assert.equal(process.env.GIT_COMMIT_SHA, before,
+    if (envBefore !== undefined) {
+      assert.equal(process.env.GIT_COMMIT_SHA, envBefore,
         'env var was not restored after try/finally')
     } else {
       assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false,
-        'env var should remain unset when it was unset before')
+        'env var should remain unset when it was originally unset')
     }
   })
 

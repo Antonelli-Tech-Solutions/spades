@@ -16,9 +16,11 @@ import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 describe('afterEach cleanup removes need for redundant after hook (issue #365)', { timeout: 10000 }, () => {
   let server
   let baseUrl
-  const savedSha = saveEnv('GIT_COMMIT_SHA')
+  let savedSha
 
   before(async () => {
+    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     const app = express()
     app.use(express.json())
     registerBuildInfoRoute(app)

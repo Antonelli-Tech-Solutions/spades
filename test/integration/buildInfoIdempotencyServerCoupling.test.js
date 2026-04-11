@@ -145,13 +145,15 @@ describe('re-registration on same app is a silent no-op (issue #327)', { timeout
     registerBuildInfoRoute(app)
     const server = await listenOnRandomPort(app)
 
-    process.env.GIT_COMMIT_SHA = 'noop1111222233334444555566667777888899aa'
-    const res = await fetch(`${server.baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
-    const body = await res.json()
-    assert.equal(body.commitShort, 'noop111')
-
-    await server.close()
+    try {
+      process.env.GIT_COMMIT_SHA = 'noop1111222233334444555566667777888899aa'
+      const res = await fetch(`${server.baseUrl}/api/build-info`)
+      assert.equal(res.status, 200)
+      const body = await res.json()
+      assert.equal(body.commitShort, 'noop111')
+    } finally {
+      await server.close()
+    }
   })
 })
 
@@ -220,23 +222,25 @@ describe('fresh app per describe block is safe (issue #327)', { timeout: 10000 }
   it('sequential fresh apps each get their own working route', { timeout: 5000 }, async () => {
     const servers = []
 
-    for (let i = 0; i < 3; i++) {
-      const app = createApp()
-      registerBuildInfoRoute(app)
-      const srv = await listenOnRandomPort(app)
-      servers.push(srv)
-    }
+    try {
+      for (let i = 0; i < 3; i++) {
+        const app = createApp()
+        registerBuildInfoRoute(app)
+        const srv = await listenOnRandomPort(app)
+        servers.push(srv)
+      }
 
-    process.env.GIT_COMMIT_SHA = 'fresh_app_test_sha_1234567890abcdef1234'
-    for (const srv of servers) {
-      const res = await fetch(`${srv.baseUrl}/api/build-info`)
-      assert.equal(res.status, 200, `Server at ${srv.baseUrl} should respond 200`)
-      const body = await res.json()
-      assert.equal(body.commitShort, 'fresh_a')
-    }
-
-    for (const srv of servers) {
-      await srv.close()
+      process.env.GIT_COMMIT_SHA = 'fresh_app_test_sha_1234567890abcdef1234'
+      for (const srv of servers) {
+        const res = await fetch(`${srv.baseUrl}/api/build-info`)
+        assert.equal(res.status, 200, `Server at ${srv.baseUrl} should respond 200`)
+        const body = await res.json()
+        assert.equal(body.commitShort, 'fresh_a')
+      }
+    } finally {
+      for (const srv of servers) {
+        await srv.close()
+      }
     }
   })
 
@@ -283,12 +287,14 @@ describe('clearing _buildInfoRegistered allows re-registration (issue #327 edge 
     registerBuildInfoRoute(app)
     const server = await listenOnRandomPort(app)
 
-    process.env.GIT_COMMIT_SHA = 'duphandler_test_sha_234567890abcdef12345'
-    const res = await fetch(`${server.baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
-    const body = await res.json()
-    assert.equal(body.commitShort, 'duphand')
-
-    await server.close()
+    try {
+      process.env.GIT_COMMIT_SHA = 'duphandler_test_sha_234567890abcdef12345'
+      const res = await fetch(`${server.baseUrl}/api/build-info`)
+      assert.equal(res.status, 200)
+      const body = await res.json()
+      assert.equal(body.commitShort, 'duphand')
+    } finally {
+      await server.close()
+    }
   })
 })

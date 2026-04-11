@@ -887,6 +887,15 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   })
 
   // GET /api/build-info
+  registerBuildInfoRoute(app)
+}
+
+/**
+ * Register only the /api/build-info route on the given Express app.
+ * This route has no dependencies (no Redis, no mailer, no DB) and can
+ * be registered in isolation for lightweight testing.
+ */
+export function registerBuildInfoRoute(app) {
   app.get('/api/build-info', (req, res) => {
     const commitSha = process.env.GIT_COMMIT_SHA || null
     const shortSha = commitSha ? commitSha.slice(0, 7) : null

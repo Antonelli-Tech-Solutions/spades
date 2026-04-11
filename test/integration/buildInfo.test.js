@@ -5,12 +5,12 @@
 import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import { handler } from '../../server/server.js'
+import { registerBuildInfoRoute } from '../../server/server.js'
 
 async function startTestServer() {
   const app = express()
   app.use(express.json())
-  handler(app)
+  registerBuildInfoRoute(app)
 
   return new Promise((resolve) => {
     const server = app.listen(0, () => {

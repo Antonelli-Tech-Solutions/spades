@@ -1,28 +1,21 @@
 /**
- * Tests for GitHub issue #327:
+ * Tests for GitHub issue #344:
  *
- * The build-info env-isolation tests (issue #317) create the server once in
- * before() with a single registerBuildInfoRoute(app) call. This works because
- * the route handler reads process.env.GIT_COMMIT_SHA at request time, not at
- * registration time. However, the idempotency guard (issue #311) uses
- * app.locals._buildInfoRegistered to skip duplicate registrations on the SAME
- * app instance. If a test suite tried to call registerBuildInfoRoute(app) again
- * on an already-registered app, the call would silently no-op.
+ * Validates that the env save/restore helper (`test/helpers/envHelper.js`)
+ * correctly replaces the duplicated 5-line save/restore pattern that was
+ * copy-pasted ~15 times in buildInfoIdempotencyServerCoupling.test.js.
  *
- * This file explicitly tests the coupling between:
- *   1. The idempotency guard being per-app (not global)
- *   2. Env vars being read at request time (not registration time)
- *   3. The single-server-per-suite pattern relying on both of the above
- *
- * DEPENDENCY NOTE: These tests depend on registerBuildInfoRoute using
- * app.locals._buildInfoRegistered as its idempotency guard (commit b51ceba).
- * If the guard mechanism changes, these tests must be updated.
+ * Part 1: Unit tests for saveEnv/restoreEnv helpers themselves
+ * Part 2: Re-implementation of all original coupling tests using the helpers,
+ *   proving the refactored approach is functionally equivalent
  */
 import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
 import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function createApp() {
   const app = express()
@@ -44,9 +37,82 @@ function listenOnRandomPort(app) {
 
 const ENV_KEY = 'GIT_COMMIT_SHA'
 
-// ── Idempotency guard is per-app, not global ────────────────────────────────
+// ── Part 1: saveEnv / restoreEnv helper correctness ─────────────────────────
 
-describe('idempotency guard is per-app instance (issue #327)', { timeout: 10000 }, () => {
+describe('saveEnv/restoreEnv helpers (issue #344)', { timeout: 2000 }, () => {
+  const TEST_KEY = '__ENVHELPER_TEST_KEY__'
+
+  afterEach(() => {
+    // Always clean up the test key regardless of test outcome
+    delete process.env[TEST_KEY]
+  })
+
+  it('saveEnv returns undefined when env var is not set', () => {
+    delete process.env[TEST_KEY]
+    const saved = saveEnv(TEST_KEY)
+    assert.equal(saved, undefined)
+  })
+
+  it('saveEnv returns the current value when env var is set', () => {
+    process.env[TEST_KEY] = 'hello'
+    const saved = saveEnv(TEST_KEY)
+    assert.equal(saved, 'hello')
+  })
+
+  it('saveEnv returns empty string for empty env var (not undefined)', () => {
+    process.env[TEST_KEY] = ''
+    const saved = saveEnv(TEST_KEY)
+    assert.equal(saved, '')
+  })
+
+  it('restoreEnv sets the var when savedValue is a string', () => {
+    delete process.env[TEST_KEY]
+    restoreEnv(TEST_KEY, 'restored_value')
+    assert.equal(process.env[TEST_KEY], 'restored_value')
+  })
+
+  it('restoreEnv deletes the var when savedValue is undefined', () => {
+    process.env[TEST_KEY] = 'should_be_removed'
+    restoreEnv(TEST_KEY, undefined)
+    assert.equal(Object.hasOwn(process.env, TEST_KEY), false)
+  })
+
+  it('restoreEnv sets empty string correctly (does not delete)', () => {
+    delete process.env[TEST_KEY]
+    restoreEnv(TEST_KEY, '')
+    assert.equal(process.env[TEST_KEY], '')
+    assert.equal(Object.hasOwn(process.env, TEST_KEY), true)
+  })
+
+  it('round-trip: save then restore preserves original set value', () => {
+    process.env[TEST_KEY] = 'original'
+    const saved = saveEnv(TEST_KEY)
+    process.env[TEST_KEY] = 'modified'
+    restoreEnv(TEST_KEY, saved)
+    assert.equal(process.env[TEST_KEY], 'original')
+  })
+
+  it('round-trip: save then restore preserves original unset state', () => {
+    delete process.env[TEST_KEY]
+    const saved = saveEnv(TEST_KEY)
+    process.env[TEST_KEY] = 'temporary'
+    restoreEnv(TEST_KEY, saved)
+    assert.equal(Object.hasOwn(process.env, TEST_KEY), false)
+  })
+
+  it('restoreEnv is idempotent — calling it twice with same value is safe', () => {
+    process.env[TEST_KEY] = 'value'
+    restoreEnv(TEST_KEY, 'restored')
+    restoreEnv(TEST_KEY, 'restored')
+    assert.equal(process.env[TEST_KEY], 'restored')
+  })
+})
+
+// ── Part 2: Refactored coupling tests using helpers ─────────────────────────
+// These mirror the original tests in buildInfoIdempotencyServerCoupling.test.js
+// but use saveEnv/restoreEnv instead of the duplicated 5-line pattern.
+
+describe('idempotency guard is per-app — refactored with helpers (issue #344)', { timeout: 10000 }, () => {
   const savedSha = saveEnv(ENV_KEY)
   let serverA, serverB
 
@@ -113,9 +179,7 @@ describe('idempotency guard is per-app instance (issue #327)', { timeout: 10000 
   })
 })
 
-// ── Silent no-op on re-registration of same app ─────────────────────────────
-
-describe('re-registration on same app is a silent no-op (issue #327)', { timeout: 10000 }, () => {
+describe('re-registration on same app — refactored with helpers (issue #344)', { timeout: 10000 }, () => {
   const savedSha = saveEnv(ENV_KEY)
 
   afterEach(() => {
@@ -147,7 +211,7 @@ describe('re-registration on same app is a silent no-op (issue #327)', { timeout
       'Expected exactly one /api/build-info handler after two registrations')
   })
 
-  it('route still works correctly after idempotent re-registration', { timeout: 5000 }, async () => {
+  it('route still works after idempotent re-registration', { timeout: 5000 }, async () => {
     const app = createApp()
     registerBuildInfoRoute(app)
     registerBuildInfoRoute(app)
@@ -166,9 +230,7 @@ describe('re-registration on same app is a silent no-op (issue #327)', { timeout
   })
 })
 
-// ── Request-time env reading vs registration-time ───────────────────────────
-
-describe('env var is read at request time, not registration time (issue #327)', { timeout: 10000 }, () => {
+describe('env var read at request time — refactored with helpers (issue #344)', { timeout: 10000 }, () => {
   const savedSha = saveEnv(ENV_KEY)
   let server
 
@@ -231,9 +293,7 @@ describe('env var is read at request time, not registration time (issue #327)', 
   })
 })
 
-// ── Fresh app per describe block works despite global guard concerns ────────
-
-describe('fresh app per describe block is safe (issue #327)', { timeout: 10000 }, () => {
+describe('fresh app per describe block — refactored with helpers (issue #344)', { timeout: 10000 }, () => {
   const savedSha = saveEnv(ENV_KEY)
 
   afterEach(() => {
@@ -278,9 +338,7 @@ describe('fresh app per describe block is safe (issue #327)', { timeout: 10000 }
   })
 })
 
-// ── Edge case: manually clearing the guard re-enables registration ──────────
-
-describe('clearing _buildInfoRegistered allows re-registration (issue #327 edge case)', { timeout: 10000 }, () => {
+describe('clearing guard allows re-registration — refactored with helpers (issue #344)', { timeout: 10000 }, () => {
   const savedSha = saveEnv(ENV_KEY)
 
   afterEach(() => {

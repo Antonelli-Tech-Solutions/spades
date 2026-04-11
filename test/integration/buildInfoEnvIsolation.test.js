@@ -15,6 +15,13 @@ import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
 
 async function startTestServer() {
+  // DEPENDENCY NOTE (issue #327): This suite creates the server once in before()
+  // with a single registerBuildInfoRoute(app) call. The idempotency guard
+  // (app.locals._buildInfoRegistered, commit b51ceba) is per-app-instance, so
+  // calling registerBuildInfoRoute again on the SAME app would silently no-op.
+  // This works because env vars are read at request time, not registration time,
+  // so a single registration is sufficient for all tests. If the guard mechanism
+  // changes, this setup may need to be revisited.
   const app = express()
   app.use(express.json())
   registerBuildInfoRoute(app)

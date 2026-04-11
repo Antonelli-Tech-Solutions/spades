@@ -1,24 +1,25 @@
 /**
- * Tests for GitHub issue #345:
+ * Tests for GitHub issue #345 (refactored per issue #382):
  *
- * Two tests in buildInfoIdempotencyServerCoupling.test.js (and its refactored
- * counterpart) inspect `app._router.stack` to count route layers. This is an
- * undocumented Express internal that could break on a major version upgrade.
+ * Verifies observable HTTP behavior of build-info route registration:
+ *   - Idempotent re-registration: only one response is sent (status 200,
+ *     correct body, correct content-type, no duplicate response).
+ *   - Guard reset re-registration: route still responds correctly after
+ *     a duplicate handler is added (first handler wins in Express).
+ *   - Single vs double registration produce equivalent results.
+ *   - Re-registration does not affect other routes.
  *
- * This file replaces those `_router.stack` inspections with tests that verify
- * observable HTTP behavior:
- *   - Idempotent re-registration: verify only one response is sent (status 200,
- *     correct body, correct content-type, no duplicate response headers).
- *   - Guard reset re-registration: verify the route still responds correctly
- *     after a duplicate handler is added (first handler wins in Express).
- *
- * Each test hits the real HTTP endpoint rather than poking at router internals.
+ * Issue #382: extracted duplicated create-app-register-listen-teardown
+ * boilerplate into shared helpers; collapsed tests that assert different
+ * properties of the same response into single tests.
  */
 import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
 import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
+
+// ── Shared helpers (issue #382) ──────────────────────────────────────────────────
 
 function createApp() {
   const app = express()
@@ -38,6 +39,53 @@ function listenOnRandomPort(app) {
   })
 }
 
+/**
+ * Create an Express app with build-info route registered `count` times.
+ * If `resetGuardBeforeLast` is true, resets the idempotency guard before
+ * the final registration (simulating the guard-reset scenario).
+ */
+function createRegisteredApp({ count = 1, resetGuardBeforeLast = false } = {}) {
+  const app = createApp()
+  for (let i = 0; i < count; i++) {
+    if (resetGuardBeforeLast && i === count - 1) {
+      app.locals._buildInfoRegistered = false
+    }
+    registerBuildInfoRoute(app)
+  }
+  return app
+}
+
+/**
+ * Set up a server with registered build-info route, run an async callback
+ * with the server's baseUrl, then tear down. Handles env save/restore.
+ */
+async function withBuildInfoServer(appOpts, fn) {
+  const app = createRegisteredApp(appOpts)
+  const server = await listenOnRandomPort(app)
+  try {
+    await fn(server.baseUrl, app)
+  } finally {
+    await server.close()
+  }
+}
+
+/**
+ * Set up two servers and run an async callback with both baseUrls,
+ * then tear down both.
+ */
+async function withTwoServers(optsA, optsB, fn) {
+  const appA = createRegisteredApp(optsA)
+  const appB = createRegisteredApp(optsB)
+  const serverA = await listenOnRandomPort(appA)
+  const serverB = await listenOnRandomPort(appB)
+  try {
+    await fn(serverA.baseUrl, serverB.baseUrl)
+  } finally {
+    await serverA.close()
+    await serverB.close()
+  }
+}
+
 const ENV_KEY = 'GIT_COMMIT_SHA'
 const TEST_SHA = 'obs_test_sha_1234567890abcdef1234567890abcd'
 const TEST_SHORT = 'obs_tes'
@@ -51,91 +99,42 @@ describe('idempotent re-registration produces single response (issue #345)', { t
     restoreEnv(ENV_KEY, savedSha)
   })
 
-  it('returns 200 after double registration', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
+  it('returns 200 with correct JSON body and content-type after double registration', { timeout: 5000 }, async () => {
+    await withBuildInfoServer({ count: 2 }, async (baseUrl) => {
       process.env.GIT_COMMIT_SHA = TEST_SHA
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
+      const res = await fetch(`${baseUrl}/api/build-info`)
+
       assert.equal(res.status, 200)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
-  })
 
-  it('returns correct JSON body after double registration', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
-      process.env.GIT_COMMIT_SHA = TEST_SHA
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
-      const body = await res.json()
-      assert.equal(body.commitShort, TEST_SHORT)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
-  })
-
-  it('returns valid JSON content-type after double registration', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
-      process.env.GIT_COMMIT_SHA = TEST_SHA
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
       const contentType = res.headers.get('content-type')
       assert.ok(contentType.includes('application/json'),
         `Expected JSON content-type, got: ${contentType}`)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
+
+      const body = await res.json()
+      assert.equal(body.commitShort, TEST_SHORT)
+    })
   })
 
   it('response body is parseable as a single JSON object (not concatenated duplicates)', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
+    await withBuildInfoServer({ count: 2 }, async (baseUrl) => {
       process.env.GIT_COMMIT_SHA = TEST_SHA
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
+      const res = await fetch(`${baseUrl}/api/build-info`)
       const text = await res.text()
       // If two handlers both wrote to the response, the body would be
-      // two concatenated JSON objects (e.g. '{"commitShort":"obs_tes"}{"commitShort":"obs_tes"}')
-      // which would fail JSON.parse or produce unexpected results
+      // two concatenated JSON objects which would fail JSON.parse
       let parsed
       assert.doesNotThrow(() => { parsed = JSON.parse(text) },
         'Response body should be a single valid JSON object, not concatenated duplicates')
       assert.equal(typeof parsed, 'object')
       assert.equal(parsed.commitShort, TEST_SHORT)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
+    })
   })
 
   it('multiple rapid requests after double registration all return consistent results', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
+    await withBuildInfoServer({ count: 2 }, async (baseUrl) => {
       process.env.GIT_COMMIT_SHA = TEST_SHA
       const requests = Array.from({ length: 5 }, () =>
-        fetch(`${server.baseUrl}/api/build-info`)
+        fetch(`${baseUrl}/api/build-info`)
       )
       const responses = await Promise.all(requests)
 
@@ -144,32 +143,21 @@ describe('idempotent re-registration produces single response (issue #345)', { t
         const body = await res.json()
         assert.equal(body.commitShort, TEST_SHORT)
       }
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
+    })
   })
 
   it('env change after double registration is reflected correctly', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
+    await withBuildInfoServer({ count: 2 }, async (baseUrl) => {
       process.env.GIT_COMMIT_SHA = 'first_sha_1234567890abcdef1234567890abcd'
-      const res1 = await fetch(`${server.baseUrl}/api/build-info`)
+      const res1 = await fetch(`${baseUrl}/api/build-info`)
       const body1 = await res1.json()
       assert.equal(body1.commitShort, 'first_s')
 
       process.env.GIT_COMMIT_SHA = 'second_sha_234567890abcdef1234567890abcde'
-      const res2 = await fetch(`${server.baseUrl}/api/build-info`)
+      const res2 = await fetch(`${baseUrl}/api/build-info`)
       const body2 = await res2.json()
       assert.equal(body2.commitShort, 'second_')
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
+    })
   })
 })
 
@@ -182,63 +170,20 @@ describe('guard reset re-registration still serves correct response (issue #345)
     restoreEnv(ENV_KEY, savedSha)
   })
 
-  it('route responds 200 after guard reset and re-registration', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    app.locals._buildInfoRegistered = false
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
+  it('returns 200 with correct JSON body after guard reset and re-registration', { timeout: 5000 }, async () => {
+    await withBuildInfoServer({ count: 2, resetGuardBeforeLast: true }, async (baseUrl) => {
       process.env.GIT_COMMIT_SHA = TEST_SHA
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
+      const res = await fetch(`${baseUrl}/api/build-info`)
+
       assert.equal(res.status, 200)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
-  })
 
-  it('returns correct body after guard reset and re-registration', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    app.locals._buildInfoRegistered = false
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
-      process.env.GIT_COMMIT_SHA = TEST_SHA
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
-      const body = await res.json()
-      assert.equal(body.commitShort, TEST_SHORT)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
-  })
-
-  it('response is parseable JSON even with duplicate handlers from guard reset', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    app.locals._buildInfoRegistered = false
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
-      process.env.GIT_COMMIT_SHA = TEST_SHA
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
       const text = await res.text()
-      // With duplicate handlers, Express calls the first matching handler.
-      // sendJSON ends the response, so the second handler should not produce
-      // corrupted output. Verify the response is a single valid JSON object.
+      // Verify parseable as single JSON (not corrupted by duplicate handlers)
       let parsed
       assert.doesNotThrow(() => { parsed = JSON.parse(text) },
         'Response should be valid JSON even with duplicate handlers')
       assert.equal(parsed.commitShort, TEST_SHORT)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
+    })
   })
 
   it('guard flag is re-set after second registration', () => {
@@ -254,13 +199,7 @@ describe('guard reset re-registration still serves correct response (issue #345)
   })
 
   it('env changes reflect correctly with duplicate handlers from guard reset', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    app.locals._buildInfoRegistered = false
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
+    await withBuildInfoServer({ count: 2, resetGuardBeforeLast: true }, async (baseUrl) => {
       const values = [
         { sha: 'dup_a_11222233334444555566667777888899001111', expected: 'dup_a_1' },
         { sha: 'dup_b_22333344445555666677778888999900112222', expected: 'dup_b_2' },
@@ -268,14 +207,11 @@ describe('guard reset re-registration still serves correct response (issue #345)
 
       for (const { sha, expected } of values) {
         process.env.GIT_COMMIT_SHA = sha
-        const res = await fetch(`${server.baseUrl}/api/build-info`)
+        const res = await fetch(`${baseUrl}/api/build-info`)
         const body = await res.json()
         assert.equal(body.commitShort, expected)
       }
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await server.close()
-    }
+    })
   })
 })
 
@@ -289,22 +225,12 @@ describe('single and double registration produce equivalent observable behavior 
   })
 
   it('single-registered and double-registered apps return identical responses', { timeout: 5000 }, async () => {
-    const appSingle = createApp()
-    registerBuildInfoRoute(appSingle)
-
-    const appDouble = createApp()
-    registerBuildInfoRoute(appDouble)
-    registerBuildInfoRoute(appDouble)
-
-    const serverSingle = await listenOnRandomPort(appSingle)
-    const serverDouble = await listenOnRandomPort(appDouble)
-
-    try {
+    await withTwoServers({ count: 1 }, { count: 2 }, async (singleUrl, doubleUrl) => {
       process.env.GIT_COMMIT_SHA = TEST_SHA
 
       const [resSingle, resDouble] = await Promise.all([
-        fetch(`${serverSingle.baseUrl}/api/build-info`),
-        fetch(`${serverDouble.baseUrl}/api/build-info`),
+        fetch(`${singleUrl}/api/build-info`),
+        fetch(`${doubleUrl}/api/build-info`),
       ])
 
       assert.equal(resSingle.status, resDouble.status)
@@ -312,62 +238,37 @@ describe('single and double registration produce equivalent observable behavior 
       const bodySingle = await resSingle.json()
       const bodyDouble = await resDouble.json()
       assert.deepStrictEqual(bodySingle, bodyDouble)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await serverSingle.close()
-      await serverDouble.close()
-    }
+    })
   })
 
   it('single-registered and guard-reset apps return identical responses', { timeout: 5000 }, async () => {
-    const appSingle = createApp()
-    registerBuildInfoRoute(appSingle)
+    await withTwoServers(
+      { count: 1 },
+      { count: 2, resetGuardBeforeLast: true },
+      async (singleUrl, resetUrl) => {
+        process.env.GIT_COMMIT_SHA = TEST_SHA
 
-    const appReset = createApp()
-    registerBuildInfoRoute(appReset)
-    appReset.locals._buildInfoRegistered = false
-    registerBuildInfoRoute(appReset)
+        const [resSingle, resReset] = await Promise.all([
+          fetch(`${singleUrl}/api/build-info`),
+          fetch(`${resetUrl}/api/build-info`),
+        ])
 
-    const serverSingle = await listenOnRandomPort(appSingle)
-    const serverReset = await listenOnRandomPort(appReset)
+        assert.equal(resSingle.status, resReset.status)
 
-    try {
-      process.env.GIT_COMMIT_SHA = TEST_SHA
-
-      const [resSingle, resReset] = await Promise.all([
-        fetch(`${serverSingle.baseUrl}/api/build-info`),
-        fetch(`${serverReset.baseUrl}/api/build-info`),
-      ])
-
-      assert.equal(resSingle.status, resReset.status)
-
-      const bodySingle = await resSingle.json()
-      const bodyReset = await resReset.json()
-      assert.deepStrictEqual(bodySingle, bodyReset)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await serverSingle.close()
-      await serverReset.close()
-    }
+        const bodySingle = await resSingle.json()
+        const bodyReset = await resReset.json()
+        assert.deepStrictEqual(bodySingle, bodyReset)
+      }
+    )
   })
 
   it('unset env returns null commitShort for both single and double registration', { timeout: 5000 }, async () => {
-    const appSingle = createApp()
-    registerBuildInfoRoute(appSingle)
-
-    const appDouble = createApp()
-    registerBuildInfoRoute(appDouble)
-    registerBuildInfoRoute(appDouble)
-
-    const serverSingle = await listenOnRandomPort(appSingle)
-    const serverDouble = await listenOnRandomPort(appDouble)
-
-    try {
+    await withTwoServers({ count: 1 }, { count: 2 }, async (singleUrl, doubleUrl) => {
       delete process.env.GIT_COMMIT_SHA
 
       const [resSingle, resDouble] = await Promise.all([
-        fetch(`${serverSingle.baseUrl}/api/build-info`),
-        fetch(`${serverDouble.baseUrl}/api/build-info`),
+        fetch(`${singleUrl}/api/build-info`),
+        fetch(`${doubleUrl}/api/build-info`),
       ])
 
       assert.equal(resSingle.status, 200)
@@ -377,11 +278,7 @@ describe('single and double registration produce equivalent observable behavior 
       const bodyDouble = await resDouble.json()
       assert.equal(bodySingle.commitShort, null)
       assert.equal(bodyDouble.commitShort, null)
-    } finally {
-      restoreEnv(ENV_KEY, savedSha)
-      await serverSingle.close()
-      await serverDouble.close()
-    }
+    })
   })
 })
 
@@ -395,23 +292,14 @@ describe('re-registration does not affect other routes (issue #345)', { timeout:
   })
 
   it('unregistered route returns 404 regardless of double registration', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
-    const server = await listenOnRandomPort(app)
-
-    try {
-      const res = await fetch(`${server.baseUrl}/api/nonexistent`)
+    await withBuildInfoServer({ count: 2 }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/nonexistent`)
       assert.equal(res.status, 404)
-    } finally {
-      await server.close()
-    }
+    })
   })
 
   it('custom route added alongside double-registered build-info works', { timeout: 5000 }, async () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
+    const app = createRegisteredApp({ count: 2 })
     app.get('/api/health', (req, res) => res.json({ ok: true }))
     const server = await listenOnRandomPort(app)
 

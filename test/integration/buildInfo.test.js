@@ -236,21 +236,46 @@ describe('GET /api/build-info', () => {
     }
   })
 
-  // Verifies that try/finally cleanup in the clean-check test actually
-  // restores GIT_COMMIT_SHA — a second observer test that would fail if
-  // the previous test leaked 'clean123check456' into process.env (issue #324).
+  // Self-contained leak-detection test (issue #339): explicitly runs the
+  // clean-check scenario inline so it does not depend on test ordering,
+  // parallel execution, or --grep filtering.
   it('GIT_COMMIT_SHA is not leaked by the clean-check test', async () => {
     const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
       ? process.env.GIT_COMMIT_SHA
       : undefined
     try {
-      // The previous test set 'clean123check456' — if it leaked, this
-      // would still be the value. Verify it was properly restored.
+      // --- Reproduce the clean-check scenario inline ---
+      // Save env state the way the clean-check test does
+      const innerBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
+        ? process.env.GIT_COMMIT_SHA
+        : undefined
+      try {
+        process.env.GIT_COMMIT_SHA = 'clean123check456'
+        const res = await fetch(`${server.baseUrl}/api/build-info`)
+        const body = await res.json()
+        assert.equal(body.commitShort, 'clean12')
+      } finally {
+        if (innerBefore !== undefined) {
+          process.env.GIT_COMMIT_SHA = innerBefore
+        } else {
+          delete process.env.GIT_COMMIT_SHA
+        }
+      }
+
+      // --- Now verify the cleanup worked ---
       assert.notEqual(
         process.env.GIT_COMMIT_SHA,
         'clean123check456',
-        'GIT_COMMIT_SHA leaked from the previous test — try/finally cleanup is broken'
+        'GIT_COMMIT_SHA leaked from the clean-check scenario — try/finally cleanup is broken'
       )
+      // Also verify it was restored to the correct value
+      if (innerBefore !== undefined) {
+        assert.equal(process.env.GIT_COMMIT_SHA, innerBefore,
+          'GIT_COMMIT_SHA was not restored to its original value')
+      } else {
+        assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false,
+          'GIT_COMMIT_SHA should have been deleted but still exists')
+      }
     } finally {
       if (envBefore !== undefined) {
         process.env.GIT_COMMIT_SHA = envBefore

@@ -25,6 +25,25 @@ async function startTestServer() {
 
 describe('GET /api/build-info', () => {
   let server
+
+  /**
+   * ENV-VAR COUPLING WARNING (see GitHub issue #306):
+   *
+   * These tests mutate `process.env.GIT_COMMIT_SHA` *after* the server is
+   * already listening. This works because the `/api/build-info` handler reads
+   * `process.env.GIT_COMMIT_SHA` on every incoming request — it does NOT
+   * capture the value once at startup.
+   *
+   * If the endpoint is ever refactored to snapshot the env var at import time
+   * or during server initialization (a common optimization), every test here
+   * will silently pass with stale/default values instead of the per-test
+   * values set below.
+   *
+   * The "reflects env var changes between requests" test at the bottom of
+   * this suite exists specifically to catch that regression — if it fails,
+   * the handler has started caching the value and all other env-dependent
+   * tests in this file are unreliable.
+   */
   const savedSha = process.env.GIT_COMMIT_SHA
 
   before(async () => {
@@ -151,5 +170,30 @@ describe('GET /api/build-info', () => {
     })
 
     assert.notEqual(res.status, 200)
+  })
+
+  // --- Regression guard for env-var coupling (issue #306) ---
+  // This test MUST remain last in the suite. It verifies the endpoint reads
+  // process.env on every request, not once at startup. If this test fails,
+  // every other env-dependent test in this file is unreliable.
+
+  it('reflects env var changes between requests (runtime read, not cached at startup)', async () => {
+    // First request — set a known SHA
+    process.env.GIT_COMMIT_SHA = 'aaa1111bbb2222ccc3333ddd4444eee5555fff66'
+    const res1 = await fetch(`${server.baseUrl}/api/build-info`)
+    const body1 = await res1.json()
+    assert.equal(body1.commitShort, 'aaa1111')
+
+    // Second request — change the SHA without restarting the server
+    process.env.GIT_COMMIT_SHA = '9990000888aaabbbcccdddeeefffaaa111222333'
+    const res2 = await fetch(`${server.baseUrl}/api/build-info`)
+    const body2 = await res2.json()
+    assert.equal(body2.commitShort, '9990000')
+
+    // Third request — delete the SHA entirely
+    delete process.env.GIT_COMMIT_SHA
+    const res3 = await fetch(`${server.baseUrl}/api/build-info`)
+    const body3 = await res3.json()
+    assert.equal(body3.commitShort, null)
   })
 })

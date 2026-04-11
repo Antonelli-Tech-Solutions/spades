@@ -319,38 +319,7 @@ describe('GET /api/build-info', () => {
     }
   })
 
-  // Verifies try/finally cleanup correctly handles the case where
-  // GIT_COMMIT_SHA was undefined (not set) before the test (issue #324).
-  it('try/finally cleanup correctly deletes env var when it was originally unset', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
-      // Force-delete so we know the starting state
-      delete process.env.GIT_COMMIT_SHA
-      const localBefore = undefined
-
-      // Now set it and verify cleanup would delete it
-      process.env.GIT_COMMIT_SHA = 'tempvalue1234567890abcdef1234567890abcdef'
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
-      const body = await res.json()
-      assert.equal(body.commitShort, 'tempval')
-
-      // Simulate the cleanup inline
-      if (localBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = localBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-      assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false,
-        'cleanup should delete GIT_COMMIT_SHA when it was originally unset')
-    } finally {
-      // Restore actual original state
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
-  })
+  // Issue #340: the previous test here was tautological — it inlined cleanup
+  // logic in the try block and asserted on that copy rather than the finally
+  // block. Real finally-block cleanup tests live in buildInfoFinallyCleanup.test.js.
 })

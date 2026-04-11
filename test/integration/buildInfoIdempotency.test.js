@@ -36,6 +36,10 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
 
   after(async () => {
     await new Promise((res) => server.close(res))
+    // No env restoration here — afterEach already handles it reliably.
+    // See issue #366 and buildInfoIdempotencyAfterHookSafety.test.js for proof
+    // that the after hook env restore is redundant (restoreEnv is idempotent,
+    // afterEach fires even on assertion failures, and try/finally covers inline cases).
   })
 
   afterEach(() => {

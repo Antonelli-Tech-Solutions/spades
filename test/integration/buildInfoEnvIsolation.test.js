@@ -13,6 +13,7 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
+import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
 async function startTestServer() {
   // DEPENDENCY NOTE (issue #327): This suite creates the server once in before()
@@ -39,7 +40,7 @@ async function startTestServer() {
 
 describe('build-info env-var isolation (issue #317)', () => {
   let server
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   before(async () => {
     server = await startTestServer()
@@ -48,19 +49,11 @@ describe('build-info env-var isolation (issue #317)', () => {
   after(async () => {
     await server.close()
     // Final restore — belt and suspenders
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   // ---------------------------------------------------------------
@@ -68,9 +61,7 @@ describe('build-info env-var isolation (issue #317)', () => {
   // ---------------------------------------------------------------
 
   it('delete inside try/finally restores env var for subsequent code', { timeout: 5000 }, async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
+    const envBefore = saveEnv('GIT_COMMIT_SHA')
 
     try {
       process.env.GIT_COMMIT_SHA = 'aaa1111bbb2222ccc3333ddd4444eee5555fff66'
@@ -84,11 +75,7 @@ describe('build-info env-var isolation (issue #317)', () => {
       const body2 = await res2.json()
       assert.equal(body2.commitShort, null)
     } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
     }
 
     // After the finally block, the env var must match pre-test state
@@ -192,9 +179,7 @@ describe('build-info env-var isolation (issue #317)', () => {
   // ---------------------------------------------------------------
 
   it('try/finally restores env even when the test logic throws', { timeout: 5000 }, async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
+    const envBefore = saveEnv('GIT_COMMIT_SHA')
 
     let innerError = null
     try {
@@ -207,11 +192,7 @@ describe('build-info env-var isolation (issue #317)', () => {
       innerError = err
     } finally {
       // This is the pattern issue #317 requires — always restore
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
     }
 
     if (innerError) throw innerError

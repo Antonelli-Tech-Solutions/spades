@@ -15,6 +15,7 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
+import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -38,7 +39,7 @@ async function startTestServer() {
 
 describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, () => {
   let server
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   before(async () => {
     const app = express()
@@ -60,19 +61,11 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
 
   after(async () => {
     await server.close()
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   // ---------------------------------------------------------------
@@ -80,9 +73,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
   // ---------------------------------------------------------------
 
   it('cleans up env var via try/finally even when fetch succeeds (line 53 pattern)', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
+    const envBefore = saveEnv('GIT_COMMIT_SHA')
 
     try {
       process.env.GIT_COMMIT_SHA = 'idempotent123456789012345678901234567890'
@@ -93,11 +84,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
       const body = await res.json()
       assert.equal(body.commitShort, 'idempot')
     } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
     }
 
     // Verify cleanup happened
@@ -124,9 +111,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
   // ---------------------------------------------------------------
 
   it('try/finally restores env var even when an assertion fails mid-test', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
+    const envBefore = saveEnv('GIT_COMMIT_SHA')
 
     let caughtError = null
     try {
@@ -143,11 +128,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
         caughtError = innerErr
       }
     } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
     }
 
     // The inner assertion did fail (simulated)
@@ -176,9 +157,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
   // ---------------------------------------------------------------
 
   it('fresh-app test cleans up env var and server via try/finally (line 77 pattern)', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
+    const envBefore = saveEnv('GIT_COMMIT_SHA')
 
     const freshApp = express()
     freshApp.use(express.json())
@@ -199,11 +178,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
       assert.equal(body.commitShort, 'freshap')
     } finally {
       // Always restore env var
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
       // Always close the server
       await new Promise((res) => freshServer.close(res))
     }
@@ -221,9 +196,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
   // ---------------------------------------------------------------
 
   it('fresh-app server is closed even when assertion fails', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
+    const envBefore = saveEnv('GIT_COMMIT_SHA')
 
     const freshApp = express()
     freshApp.use(express.json())
@@ -248,11 +221,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
         caughtError = innerErr
       }
     } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
       await new Promise((res) => freshServer.close(res))
     }
 
@@ -299,9 +268,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
   // ---------------------------------------------------------------
 
   it('handles empty-string GIT_COMMIT_SHA without leaking', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
+    const envBefore = saveEnv('GIT_COMMIT_SHA')
 
     try {
       process.env.GIT_COMMIT_SHA = ''
@@ -314,18 +281,12 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
       assert.ok(body.commitShort === '' || body.commitShort === null,
         `commitShort should be empty or null for empty env var, got: ${body.commitShort}`)
     } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
     }
   })
 
   it('handles short GIT_COMMIT_SHA (< 7 chars) without leaking', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
+    const envBefore = saveEnv('GIT_COMMIT_SHA')
 
     try {
       process.env.GIT_COMMIT_SHA = 'abc'
@@ -336,11 +297,7 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
       const body = await res.json()
       assert.equal(body.commitShort, 'abc')
     } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
     }
   })
 

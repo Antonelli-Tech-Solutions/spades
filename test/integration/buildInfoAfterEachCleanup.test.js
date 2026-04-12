@@ -16,6 +16,7 @@ describe('afterEach env cleanup is sufficient for build-info (issue #396)', { ti
   let savedSha
 
   before(async () => {
+    // Captures pre-test env state once, at before() time, for afterEach restoration
     savedSha = saveEnv('GIT_COMMIT_SHA')
     const app = express()
     app.use(express.json())

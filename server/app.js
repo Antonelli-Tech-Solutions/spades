@@ -8,13 +8,22 @@ import { handler } from './server.js'
 import { getRedis } from './redis.js'
 import { createWsServer } from './ws/index.js'
 
-// If GIT_COMMIT_SHA isn't provided by CI, derive it from git at startup so
-// the build indicator works in non-CI environments (local dev, self-hosted).
+// If GIT_COMMIT_SHA isn't provided by CI, check platform-specific env vars
+// (Vercel, Netlify, etc.) then fall back to `git rev-parse HEAD`.
 if (!process.env.GIT_COMMIT_SHA) {
-  try {
-    process.env.GIT_COMMIT_SHA = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim()
-  } catch {
-    // Not a git repo or git unavailable — leave unset; /api/build-info returns null
+  const platformSha =
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.COMMIT_REF ||
+    null
+
+  if (platformSha) {
+    process.env.GIT_COMMIT_SHA = platformSha
+  } else {
+    try {
+      process.env.GIT_COMMIT_SHA = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim()
+    } catch {
+      // Not a git repo or git unavailable — leave unset; /api/build-info returns null
+    }
   }
 }
 

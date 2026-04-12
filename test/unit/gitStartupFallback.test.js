@@ -19,10 +19,19 @@ import { execSync } from 'node:child_process'
 /** Reproduce the exact startup-fallback logic from app.js. */
 function applyGitFallback() {
   if (!process.env.GIT_COMMIT_SHA) {
-    try {
-      process.env.GIT_COMMIT_SHA = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim()
-    } catch {
-      // Not a git repo or git not available — leave unset
+    const platformSha =
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      process.env.COMMIT_REF ||
+      null
+
+    if (platformSha) {
+      process.env.GIT_COMMIT_SHA = platformSha
+    } else {
+      try {
+        process.env.GIT_COMMIT_SHA = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim()
+      } catch {
+        // Not a git repo or git not available — leave unset
+      }
     }
   }
 }
@@ -99,6 +108,71 @@ describe('app.js git startup fallback', () => {
         process.env.GIT_COMMIT_SHA = saved
       } else {
         delete process.env.GIT_COMMIT_SHA
+      }
+    }
+  })
+
+  it('uses VERCEL_GIT_COMMIT_SHA when GIT_COMMIT_SHA is absent', { timeout: 5000 }, () => {
+    const savedGit = process.env.GIT_COMMIT_SHA
+    const savedVercel = process.env.VERCEL_GIT_COMMIT_SHA
+    const vercelSha = 'aabbccdd11223344556677889900aabbccddeeff'
+    try {
+      delete process.env.GIT_COMMIT_SHA
+      process.env.VERCEL_GIT_COMMIT_SHA = vercelSha
+
+      applyGitFallback()
+
+      assert.equal(
+        process.env.GIT_COMMIT_SHA,
+        vercelSha,
+        'GIT_COMMIT_SHA must be set from VERCEL_GIT_COMMIT_SHA',
+      )
+    } finally {
+      if (savedGit !== undefined) {
+        process.env.GIT_COMMIT_SHA = savedGit
+      } else {
+        delete process.env.GIT_COMMIT_SHA
+      }
+      if (savedVercel !== undefined) {
+        process.env.VERCEL_GIT_COMMIT_SHA = savedVercel
+      } else {
+        delete process.env.VERCEL_GIT_COMMIT_SHA
+      }
+    }
+  })
+
+  it('uses COMMIT_REF when GIT_COMMIT_SHA and VERCEL_GIT_COMMIT_SHA are absent', { timeout: 5000 }, () => {
+    const savedGit = process.env.GIT_COMMIT_SHA
+    const savedVercel = process.env.VERCEL_GIT_COMMIT_SHA
+    const savedCommitRef = process.env.COMMIT_REF
+    const netlifySha = '1122334455667788990011223344556677889900'
+    try {
+      delete process.env.GIT_COMMIT_SHA
+      delete process.env.VERCEL_GIT_COMMIT_SHA
+      process.env.COMMIT_REF = netlifySha
+
+      applyGitFallback()
+
+      assert.equal(
+        process.env.GIT_COMMIT_SHA,
+        netlifySha,
+        'GIT_COMMIT_SHA must be set from COMMIT_REF',
+      )
+    } finally {
+      if (savedGit !== undefined) {
+        process.env.GIT_COMMIT_SHA = savedGit
+      } else {
+        delete process.env.GIT_COMMIT_SHA
+      }
+      if (savedVercel !== undefined) {
+        process.env.VERCEL_GIT_COMMIT_SHA = savedVercel
+      } else {
+        delete process.env.VERCEL_GIT_COMMIT_SHA
+      }
+      if (savedCommitRef !== undefined) {
+        process.env.COMMIT_REF = savedCommitRef
+      } else {
+        delete process.env.COMMIT_REF
       }
     }
   })

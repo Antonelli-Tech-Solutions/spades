@@ -58,7 +58,7 @@ npm start
 | `EMAIL_FROM` | No | `noreply@spades.online` | From address for outbound email |
 | `PUSH_API_KEY` | No | — | Push notification service API key |
 | `GIT_BRANCH` | No | — | Current branch (set by CI) |
-| `GIT_COMMIT_SHA` | No | — | Current commit SHA (set by CI) |
+| `GIT_COMMIT_SHA` | No | — | Current commit SHA (set by CI). If not set, the server checks `VERCEL_GIT_COMMIT_SHA` (Vercel) and `COMMIT_REF` (Netlify), then falls back to `git rev-parse HEAD`. |
 | `AUTH_RATE_LIMIT_MAX` | No | `10` | Max auth requests per window (unauthenticated endpoints) |
 | `AUTH_RATE_LIMIT_WINDOW` | No | `900` | Rate limit window in seconds (default: 15 min) |
 | `DEV_AUTO_VERIFY` | No | — | Set to `true` to skip email verification on registration. **Local dev only — never set in production.** |

@@ -427,12 +427,6 @@ export async function getActiveTable({ sessionId, playerId }, fetchFn = globalTh
   return body
 }
 
-/**
- * Log in with email and password.
- * @param {{ email: string, password: string }} data
- * @param {typeof fetch} [fetchFn]
- * @returns {Promise<{ sessionId: string, playerId: string, username: string }>}
- */
 export async function getBuildInfo(fetchFn = globalThis.fetch) {
   const res = await fetchFn('/api/build-info')
   const body = await res.json()

@@ -37,12 +37,9 @@ function listenOnRandomPort(app) {
   })
 }
 
-function createRegisteredApp({ count = 1, resetGuardBeforeLast = false } = {}) {
+function createRegisteredApp({ count = 1 } = {}) {
   const app = createApp()
   for (let i = 0; i < count; i++) {
-    if (resetGuardBeforeLast && i === count - 1) {
-      app.locals._buildInfoRegistered = false
-    }
     registerBuildInfoRoute(app)
   }
   return app

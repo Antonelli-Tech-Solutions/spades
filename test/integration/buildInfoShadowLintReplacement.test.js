@@ -19,7 +19,7 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile, access } from 'node:fs/promises'
+import { readFile, access, writeFile, unlink } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
@@ -30,6 +30,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
 const SHADOW_TEST_FILE = join(__dirname, 'buildInfoEnvIsolation.shadow.test.js')
 const TARGET_TEST_FILE = join(__dirname, 'buildInfoEnvIsolation.test.js')
+const ESLINT_BIN = join(ROOT, 'node_modules', 'eslint', 'bin', 'eslint.js')
+
+function eslint(args, opts = {}) {
+  return execFileAsync(process.execPath, [ESLINT_BIN, ...args], { cwd: ROOT, timeout: 15000, ...opts })
+}
 
 describe('issue #350 — replace fragile regex shadow test with ESLint no-shadow rule', () => {
   // ---------------------------------------------------------------
@@ -92,25 +97,19 @@ describe('issue #350 — replace fragile regex shadow test with ESLint no-shadow
   })
 
   it('ESLint config enables the no-shadow rule', { timeout: 10000 }, async () => {
-    // Run eslint --print-config on the target file and verify no-shadow is on
     try {
-      const { stdout } = await execFileAsync(
-        'npx', ['eslint', '--print-config', TARGET_TEST_FILE],
-        { cwd: ROOT, timeout: 15000 }
-      )
+      const { stdout } = await eslint(['--print-config', TARGET_TEST_FILE])
       const config = JSON.parse(stdout)
       const noShadow = config.rules && config.rules['no-shadow']
 
       assert.ok(noShadow,
         'Expected the "no-shadow" rule to be present in the resolved ESLint config')
 
-      // Rule value can be "error"/2, "warn"/1, or ["error", opts]/[2, opts]
       const severity = Array.isArray(noShadow) ? noShadow[0] : noShadow
       const isEnabled = severity === 'error' || severity === 'warn' || severity === 2 || severity === 1
       assert.ok(isEnabled,
         `Expected "no-shadow" rule to be enabled (error or warn), got: ${JSON.stringify(noShadow)}`)
     } catch (err) {
-      // If eslint isn't installed or npx fails, that's a test failure
       assert.fail(
         `Failed to resolve ESLint config: ${err.message}. ` +
         'Ensure eslint is installed and configured with the no-shadow rule.')
@@ -123,16 +122,12 @@ describe('issue #350 — replace fragile regex shadow test with ESLint no-shadow
 
   it('buildInfoEnvIsolation.test.js passes ESLint no-shadow check', { timeout: 15000 }, async () => {
     try {
-      // eslint exits 0 if no violations
-      await execFileAsync(
-        'npx', ['eslint', '--no-eslintrc', '--rule', '{"no-shadow": "error"}',
-          '--parser-options', 'ecmaVersion:2022,sourceType:module',
-          TARGET_TEST_FILE],
-        { cwd: ROOT, timeout: 15000 }
-      )
-      // If we get here, eslint found no violations — test passes
+      await eslint([
+        '--no-eslintrc', '--rule', '{"no-shadow": "error"}',
+        '--parser-options', 'ecmaVersion:2022,sourceType:module',
+        TARGET_TEST_FILE,
+      ])
     } catch (err) {
-      // eslint exits non-zero when it finds violations
       if (err.stdout) {
         assert.fail(
           `ESLint no-shadow violations found in buildInfoEnvIsolation.test.js:\n${err.stdout}`)
@@ -164,72 +159,68 @@ describe('issue #350 — replace fragile regex shadow test with ESLint no-shadow
   // ---------------------------------------------------------------
 
   it('no-shadow rule detects when a local variable shadows an import', { timeout: 15000 }, async () => {
-    // Create a minimal source string with a deliberate shadow violation
-    // and verify eslint catches it via --stdin
     const violatingCode = [
       'import { before } from "node:test";',
       'function test() {',
-      '  const before = 42;',  // shadows the import
+      '  const before = 42;',
       '  return before;',
       '}',
       'test();',
     ].join('\n')
 
+    const tmpFile = join(ROOT, '_tmp_shadow_violation_check.js')
     try {
-      await execFileAsync(
-        'npx', ['eslint', '--no-eslintrc',
-          '--rule', '{"no-shadow": "error"}',
-          '--parser-options', 'ecmaVersion:2022,sourceType:module',
-          '--stdin', '--stdin-filename', 'test-shadow-check.js'],
-        { cwd: ROOT, input: violatingCode, timeout: 15000 }
-      )
-      // If eslint exits 0, it did NOT catch the shadow — that's a failure
+      await writeFile(tmpFile, violatingCode, 'utf-8')
+      await eslint([
+        '--no-eslintrc', '--rule', '{"no-shadow": "error"}',
+        '--parser-options', 'ecmaVersion:2022,sourceType:module',
+        tmpFile,
+      ])
       assert.fail(
         'ESLint did not report a no-shadow violation for code that shadows an import. ' +
         'The rule may not be working correctly.')
     } catch (err) {
-      // eslint should exit non-zero because the code has a shadow violation
-      if (err.code !== null && err.stdout && err.stdout.includes('no-shadow')) {
-        // Expected: eslint found the violation
+      if (err.code === 'ERR_ASSERTION') throw err
+      if (err.stdout && err.stdout.includes('no-shadow')) {
         assert.ok(true)
       } else if (err.stdout && err.stdout.includes('shadow')) {
-        // Alternative output format
         assert.ok(true)
       } else if (err.code !== null && err.stderr && !err.stderr.includes('not found')) {
-        // eslint exited non-zero — likely found the violation
         assert.ok(true)
       } else {
         assert.fail(
           `Unexpected eslint behavior: ${err.message}\nstdout: ${err.stdout}\nstderr: ${err.stderr}`)
       }
+    } finally {
+      try { await unlink(tmpFile) } catch { /* ignore */ }
     }
   })
 
   it('no-shadow rule passes clean code where no imports are shadowed', { timeout: 15000 }, async () => {
-    // Code that does NOT shadow — eslint should pass (exit 0)
     const cleanCode = [
       'import { before } from "node:test";',
       'function test() {',
-      '  const envBefore = 42;',  // different name, no shadow
+      '  const envBefore = 42;',
       '  return envBefore;',
       '}',
       'before(() => {});',
       'test();',
     ].join('\n')
 
+    const tmpFile = join(ROOT, '_tmp_shadow_clean_check.js')
     try {
-      await execFileAsync(
-        'npx', ['eslint', '--no-eslintrc',
-          '--rule', '{"no-shadow": "error"}',
-          '--parser-options', 'ecmaVersion:2022,sourceType:module',
-          '--stdin', '--stdin-filename', 'test-clean-check.js'],
-        { cwd: ROOT, input: cleanCode, timeout: 15000 }
-      )
-      // Exit 0 — no violations found, which is correct
+      await writeFile(tmpFile, cleanCode, 'utf-8')
+      await eslint([
+        '--no-eslintrc', '--rule', '{"no-shadow": "error"}',
+        '--parser-options', 'ecmaVersion:2022,sourceType:module',
+        tmpFile,
+      ])
       assert.ok(true)
     } catch (err) {
       assert.fail(
         `ESLint reported violations on clean code (no shadowing): ${err.stdout || err.message}`)
+    } finally {
+      try { await unlink(tmpFile) } catch { /* ignore */ }
     }
   })
 

@@ -6,7 +6,6 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
-import { withEnv } from '../helpers/envHelper.js'
 
 async function startTestServer() {
   const app = express()
@@ -179,45 +178,38 @@ describe('GET /api/build-info', () => {
   // try/finally (issue #316).
 
   it('reflects env var changes between requests (runtime read, not cached at startup)', async () => {
-    await withEnv('GIT_COMMIT_SHA', async () => {
-      // First request — set a known SHA
-      process.env.GIT_COMMIT_SHA = 'aaa1111bbb2222ccc3333ddd4444eee5555fff66'
-      const res1 = await fetch(`${server.baseUrl}/api/build-info`)
-      const body1 = await res1.json()
-      assert.equal(body1.commitShort, 'aaa1111')
+    // First request — set a known SHA
+    process.env.GIT_COMMIT_SHA = 'aaa1111bbb2222ccc3333ddd4444eee5555fff66'
+    const res1 = await fetch(`${server.baseUrl}/api/build-info`)
+    const body1 = await res1.json()
+    assert.equal(body1.commitShort, 'aaa1111')
 
-      // Second request — change the SHA without restarting the server
-      process.env.GIT_COMMIT_SHA = '9990000888aaabbbcccdddeeefffaaa111222333'
-      const res2 = await fetch(`${server.baseUrl}/api/build-info`)
-      const body2 = await res2.json()
-      assert.equal(body2.commitShort, '9990000')
+    // Second request — change the SHA without restarting the server
+    process.env.GIT_COMMIT_SHA = '9990000888aaabbbcccdddeeefffaaa111222333'
+    const res2 = await fetch(`${server.baseUrl}/api/build-info`)
+    const body2 = await res2.json()
+    assert.equal(body2.commitShort, '9990000')
 
-      // Third request — delete the SHA entirely
-      delete process.env.GIT_COMMIT_SHA
-      const res3 = await fetch(`${server.baseUrl}/api/build-info`)
-      const body3 = await res3.json()
-      assert.equal(body3.commitShort, null)
-    })
+    // Third request — delete the SHA entirely
+    delete process.env.GIT_COMMIT_SHA
+    const res3 = await fetch(`${server.baseUrl}/api/build-info`)
+    const body3 = await res3.json()
+    assert.equal(body3.commitShort, null)
   })
 
   // Proves the regression guard above does not pollute env state (issue #316).
-  // This test would fail if the finally block were missing and the regression
+  // This test would fail if afterEach were missing and the regression
   // test left GIT_COMMIT_SHA deleted.
-  // Uses save/try/finally for self-contained cleanup (issue #324) instead of
-  // relying solely on afterEach — consistent with the pattern established by
-  // the regression guard test above.
   it('env state is clean after the regression guard test runs', async () => {
-    await withEnv('GIT_COMMIT_SHA', async () => {
-      assert.notEqual(
-        process.env.GIT_COMMIT_SHA,
-        '9990000888aaabbbcccdddeeefffaaa111222333'
-      )
-      // Set a known value, make a request, verify the endpoint still works
-      process.env.GIT_COMMIT_SHA = 'clean123check456'
-      const res = await fetch(`${server.baseUrl}/api/build-info`)
-      const body = await res.json()
-      assert.equal(body.commitShort, 'clean12')
-    })
+    assert.notEqual(
+      process.env.GIT_COMMIT_SHA,
+      '9990000888aaabbbcccdddeeefffaaa111222333'
+    )
+    // Set a known value, make a request, verify the endpoint still works
+    process.env.GIT_COMMIT_SHA = 'clean123check456'
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
+    assert.equal(body.commitShort, 'clean12')
   })
 
   // Issue #309: verify CORS headers are applied to /api/build-info via global middleware

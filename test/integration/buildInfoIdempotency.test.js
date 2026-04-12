@@ -35,7 +35,7 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
   })
 
   after(async () => {
-    await new Promise((res) => server.close(res))
+    await new Promise((resolve) => server.close(resolve))
     // No env restoration here — afterEach already handles it reliably.
     // See issue #366 and buildInfoIdempotencyAfterHookSafety.test.js for proof
     // that the after hook env restore is redundant (restoreEnv is idempotent,
@@ -108,7 +108,7 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
       } else {
         delete process.env.GIT_COMMIT_SHA
       }
-      await new Promise((res) => freshServer.close(res))
+      await new Promise((resolve) => freshServer.close(resolve))
     }
   })
 })

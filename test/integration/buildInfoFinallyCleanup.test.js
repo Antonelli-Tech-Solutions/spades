@@ -45,7 +45,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   })
 
   beforeEach(() => {
-
+    savedSha = saveEnv('GIT_COMMIT_SHA')
   })
 
   afterEach(() => {

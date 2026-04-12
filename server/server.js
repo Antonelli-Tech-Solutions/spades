@@ -901,7 +901,7 @@ export function registerBuildInfoRoute(app) {
   app.locals._buildInfoRegistered = true
 
   app.get('/api/build-info', (req, res) => {
-    const commitSha = process.env.GIT_COMMIT_SHA || null
+    const commitSha = process.env.GIT_COMMIT_SHA ?? null
     const shortSha = commitSha ? commitSha.slice(0, 7) : null
     sendJSON(res, 200, { commitShort: shortSha })
   })

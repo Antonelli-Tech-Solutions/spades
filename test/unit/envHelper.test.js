@@ -191,4 +191,36 @@ describe('saveEnv/restoreEnv helpers (issue #377)', { timeout: 2000 }, () => {
     restoreEnv(TEST_KEY, saved)
     assert.equal(process.env[TEST_KEY], longVal)
   })
+
+  // ── String "undefined" safety (issue #360) ────────────────────────────
+
+  it('round-trip preserves the literal string "undefined"', () => {
+    process.env[TEST_KEY] = 'undefined'
+    const saved = saveEnv(TEST_KEY)
+    assert.equal(saved, 'undefined', 'saveEnv must return the string "undefined"')
+    assert.equal(typeof saved, 'string')
+    process.env[TEST_KEY] = 'overwritten'
+    restoreEnv(TEST_KEY, saved)
+    assert.equal(process.env[TEST_KEY], 'undefined')
+    assert.equal(Object.hasOwn(process.env, TEST_KEY), true, 'var must still exist')
+  })
+
+  it('saveEnv distinguishes unset from the string "undefined"', () => {
+    delete process.env[TEST_KEY]
+    const unsetResult = saveEnv(TEST_KEY)
+
+    process.env[TEST_KEY] = 'undefined'
+    const stringResult = saveEnv(TEST_KEY)
+
+    assert.equal(unsetResult, undefined)
+    assert.equal(stringResult, 'undefined')
+    assert.notEqual(unsetResult, stringResult, 'JS undefined !== string "undefined"')
+  })
+
+  it('restoreEnv does not delete when savedValue is the string "undefined"', () => {
+    delete process.env[TEST_KEY]
+    restoreEnv(TEST_KEY, 'undefined')
+    assert.equal(Object.hasOwn(process.env, TEST_KEY), true)
+    assert.equal(process.env[TEST_KEY], 'undefined')
+  })
 })

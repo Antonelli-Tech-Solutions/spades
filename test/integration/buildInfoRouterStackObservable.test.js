@@ -1,17 +1,18 @@
 /**
- * Tests for GitHub issue #345 (refactored per issue #382):
+ * Tests for GitHub issue #345 (refactored per issue #382, cleaned per #385):
  *
  * Verifies observable HTTP behavior of build-info route registration:
  *   - Idempotent re-registration: only one response is sent (status 200,
  *     correct body, correct content-type, no duplicate response).
- *   - Guard reset re-registration: route still responds correctly after
- *     a duplicate handler is added (first handler wins in Express).
  *   - Single vs double registration produce equivalent results.
  *   - Re-registration does not affect other routes.
  *
  * Issue #382: extracted duplicated create-app-register-listen-teardown
  * boilerplate into shared helpers; collapsed tests that assert different
  * properties of the same response into single tests.
+ *
+ * Issue #385: removed guard-reset tests that coupled to the internal
+ * `app.locals._buildInfoRegistered` flag.
  */
 import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
@@ -42,15 +43,10 @@ function listenOnRandomPort(app) {
 
 /**
  * Create an Express app with build-info route registered `count` times.
- * If `resetGuardBeforeLast` is true, resets the idempotency guard before
- * the final registration (simulating the guard-reset scenario).
  */
-function createRegisteredApp({ count = 1, resetGuardBeforeLast = false } = {}) {
+function createRegisteredApp({ count = 1 } = {}) {
   const app = createApp()
   for (let i = 0; i < count; i++) {
-    if (resetGuardBeforeLast && i === count - 1) {
-      app.locals._buildInfoRegistered = false
-    }
     registerBuildInfoRoute(app)
   }
   return app
@@ -161,62 +157,6 @@ describe('idempotent re-registration produces single response (issue #345)', { t
   })
 })
 
-// ── Guard reset re-registration: observable behavior ───────────────────────────
-
-describe('guard reset re-registration still serves correct response (issue #345)', { timeout: 10000 }, () => {
-  const savedSha = saveEnv(ENV_KEY)
-
-  afterEach(() => {
-    restoreEnv(ENV_KEY, savedSha)
-  })
-
-  it('returns 200 with correct JSON body after guard reset and re-registration', { timeout: 5000 }, async () => {
-    await withBuildInfoServer({ count: 2, resetGuardBeforeLast: true }, async (baseUrl) => {
-      process.env.GIT_COMMIT_SHA = TEST_SHA
-      const res = await fetch(`${baseUrl}/api/build-info`)
-
-      assert.equal(res.status, 200)
-
-      const text = await res.text()
-      // With duplicate handlers, Express calls the first match. sendJSON ends
-      // the response, so the second handler never corrupts the output. Verify
-      // the response is a single valid JSON object.
-      let parsed
-      assert.doesNotThrow(() => { parsed = JSON.parse(text) },
-        'Response should be valid JSON even with duplicate handlers')
-      assert.equal(parsed.commitShort, TEST_SHORT)
-    })
-  })
-
-  it('guard flag is re-set after second registration', () => {
-    const app = createApp()
-    registerBuildInfoRoute(app)
-    assert.equal(app.locals._buildInfoRegistered, true)
-
-    app.locals._buildInfoRegistered = false
-    assert.equal(app.locals._buildInfoRegistered, false)
-
-    registerBuildInfoRoute(app)
-    assert.equal(app.locals._buildInfoRegistered, true)
-  })
-
-  it('env changes reflect correctly with duplicate handlers from guard reset', { timeout: 5000 }, async () => {
-    await withBuildInfoServer({ count: 2, resetGuardBeforeLast: true }, async (baseUrl) => {
-      const values = [
-        { sha: 'dup_a_11222233334444555566667777888899001111', expected: 'dup_a_1' },
-        { sha: 'dup_b_22333344445555666677778888999900112222', expected: 'dup_b_2' },
-      ]
-
-      for (const { sha, expected } of values) {
-        process.env.GIT_COMMIT_SHA = sha
-        const res = await fetch(`${baseUrl}/api/build-info`)
-        const body = await res.json()
-        assert.equal(body.commitShort, expected)
-      }
-    })
-  })
-})
-
 // ── Single vs double registration: behavior equivalence ────────────────────────
 
 describe('single and double registration produce equivalent observable behavior (issue #345)', { timeout: 10000 }, () => {
@@ -241,27 +181,6 @@ describe('single and double registration produce equivalent observable behavior 
       const bodyDouble = await resDouble.json()
       assert.deepStrictEqual(bodySingle, bodyDouble)
     })
-  })
-
-  it('single-registered and guard-reset apps return identical responses', { timeout: 5000 }, async () => {
-    await withTwoServers(
-      { count: 1 },
-      { count: 2, resetGuardBeforeLast: true },
-      async (singleUrl, resetUrl) => {
-        process.env.GIT_COMMIT_SHA = TEST_SHA
-
-        const [resSingle, resReset] = await Promise.all([
-          fetch(`${singleUrl}/api/build-info`),
-          fetch(`${resetUrl}/api/build-info`),
-        ])
-
-        assert.equal(resSingle.status, resReset.status)
-
-        const bodySingle = await resSingle.json()
-        const bodyReset = await resReset.json()
-        assert.deepStrictEqual(bodySingle, bodyReset)
-      }
-    )
   })
 
   it('unset env returns null commitShort for both single and double registration', { timeout: 5000 }, async () => {

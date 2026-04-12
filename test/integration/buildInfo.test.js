@@ -25,6 +25,7 @@ async function startTestServer() {
     next()
   })
 
+  // Issue #307: use registerBuildInfoRoute instead of handler() to avoid needing redis/mailer stubs
   registerBuildInfoRoute(app)
 
   return new Promise((resolve) => {

@@ -221,6 +221,10 @@ describe('GET /api/build-info', () => {
       ? process.env.GIT_COMMIT_SHA
       : undefined
     try {
+      assert.notEqual(
+        process.env.GIT_COMMIT_SHA,
+        '9990000888aaabbbcccdddeeefffaaa111222333'
+      )
       // Set a known value, make a request, verify the endpoint still works
       process.env.GIT_COMMIT_SHA = 'clean123check456'
       const res = await fetch(`${server.baseUrl}/api/build-info`)

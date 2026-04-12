@@ -179,7 +179,9 @@ describe('guard reset re-registration still serves correct response (issue #345)
       assert.equal(res.status, 200)
 
       const text = await res.text()
-      // Verify parseable as single JSON (not corrupted by duplicate handlers)
+      // With duplicate handlers, Express calls the first match. sendJSON ends
+      // the response, so the second handler never corrupts the output. Verify
+      // the response is a single valid JSON object.
       let parsed
       assert.doesNotThrow(() => { parsed = JSON.parse(text) },
         'Response should be valid JSON even with duplicate handlers')

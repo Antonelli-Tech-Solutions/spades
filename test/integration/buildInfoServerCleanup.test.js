@@ -76,11 +76,9 @@ describe('single inline server is cleaned up after test (issue #388)', { timeout
     assert.equal(free, true, `Port ${port} should be free after server.close()`)
   })
 
-  it('duphandler test closes server even when assertions execute', { timeout: 5000 }, async () => {
-    // Mirrors the "duplicate handlers still return correct response" test.
+  it('idempotent registration test closes server even when assertions execute', { timeout: 5000 }, async () => {
     const app = createApp()
     registerBuildInfoRoute(app)
-    app.locals._buildInfoRegistered = false
     registerBuildInfoRoute(app)
     const server = await listenOnRandomPort(app)
     const port = server.port

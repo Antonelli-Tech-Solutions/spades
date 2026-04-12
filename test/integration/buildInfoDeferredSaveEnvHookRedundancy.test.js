@@ -11,16 +11,10 @@
  * suite-start time, consistent with the server setup that also lives in
  * before().
  *
- * These tests verify:
- *   1. The deferred (before-hook) pattern captures GIT_COMMIT_SHA at runtime,
- *      not at describe-registration time
- *   2. The deferred savedSha works correctly with afterEach env restoration
- *   3. The deferred savedSha works correctly with after() fallback restoration
- *   4. The full integration flow (server + env capture in same before hook)
- *      behaves identically to the original for all build-info route tests
- *   5. Simulated cross-file pollution does not corrupt the deferred saved value
- *   6. restoreEnv idempotency holds with the deferred pattern
- *   7. Edge cases (unset, empty, short SHA) work with deferred capture
+ * These tests verify only the genuinely new scenarios not covered elsewhere:
+ *   1. Simulated cross-file pollution does not corrupt the deferred saved value
+ *   2. Describe-scope vs before-hook capture contrast (proves the timing bug)
+ *   3. Server setup and saveEnv coexist in the same before() hook
  */
 import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
@@ -28,77 +22,7 @@ import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
 import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
-// -- 1. Deferred saveEnv captures runtime value, not registration-time value --
-
-describe('issue #399: deferred saveEnv in before() captures runtime GIT_COMMIT_SHA', { timeout: 10000 }, () => {
-  let server
-  let baseUrl
-  let savedSha
-
-  before(async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
-
-    const app = express()
-    app.use(express.json())
-    registerBuildInfoRoute(app)
-
-    server = await new Promise((resolve) => {
-      const srv = app.listen(0, () => {
-        baseUrl = `http://127.0.0.1:${srv.address().port}`
-        resolve(srv)
-      })
-    })
-  })
-
-  after(async () => {
-    await new Promise((res) => server.close(res))
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
-  })
-
-  afterEach(() => {
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
-  })
-
-  it('savedSha is assigned by the time tests run (before hook executed)', () => {
-    // savedSha should equal whatever GIT_COMMIT_SHA was at before() time
-    // (not undefined due to let declaration, which would indicate before() didn't run)
-    const currentOriginal = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    // After afterEach restores, env should match savedSha
-    assert.equal(currentOriginal, savedSha,
-      'env should match the value captured in before()')
-  })
-
-  it('route reflects mutated GIT_COMMIT_SHA with deferred save', async () => {
-    process.env.GIT_COMMIT_SHA = 'aaa1111222233334444555566667777888899990000'
-    const res = await fetch(`${baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
-    const body = await res.json()
-    assert.equal(body.commitShort, 'aaa1111')
-  })
-
-  it('route reflects a different mutated SHA independently', async () => {
-    process.env.GIT_COMMIT_SHA = 'bbb2222333344445555666677778888999900001111'
-    const res = await fetch(`${baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
-    const body = await res.json()
-    assert.equal(body.commitShort, 'bbb2222')
-  })
-
-  it('afterEach restores env correctly after mutation', async () => {
-    // env should be back to savedSha from afterEach of prior test
-    if (savedSha !== undefined) {
-      assert.equal(process.env.GIT_COMMIT_SHA, savedSha,
-        'afterEach should have restored the original value')
-    } else {
-      assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false,
-        'afterEach should have deleted the env var when saved was undefined')
-    }
-  })
-})
-
-// -- 2. Simulated cross-file pollution: deferred pattern is immune ------------
+// -- 1. Simulated cross-file pollution: deferred pattern is immune ------------
 
 describe('issue #399: deferred saveEnv resists cross-file pollution of GIT_COMMIT_SHA', { timeout: 2000 }, () => {
   const POLLUTION_KEY = 'GIT_COMMIT_SHA'
@@ -152,7 +76,7 @@ describe('issue #399: deferred saveEnv resists cross-file pollution of GIT_COMMI
   })
 })
 
-// -- 3. Contrast: describe-scope capture IS vulnerable to pollution -----------
+// -- 2. Contrast: describe-scope capture IS vulnerable to pollution -----------
 
 describe('issue #399: describe-scope saveEnv captures polluted GIT_COMMIT_SHA (contrast)', { timeout: 2000 }, () => {
   const CONTRAST_KEY = '__CONTRAST_POLLUTION_399__'
@@ -193,145 +117,7 @@ describe('issue #399: describe-scope saveEnv captures polluted GIT_COMMIT_SHA (c
   })
 })
 
-// -- 4. restoreEnv idempotency with deferred pattern --------------------------
-
-describe('issue #399: restoreEnv idempotency with deferred savedSha', { timeout: 10000 }, () => {
-  let server
-  let baseUrl
-  let savedSha
-
-  before(async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
-
-    const app = express()
-    app.use(express.json())
-    registerBuildInfoRoute(app)
-
-    server = await new Promise((resolve) => {
-      const srv = app.listen(0, () => {
-        baseUrl = `http://127.0.0.1:${srv.address().port}`
-        resolve(srv)
-      })
-    })
-  })
-
-  after(async () => {
-    await new Promise((res) => server.close(res))
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
-  })
-
-  afterEach(() => {
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
-  })
-
-  it('calling restoreEnv multiple times does not corrupt state', () => {
-    process.env.GIT_COMMIT_SHA = 'ddd4444555566667777888899990000111122223333'
-
-    // Simulate afterEach running
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
-    // Simulate redundant after hook also running
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
-
-    if (savedSha !== undefined) {
-      assert.equal(process.env.GIT_COMMIT_SHA, savedSha)
-    } else {
-      assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false)
-    }
-  })
-
-  it('restoreEnv handles set-to-unset transition with deferred save', () => {
-    process.env.GIT_COMMIT_SHA = 'eee5555666677778888999900001111222233334444'
-    restoreEnv('GIT_COMMIT_SHA', undefined)
-    assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false,
-      'restoreEnv(key, undefined) should delete the env var')
-  })
-
-  it('restoreEnv handles unset-to-set transition with deferred save', () => {
-    delete process.env.GIT_COMMIT_SHA
-    restoreEnv('GIT_COMMIT_SHA', 'original_sha_value_1234567890abcdef')
-    assert.equal(process.env.GIT_COMMIT_SHA, 'original_sha_value_1234567890abcdef')
-  })
-})
-
-// -- 5. Edge cases: unset, empty, short SHA with deferred pattern -------------
-
-describe('issue #399: build-info route edge cases with deferred saveEnv', { timeout: 10000 }, () => {
-  let server
-  let baseUrl
-  let savedSha
-
-  before(async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
-
-    const app = express()
-    app.use(express.json())
-    registerBuildInfoRoute(app)
-
-    server = await new Promise((resolve) => {
-      const srv = app.listen(0, () => {
-        baseUrl = `http://127.0.0.1:${srv.address().port}`
-        resolve(srv)
-      })
-    })
-  })
-
-  after(async () => {
-    await new Promise((res) => server.close(res))
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
-  })
-
-  afterEach(() => {
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
-  })
-
-  it('route returns null commitShort when GIT_COMMIT_SHA is unset', async () => {
-    delete process.env.GIT_COMMIT_SHA
-
-    const res = await fetch(`${baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
-    const body = await res.json()
-    assert.equal(body.commitShort, null)
-  })
-
-  it('route returns null commitShort when GIT_COMMIT_SHA is empty string', async () => {
-    process.env.GIT_COMMIT_SHA = ''
-
-    const res = await fetch(`${baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
-    const body = await res.json()
-    assert.equal(body.commitShort, null)
-  })
-
-  it('route truncates SHA to 7 characters for exactly 7-char input', async () => {
-    process.env.GIT_COMMIT_SHA = 'abcdefg'
-
-    const res = await fetch(`${baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
-    const body = await res.json()
-    assert.equal(body.commitShort, 'abcdefg')
-  })
-
-  it('route returns fewer than 7 characters when SHA is shorter', async () => {
-    process.env.GIT_COMMIT_SHA = 'abc'
-
-    const res = await fetch(`${baseUrl}/api/build-info`)
-    assert.equal(res.status, 200)
-    const body = await res.json()
-    assert.equal(body.commitShort, 'abc')
-  })
-
-  it('afterEach correctly restores env after each edge case test', () => {
-    if (savedSha !== undefined) {
-      assert.equal(process.env.GIT_COMMIT_SHA, savedSha,
-        'env should be restored to the deferred saved value')
-    } else {
-      assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false,
-        'env var should be deleted when deferred saved value was undefined')
-    }
-  })
-})
-
-// -- 6. Server setup and env capture coexist in same before() hook ------------
+// -- 3. Server setup and env capture coexist in same before() hook ------------
 
 describe('issue #399: server setup and saveEnv coexist in before() hook', { timeout: 10000 }, () => {
   let server

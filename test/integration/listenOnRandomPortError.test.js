@@ -65,17 +65,18 @@ function listenOnPort(app, port) {
 
 /**
  * The BROKEN version (before fix) — no error listener.
- * Used to demonstrate the hang behavior.
+ * Accepts a port so it can be aimed at an occupied port to demonstrate the hang.
  */
-function listenOnRandomPortBroken(app) {
+function listenOnPortBroken(app, port) {
   return new Promise((resolve) => {
-    const srv = app.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
+    const srv = app.listen(port, '127.0.0.1', () => {
+      const { address, port: actualPort } = srv.address()
       resolve({
-        baseUrl: `http://127.0.0.1:${port}`,
+        baseUrl: `http://${address}:${actualPort}`,
         close: () => new Promise((res) => srv.close(res)),
       })
     })
+    srv.on('error', () => {})
   })
 }
 
@@ -271,16 +272,7 @@ describe('broken listenOnRandomPort hangs on error (issue #383 regression)', { t
     blockingServer = blocker
 
     const app = createApp()
-    const brokenPromise = listenOnRandomPortBroken(app)
-
-    const hangPromise = new Promise((resolve) => {
-      const srv = app.listen(port, '127.0.0.1', () => {
-        resolve('resolved')
-      })
-      srv.on('error', () => {
-        // error swallowed, promise never settles — that's the bug
-      })
-    })
+    const hangPromise = listenOnPortBroken(app, port)
 
     const HANG_SENTINEL = Symbol('hung')
     const hangTimeout = new Promise((resolve) =>
@@ -289,9 +281,6 @@ describe('broken listenOnRandomPort hangs on error (issue #383 regression)', { t
 
     const result = await Promise.race([hangPromise, hangTimeout])
     assert.equal(result, HANG_SENTINEL, 'Broken version should hang (not resolve or reject)')
-
-    const brokenServer = await brokenPromise
-    await brokenServer.close()
   })
 
   it('fixed listenOnPort rejects promptly instead of hanging', { timeout: 5000 }, async () => {

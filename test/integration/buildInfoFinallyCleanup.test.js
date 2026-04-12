@@ -142,8 +142,13 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
     const app = express()
     app.use(express.json())
     registerBuildInfoRoute(app)
+
+    const stackLengthAfterFirst = app._router.stack.length
+
     registerBuildInfoRoute(app)
 
+    assert.equal(app._router.stack.length, stackLengthAfterFirst,
+      'Second registerBuildInfoRoute call should not add routes to the stack')
     assert.equal(app.locals._buildInfoRegistered, true)
 
     const dupServer = await new Promise((resolve) => {

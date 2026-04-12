@@ -48,32 +48,35 @@ describe('afterEach cleanup removes need for redundant after hook (issue #365)',
   // --- Happy path: env mutation is visible to the route ---
 
   it('route reflects a mutated GIT_COMMIT_SHA', async () => {
-    process.env.GIT_COMMIT_SHA = 'aaa1111222233334444555566667777888899990000'
+    const sha = 'cafe1234'
+    process.env.GIT_COMMIT_SHA = sha
 
     const res = await fetch(`${baseUrl}/api/build-info`)
     assert.equal(res.status, 200)
     const body = await res.json()
-    assert.equal(body.commitShort, 'aaa1111')
+    assert.equal(body.commitShort, sha.slice(0, 7))
   })
 
   it('route reflects a different mutated GIT_COMMIT_SHA independently', async () => {
-    process.env.GIT_COMMIT_SHA = 'bbb2222333344445555666677778888999900001111'
+    const sha = 'deadbeef'
+    process.env.GIT_COMMIT_SHA = sha
 
     const res = await fetch(`${baseUrl}/api/build-info`)
     assert.equal(res.status, 200)
     const body = await res.json()
-    assert.equal(body.commitShort, 'bbb2222')
+    assert.equal(body.commitShort, sha.slice(0, 7))
   })
 
   // --- afterEach restores env within the same test that mutates it ---
 
   it('afterEach restores env var after mutation within a single test', async (t) => {
     // Mutate env
-    process.env.GIT_COMMIT_SHA = 'ccc3333444455556666777788889999000011112222'
+    const sha = 'face9876'
+    process.env.GIT_COMMIT_SHA = sha
     const res = await fetch(`${baseUrl}/api/build-info`)
     assert.equal(res.status, 200)
     const body = await res.json()
-    assert.equal(body.commitShort, 'ccc3333')
+    assert.equal(body.commitShort, sha.slice(0, 7))
 
     // Manually invoke restore to prove it works (simulating what afterEach does)
     restoreEnv('GIT_COMMIT_SHA', savedSha)
@@ -130,7 +133,7 @@ describe('afterEach cleanup removes need for redundant after hook (issue #365)',
   // --- Redundant after-hook is unnecessary: afterEach alone suffices ---
 
   it('restoreEnv is idempotent — calling it multiple times does not corrupt state', () => {
-    process.env.GIT_COMMIT_SHA = 'ddd4444555566667777888899990000111122223333'
+    process.env.GIT_COMMIT_SHA = 'bade5678'
 
     // Simulate afterEach running
     restoreEnv('GIT_COMMIT_SHA', savedSha)
@@ -145,7 +148,7 @@ describe('afterEach cleanup removes need for redundant after hook (issue #365)',
   })
 
   it('restoreEnv correctly handles transition from set to unset', () => {
-    process.env.GIT_COMMIT_SHA = 'eee5555666677778888999900001111222233334444'
+    process.env.GIT_COMMIT_SHA = 'feed4321'
     restoreEnv('GIT_COMMIT_SHA', undefined)
     assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false,
       'restoreEnv(key, undefined) should delete the env var')
@@ -153,7 +156,7 @@ describe('afterEach cleanup removes need for redundant after hook (issue #365)',
 
   it('restoreEnv correctly handles transition from unset to set', () => {
     delete process.env.GIT_COMMIT_SHA
-    restoreEnv('GIT_COMMIT_SHA', 'original_sha_value_1234567890abcdef')
-    assert.equal(process.env.GIT_COMMIT_SHA, 'original_sha_value_1234567890abcdef')
+    restoreEnv('GIT_COMMIT_SHA', 'orig_sha')
+    assert.equal(process.env.GIT_COMMIT_SHA, 'orig_sha')
   })
 })

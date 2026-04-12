@@ -21,9 +21,6 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
     app = express()
     app.use(express.json())
 
-    // Register the route three times
-    registerBuildInfoRoute(app)
-    registerBuildInfoRoute(app)
     registerBuildInfoRoute(app)
 
     server = await new Promise((resolve) => {
@@ -56,6 +53,8 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
   })
 
   it('only adds one route handler to the stack despite multiple calls', () => {
+    registerBuildInfoRoute(app)
+    registerBuildInfoRoute(app)
     const buildInfoLayers = app._router.stack.filter(
       (layer) => layer.route && layer.route.path === '/api/build-info'
     )

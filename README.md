@@ -584,6 +584,7 @@ client/
       router.js       — Hash-based SPA router
       validation.js   — Pure form-validation helpers (shared with unit tests)
       api.js          — Fetch wrappers for all API endpoints
+      buildIndicator.js — Build commit indicator UI module
       redirectIfSeated.js — Redirects seated players back to their table
       seatUtils.js    — Seat orientation helpers
       hand.js         — Card hand rendering helpers

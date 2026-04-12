@@ -24,3 +24,17 @@ export function restoreEnv(key, savedValue) {
     delete process.env[key]
   }
 }
+
+/**
+ * Run `fn` with automatic save/restore of the given env var.
+ * @param {string} key
+ * @param {function} fn - async callback; receives the saved value as its argument
+ */
+export async function withEnv(key, fn) {
+  const saved = saveEnv(key)
+  try {
+    await fn(saved)
+  } finally {
+    restoreEnv(key, saved)
+  }
+}

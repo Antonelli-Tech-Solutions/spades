@@ -64,11 +64,13 @@ function listenOnPort(app, port) {
 }
 
 /**
- * The BROKEN version (before fix) — no error listener.
+ * The BROKEN version (before fix) — no error listener that rejects.
  * Accepts a port so it can be aimed at an occupied port to demonstrate the hang.
+ * Returns { promise, capturedError() } so tests can assert on the swallowed error.
  */
 function listenOnPortBroken(app, port) {
-  return new Promise((resolve) => {
+  let swallowedError = null
+  const promise = new Promise((resolve) => {
     const srv = app.listen(port, '127.0.0.1', () => {
       const { address, port: actualPort } = srv.address()
       resolve({
@@ -76,8 +78,9 @@ function listenOnPortBroken(app, port) {
         close: () => new Promise((res) => srv.close(res)),
       })
     })
-    srv.on('error', () => {})
+    srv.on('error', (err) => { swallowedError = err })
   })
+  return { promise, capturedError: () => swallowedError }
 }
 
 /**
@@ -272,7 +275,7 @@ describe('broken listenOnRandomPort hangs on error (issue #383 regression)', { t
     blockingServer = blocker
 
     const app = createApp()
-    const hangPromise = listenOnPortBroken(app, port)
+    const { promise: hangPromise, capturedError } = listenOnPortBroken(app, port)
 
     const HANG_SENTINEL = Symbol('hung')
     const hangTimeout = new Promise((resolve) =>
@@ -281,6 +284,10 @@ describe('broken listenOnRandomPort hangs on error (issue #383 regression)', { t
 
     const result = await Promise.race([hangPromise, hangTimeout])
     assert.equal(result, HANG_SENTINEL, 'Broken version should hang (not resolve or reject)')
+
+    const err = capturedError()
+    assert.ok(err instanceof Error, 'Error should have been captured')
+    assert.equal(err.code, 'EADDRINUSE', 'Captured error should be EADDRINUSE')
   })
 
   it('fixed listenOnPort rejects promptly instead of hanging', { timeout: 5000 }, async () => {

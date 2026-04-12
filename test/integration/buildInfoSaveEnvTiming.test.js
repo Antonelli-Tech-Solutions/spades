@@ -131,14 +131,25 @@ describe('saveEnv inside beforeEach() captures fresh state per test (issue #390)
 })
 
 // — Simulated cross-file pollution (the vulnerability) ————————————————————————
+//
+// ⚠️  SELF-POLLUTION WARNING (issue #435)
+// This describe block intentionally sets process.env at describe scope to
+// demonstrate the anti-pattern. That means THIS FILE is itself a pollution
+// source for any test file loaded after it in the same process. The after()
+// hook cleans up, but if it fails or the runner loads files concurrently the
+// key will leak. The key name is intentionally long and unique to avoid
+// collisions with any real env var or other test key.
 
 describe('simulated cross-file pollution via describe-scope saveEnv (issue #390)', { timeout: 2000 }, () => {
-  const POLLUTE_KEY = '__CROSS_FILE_POLLUTION_390__'
+  const POLLUTE_KEY = '__CROSS_FILE_POLLUTION_390_DEMO_ANTIPATTERN_DO_NOT_REUSE__'
 
   // Simulate what happens when a prior test file mutates env at load time
   // (e.g. a top-level `process.env[KEY] = ...` or a leaked test mutation).
   // In a real scenario this pollution comes from another file; here we
   // set it before calling saveEnv to simulate the same effect.
+  //
+  // ⚠️  This runs at file-load time and pollutes process.env for the entire
+  //    process until the after() hook below deletes it. See issue #435.
   process.env[POLLUTE_KEY] = 'pollution_from_prior_file'
 
   // This is the problematic pattern: saveEnv at describe scope captures

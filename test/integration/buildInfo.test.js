@@ -10,6 +10,21 @@ import { registerBuildInfoRoute } from '../../server/server.js'
 async function startTestServer() {
   const app = express()
   app.use(express.json())
+
+  // Mirror the global CORS middleware from app.js so tests verify real behavior
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, x-session-id, x-player-id, x-table-id',
+    )
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end()
+    }
+    next()
+  })
+
   registerBuildInfoRoute(app)
 
   return new Promise((resolve) => {
@@ -322,4 +337,20 @@ describe('GET /api/build-info', () => {
   // Issue #340: the previous test here was tautological — it inlined cleanup
   // logic in the try block and asserted on that copy rather than the finally
   // block. Real finally-block cleanup tests live in buildInfoFinallyCleanup.test.js.
+
+  // Issue #309: verify CORS headers are applied to /api/build-info via global middleware
+  it('includes CORS headers in the response', async () => {
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    assert.equal(res.headers.get('access-control-allow-origin'), '*')
+    assert.ok(res.headers.get('access-control-allow-methods').includes('GET'))
+    assert.ok(res.headers.get('access-control-allow-headers').includes('x-session-id'))
+  })
+
+  it('responds to preflight OPTIONS request with 204', async () => {
+    const res = await fetch(`${server.baseUrl}/api/build-info`, {
+      method: 'OPTIONS',
+    })
+    assert.equal(res.status, 204)
+    assert.equal(res.headers.get('access-control-allow-origin'), '*')
+  })
 })

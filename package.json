@@ -6,6 +6,7 @@
   "main": "server/app.js",
   "scripts": {
     "start": "node server/app.js",
+    "lint": "eslint 'test/integration/buildInfoEnvIsolation.test.js'",
     "test": "node --test 'test/**/*.test.js'"
   },
   "dependencies": {

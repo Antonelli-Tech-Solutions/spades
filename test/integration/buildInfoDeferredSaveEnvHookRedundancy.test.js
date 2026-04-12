@@ -136,11 +136,12 @@ describe('issue #399: server setup and saveEnv coexist in before() hook', { time
     app.use(express.json())
     registerBuildInfoRoute(app)
 
-    server = await new Promise((resolve) => {
+    server = await new Promise((resolve, reject) => {
       const srv = app.listen(0, () => {
         baseUrl = `http://127.0.0.1:${srv.address().port}`
         resolve(srv)
       })
+      srv.on('error', reject)
     })
   })
 

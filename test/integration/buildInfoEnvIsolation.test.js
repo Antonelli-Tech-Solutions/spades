@@ -199,10 +199,9 @@ describe('build-info env-var isolation (issue #317)', () => {
     let innerError = null
     try {
       process.env.GIT_COMMIT_SHA = 'throw666666666666666666666666666666666666'
-      delete process.env.GIT_COMMIT_SHA
 
-      // Simulate a scenario where code runs after delete — the env is gone
-      assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false)
+      // Deliberately throw to exercise the restore-after-failure path
+      throw new Error('simulated test failure')
     } catch (err) {
       innerError = err
     } finally {
@@ -214,9 +213,10 @@ describe('build-info env-var isolation (issue #317)', () => {
       }
     }
 
-    if (innerError) throw innerError
+    assert.ok(innerError, 'expected an error from the try block')
+    assert.equal(innerError.message, 'simulated test failure')
 
-    // Verify restore happened
+    // Verify restore happened despite the throw
     if (envBefore !== undefined) {
       assert.equal(process.env.GIT_COMMIT_SHA, envBefore)
     } else {

@@ -69,7 +69,7 @@ describe('afterEach cleanup removes need for redundant after hook (issue #365)',
 
   // --- afterEach restores env within the same test that mutates it ---
 
-  it('afterEach restores env var after mutation within a single test', async (t) => {
+  it('afterEach restores env var after mutation within a single test', async () => {
     // Mutate env
     const sha = 'face9876'
     process.env.GIT_COMMIT_SHA = sha

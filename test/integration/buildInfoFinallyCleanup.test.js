@@ -24,7 +24,6 @@ async function startTestServer() {
     const server = app.listen(0, () => {
       const { port } = server.address()
       resolve({
-        app,
         baseUrl: `http://127.0.0.1:${port}`,
         close: () => new Promise((res) => server.close(res)),
       })
@@ -140,14 +139,24 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
 
   it('does not register a duplicate route when called twice on the same app', { timeout: 10000 }, async () => {
 
-    registerBuildInfoRoute(server.app)
+    const app = express()
+    app.use(express.json())
+    registerBuildInfoRoute(app)
+
+    const routeCountBefore = app._router.stack.length
+
+    registerBuildInfoRoute(app)
+
+    const routeCountAfter = app._router.stack.length
+
+    assert.equal(routeCountAfter, routeCountBefore, 'router stack should not grow on duplicate registration')
+    assert.equal(app.locals._buildInfoRegistered, true)
 
     process.env.GIT_COMMIT_SHA = 'deadbeefcafe1234567890abcdef1234567890ab'
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
     const body = await res.json()
 
-    assert.equal(server.app.locals._buildInfoRegistered, true)
     assert.equal(body.commitShort, 'deadbee')
   })
 })

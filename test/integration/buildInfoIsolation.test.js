@@ -172,6 +172,7 @@ describe('handler() still registers /api/build-info', { timeout: 10000 }, () => 
 
 describe('registerBuildInfoRoute idempotency', { timeout: 10000 }, () => {
   let server
+  const savedSha = process.env.GIT_COMMIT_SHA
 
   before(async () => {
     const { registerBuildInfoRoute } = await import('../../server/server.js')
@@ -194,6 +195,14 @@ describe('registerBuildInfoRoute idempotency', { timeout: 10000 }, () => {
 
   after(async () => {
     await server.close()
+  })
+
+  afterEach(() => {
+    if (savedSha !== undefined) {
+      process.env.GIT_COMMIT_SHA = savedSha
+    } else {
+      delete process.env.GIT_COMMIT_SHA
+    }
   })
 
   it('still returns a single valid response when registered twice', async () => {

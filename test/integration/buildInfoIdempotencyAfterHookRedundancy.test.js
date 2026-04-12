@@ -34,10 +34,11 @@ describe('afterEach cleanup removes need for redundant after hook (issue #365)',
   })
 
   after(async () => {
-    // Only server teardown — env restoration is handled by afterEach
-    await new Promise((res) => server.close(res))
-    // Final restore in case afterEach didn't run (e.g. suite-level failure)
-    restoreEnv('GIT_COMMIT_SHA', savedSha)
+    try {
+      await new Promise((res) => server.close(res))
+    } finally {
+      restoreEnv('GIT_COMMIT_SHA', savedSha)
+    }
   })
 
   afterEach(() => {

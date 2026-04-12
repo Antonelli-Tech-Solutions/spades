@@ -41,24 +41,8 @@ async function startTestServer() {
 describe('GET /api/build-info', () => {
   let server
 
-  /**
-   * ENV-VAR COUPLING WARNING (see GitHub issue #306):
-   *
-   * These tests mutate `process.env.GIT_COMMIT_SHA` *after* the server is
-   * already listening. This works because the `/api/build-info` handler reads
-   * `process.env.GIT_COMMIT_SHA` on every incoming request — it does NOT
-   * capture the value once at startup.
-   *
-   * If the endpoint is ever refactored to snapshot the env var at import time
-   * or during server initialization (a common optimization), every test here
-   * will silently pass with stale/default values instead of the per-test
-   * values set below.
-   *
-   * The "reflects env var changes between requests" test at the bottom of
-   * this suite exists specifically to catch that regression — if it fails,
-   * the handler has started caching the value and all other env-dependent
-   * tests in this file are unreliable.
-   */
+  // ENV-VAR COUPLING: handler must read process.env on each request (issue #306).
+  // The "reflects env var changes between requests" regression test guards this.
   const savedSha = process.env.GIT_COMMIT_SHA
 
   before(async () => {

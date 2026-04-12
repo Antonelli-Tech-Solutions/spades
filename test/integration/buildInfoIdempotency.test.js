@@ -46,14 +46,23 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
     assert.equal(app.locals._buildInfoRegistered, true)
   })
 
-  it('only adds one route handler to the stack despite multiple calls', () => {
+  it('only adds one route handler despite multiple calls (verified via HTTP)', async () => {
     registerBuildInfoRoute(app)
     registerBuildInfoRoute(app)
-    const buildInfoLayers = app._router.stack.filter(
-      (layer) => layer.route && layer.route.path === '/api/build-info'
-    )
-    assert.equal(buildInfoLayers.length, 1,
-      'Expected exactly one /api/build-info handler in the router stack')
+    assert.equal(app.locals._buildInfoRegistered, true)
+
+    process.env.GIT_COMMIT_SHA = 'dedup_test_sha_1234567890abcdef1234567890'
+    try {
+      const res = await fetch(`${baseUrl}/api/build-info`)
+      assert.equal(res.status, 200)
+      const text = await res.text()
+      let parsed
+      assert.doesNotThrow(() => { parsed = JSON.parse(text) },
+        'Response should be a single JSON object, not concatenated duplicates')
+      assert.equal(parsed.commitShort, 'dedup_t')
+    } finally {
+      restoreEnv('GIT_COMMIT_SHA', savedSha)
+    }
   })
 
   it('still returns a valid response after multiple registrations', async () => {

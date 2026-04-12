@@ -16,22 +16,25 @@ import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
 import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
+async function startTestServer() {
+  const app = express()
+  app.use(express.json())
+  registerBuildInfoRoute(app)
+
+  const server = await new Promise((resolve) => {
+    const srv = app.listen(0, () => resolve(srv))
+  })
+  const baseUrl = `http://127.0.0.1:${server.address().port}`
+  return { server, baseUrl }
+}
+
 describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, () => {
   let server
   let baseUrl
   const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   before(async () => {
-    const app = express()
-    app.use(express.json())
-    registerBuildInfoRoute(app)
-
-    server = await new Promise((resolve) => {
-      const srv = app.listen(0, () => {
-        baseUrl = `http://127.0.0.1:${srv.address().port}`
-        resolve(srv)
-      })
-    })
+    ({ server, baseUrl } = await startTestServer())
   })
 
   after(async () => {
@@ -63,19 +66,12 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
   it('fresh-app server is properly closed after test', async () => {
     const envBefore = saveEnv('GIT_COMMIT_SHA')
 
-    const freshApp = express()
-    freshApp.use(express.json())
-    registerBuildInfoRoute(freshApp)
-
-    const freshServer = await new Promise((resolve) => {
-      const srv = freshApp.listen(0, () => resolve(srv))
-    })
+    const { server: freshServer, baseUrl: freshUrl } = await startTestServer()
 
     try {
-      const { port } = freshServer.address()
       process.env.GIT_COMMIT_SHA = 'freshap1234567890abcdef1234567890abcdef12'
 
-      const res = await fetch(`http://127.0.0.1:${port}/api/build-info`)
+      const res = await fetch(`${freshUrl}/api/build-info`)
       assert.equal(res.status, 200)
       assert.equal((await res.json()).commitShort, 'freshap')
     } finally {

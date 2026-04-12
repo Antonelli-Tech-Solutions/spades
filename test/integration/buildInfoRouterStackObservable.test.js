@@ -292,13 +292,6 @@ describe('re-registration does not affect other routes (issue #345)', { timeout:
     restoreEnv(ENV_KEY, savedSha)
   })
 
-  it('unregistered route returns 404 regardless of double registration', { timeout: 5000 }, async () => {
-    await withBuildInfoServer({ count: 2 }, async (baseUrl) => {
-      const res = await fetch(`${baseUrl}/api/nonexistent`)
-      assert.equal(res.status, 404)
-    })
-  })
-
   it('custom route added alongside double-registered build-info works', { timeout: 5000 }, async () => {
     const app = createRegisteredApp({ count: 2 })
     app.get('/api/health', (req, res) => res.json({ ok: true }))

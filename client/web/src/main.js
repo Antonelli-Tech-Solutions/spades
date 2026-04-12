@@ -1,4 +1,5 @@
 import { addRoute, init } from './router.js'
+import { renderBuildIndicator } from './buildIndicator.js'
 import { renderLoginScreen } from './screens/login.js'
 import { renderRegisterScreen } from './screens/register.js'
 import { renderVerifyEmailSuccess, renderVerifyEmailError, renderVerifyEmailExpired } from './screens/verifyEmail.js'
@@ -49,3 +50,7 @@ if (sessionId && authOnlyScreens.has(currentRoute)) {
 }
 
 init(app)
+
+renderBuildIndicator().then(html => {
+  if (html) document.body.insertAdjacentHTML('beforeend', html)
+})

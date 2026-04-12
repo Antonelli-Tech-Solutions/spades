@@ -58,7 +58,7 @@ npm start
 | `EMAIL_FROM` | No | `noreply@spades.online` | From address for outbound email |
 | `PUSH_API_KEY` | No | — | Push notification service API key |
 | `GIT_BRANCH` | No | — | Current branch (set by CI) |
-| `GIT_COMMIT_SHA` | No | — | Current commit SHA (set by CI) |
+| `GIT_COMMIT_SHA` | No | — | Current commit SHA (set by CI). If not set, the server checks `VERCEL_GIT_COMMIT_SHA` (Vercel) and `COMMIT_REF` (Netlify), then falls back to `git rev-parse HEAD`. |
 | `AUTH_RATE_LIMIT_MAX` | No | `10` | Max auth requests per window (unauthenticated endpoints) |
 | `AUTH_RATE_LIMIT_WINDOW` | No | `900` | Rate limit window in seconds (default: 15 min) |
 | `DEV_AUTO_VERIFY` | No | — | Set to `true` to skip email verification on registration. **Local dev only — never set in production.** |
@@ -584,6 +584,7 @@ client/
       router.js       — Hash-based SPA router
       validation.js   — Pure form-validation helpers (shared with unit tests)
       api.js          — Fetch wrappers for all API endpoints
+      buildIndicator.js — Build commit indicator UI module
       redirectIfSeated.js — Redirects seated players back to their table
       seatUtils.js    — Seat orientation helpers
       hand.js         — Card hand rendering helpers
@@ -645,6 +646,7 @@ test/
     auth/           — Auth API route tests (requires DATABASE_URL)
     social/         — Profile API route tests (requires DATABASE_URL)
     game/           — Game API route tests (requires DATABASE_URL + Redis)
+  ws/               — WebSocket event flow tests
 docs/
   spades_prd.md   — Product requirements (source of truth for all rules)
   TASKS.md        — Task checklist

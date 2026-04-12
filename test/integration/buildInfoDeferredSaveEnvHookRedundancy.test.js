@@ -145,7 +145,7 @@ describe('issue #399: server setup and saveEnv coexist in before() hook', { time
   })
 
   after(async () => {
-    await new Promise((res) => server.close(res))
+    if (server) await new Promise((res) => server.close(res))
     restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 

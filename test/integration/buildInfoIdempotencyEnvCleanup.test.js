@@ -6,7 +6,7 @@
  * the env var leaked into subsequent tests.
  *
  * These three essential regression tests verify:
- *   1. Env var does not leak across tests (isolation)
+ *   1. restoreEnv helper resets env between inline scenarios
  *   2. Fresh-app server is cleaned up after use
  *   3. afterEach guard restores env vars even without try/finally
  */
@@ -46,20 +46,17 @@ describe('idempotency test env-var cleanup (issue #320)', { timeout: 10000 }, ()
     restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
-  // (1) Env var does not leak across tests
-  it('env var set in one test does not leak into the next', async () => {
-    // First request: set a known SHA and verify
+  // (1) restoreEnv helper resets env so a subsequent set is seen cleanly
+  it('restoreEnv helper resets env between inline scenarios', async () => {
     process.env.GIT_COMMIT_SHA = 'aaaaaa1234567890abcdef1234567890abcdef12'
     const res1 = await fetch(`${baseUrl}/api/build-info`)
     assert.equal((await res1.json()).commitShort, 'aaaaaa1')
 
-    // afterEach will restore. Simulate the "next test" by restoring now
-    // and setting a different SHA — if the first leaked, this would conflict.
     restoreEnv('GIT_COMMIT_SHA', savedSha)
     process.env.GIT_COMMIT_SHA = 'bbbbbb1234567890abcdef1234567890abcdef12'
     const res2 = await fetch(`${baseUrl}/api/build-info`)
     assert.equal((await res2.json()).commitShort, 'bbbbbb1',
-      'second request must see the new SHA, not a leaked value')
+      'after restoreEnv the new SHA must take effect cleanly')
   })
 
   // (2) Fresh-app server is cleaned up after use

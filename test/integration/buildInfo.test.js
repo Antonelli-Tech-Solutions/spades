@@ -6,6 +6,7 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
+import { restoreEnv } from '../helpers/envHelper.js'
 
 async function startTestServer() {
   const app = express()
@@ -55,12 +56,7 @@ describe('GET /api/build-info', () => {
   })
 
   afterEach(() => {
-    // Restore original env state after each test
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('returns the short commit SHA when GIT_COMMIT_SHA is set', async () => {

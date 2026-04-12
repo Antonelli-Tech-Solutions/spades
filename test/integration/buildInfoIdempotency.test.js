@@ -9,6 +9,7 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
+import { restoreEnv } from '../helpers/envHelper.js'
 
 describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
   let app
@@ -38,11 +39,7 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('sets the _buildInfoRegistered flag on app.locals', () => {
@@ -69,11 +66,7 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
       const body = await res.json()
       assert.equal(body.commitShort, 'idempot')
     } finally {
-      if (savedSha !== undefined) {
-        process.env.GIT_COMMIT_SHA = savedSha
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', savedSha)
     }
   })
 

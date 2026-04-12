@@ -13,14 +13,7 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
-
-function restoreEnv(key, savedValue) {
-  if (savedValue !== undefined) {
-    process.env[key] = savedValue
-  } else {
-    delete process.env[key]
-  }
-}
+import { restoreEnv } from '../helpers/envHelper.js'
 
 async function startTestServer() {
   // DEPENDENCY NOTE (issue #327): This suite creates the server once in before()

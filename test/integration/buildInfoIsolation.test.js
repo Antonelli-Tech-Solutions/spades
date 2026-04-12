@@ -14,6 +14,7 @@
 import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
+import { restoreEnv } from '../helpers/envHelper.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -69,11 +70,7 @@ describe('build-info route registered in isolation', { timeout: 10000 }, () => {
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('returns 200 with commitShort when GIT_COMMIT_SHA is set', async () => {
@@ -154,11 +151,7 @@ describe('handler() still registers /api/build-info', { timeout: 10000 }, () => 
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('build-info route is still accessible via full handler', async () => {
@@ -202,11 +195,7 @@ describe('registerBuildInfoRoute idempotency', { timeout: 10000 }, () => {
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('still returns a single valid response when registered twice', async () => {

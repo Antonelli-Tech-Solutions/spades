@@ -58,30 +58,36 @@ function createRegisteredApp({ count = 1, resetGuardBeforeLast = false } = {}) {
 
 /**
  * Set up a server with registered build-info route, run an async callback
- * with the server's baseUrl, then tear down. Handles env save/restore.
+ * with the server's baseUrl, then tear down. Handles env save/restore so
+ * that GIT_COMMIT_SHA is never left polluted even if the callback throws
+ * before afterEach fires (issue #413).
  */
 async function withBuildInfoServer(appOpts, fn) {
   const app = createRegisteredApp(appOpts)
   const server = await listenOnRandomPort(app)
+  const saved = saveEnv(ENV_KEY)
   try {
     await fn(server.baseUrl, app)
   } finally {
+    restoreEnv(ENV_KEY, saved)
     await server.close()
   }
 }
 
 /**
  * Set up two servers and run an async callback with both baseUrls,
- * then tear down both.
+ * then tear down both. Restores GIT_COMMIT_SHA on teardown (issue #413).
  */
 async function withTwoServers(optsA, optsB, fn) {
   const appA = createRegisteredApp(optsA)
   const appB = createRegisteredApp(optsB)
   const serverA = await listenOnRandomPort(appA)
   const serverB = await listenOnRandomPort(appB)
+  const saved = saveEnv(ENV_KEY)
   try {
     await fn(serverA.baseUrl, serverB.baseUrl)
   } finally {
+    restoreEnv(ENV_KEY, saved)
     await serverA.close()
     await serverB.close()
   }

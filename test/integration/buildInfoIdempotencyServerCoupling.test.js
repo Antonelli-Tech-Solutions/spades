@@ -6,6 +6,10 @@ import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
 const ENV_KEY = 'GIT_COMMIT_SHA'
 
+/*
+ * CRITICAL TEST — verifies the idempotency guard from issue #327 works
+ * correctly across independent server instances and re-registrations.
+ */
 describe('buildInfo idempotency + server coupling (issue #327)', { timeout: 10000 }, () => {
   const savedSha = saveEnv(ENV_KEY)
   let serverA, serverB
@@ -43,7 +47,9 @@ describe('buildInfo idempotency + server coupling (issue #327)', { timeout: 1000
     assert.equal(bodyA.commitShort, 'aaaa111')
     assert.equal(bodyB.commitShort, 'aaaa111')
 
+    // A completely separate app instance must accept registration even though appA was already registered
     const app2 = createApp()
+    // app2 must NOT have the flag — guard is per-app
     assert.equal(app2.locals._buildInfoRegistered, undefined)
     registerBuildInfoRoute(app2)
     assert.equal(app2.locals._buildInfoRegistered, true)
@@ -66,6 +72,7 @@ describe('buildInfo idempotency + server coupling (issue #327)', { timeout: 1000
   it('re-registration on same app is a silent no-op', { timeout: 5000 }, async () => {
     const app = createApp()
     registerBuildInfoRoute(app)
+    // Must not throw — this is the "silent" part of issue #327
     assert.doesNotThrow(() => registerBuildInfoRoute(app))
     assert.equal(app.locals._buildInfoRegistered, true)
 

@@ -3,9 +3,20 @@ import { createServer } from 'http'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { execSync } from 'child_process'
 import { handler } from './server.js'
 import { getRedis } from './redis.js'
 import { createWsServer } from './ws/index.js'
+
+// If GIT_COMMIT_SHA isn't provided by CI, derive it from git at startup so
+// the build indicator works in non-CI environments (local dev, self-hosted).
+if (!process.env.GIT_COMMIT_SHA) {
+  try {
+    process.env.GIT_COMMIT_SHA = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim()
+  } catch {
+    // Not a git repo or git unavailable — leave unset; /api/build-info returns null
+  }
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 

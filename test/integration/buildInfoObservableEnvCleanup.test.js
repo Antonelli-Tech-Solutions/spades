@@ -45,10 +45,10 @@ function listenOnRandomPort(app) {
   })
 }
 
-function createRegisteredApp({ count = 1, resetGuardBeforeLast = false } = {}) {
+function createRegisteredApp({ count = 1, simulateGuardReset = false } = {}) {
   const app = createApp()
   for (let i = 0; i < count; i++) {
-    if (resetGuardBeforeLast && i === count - 1) {
+    if (simulateGuardReset && i === count - 1) {
       app.locals._buildInfoRegistered = false
     }
     registerBuildInfoRoute(app)
@@ -244,7 +244,7 @@ describe('guard-reset re-registration with afterEach-only cleanup (issue #384)',
   })
 
   it('guard-reset + env mutation cleaned by afterEach — no finally for env', { timeout: 5000 }, async () => {
-    await withBuildInfoServer({ count: 2, resetGuardBeforeLast: true }, async (baseUrl) => {
+    await withBuildInfoServer({ count: 2, simulateGuardReset: true }, async (baseUrl) => {
       process.env.GIT_COMMIT_SHA = TEST_SHA
       const res = await fetch(`${baseUrl}/api/build-info`)
       const body = await res.json()

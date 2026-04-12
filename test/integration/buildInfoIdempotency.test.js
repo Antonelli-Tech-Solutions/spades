@@ -9,12 +9,13 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
+import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
 describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
   let app
   let server
   let baseUrl
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   before(async () => {
     app = express()
@@ -36,19 +37,11 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
 
   after(async () => {
     await new Promise((res) => server.close(res))
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('sets the _buildInfoRegistered flag on app.locals', () => {
@@ -73,11 +66,7 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
       const body = await res.json()
       assert.equal(body.commitShort, 'idempot')
     } finally {
-      if (savedSha !== undefined) {
-        process.env.GIT_COMMIT_SHA = savedSha
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', savedSha)
     }
   })
 
@@ -104,11 +93,7 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
       const body = await res.json()
       assert.equal(body.commitShort, 'freshap')
     } finally {
-      if (savedSha !== undefined) {
-        process.env.GIT_COMMIT_SHA = savedSha
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', savedSha)
       await new Promise((res) => freshServer.close(res))
     }
   })

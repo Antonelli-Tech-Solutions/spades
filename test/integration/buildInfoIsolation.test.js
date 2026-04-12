@@ -14,6 +14,7 @@
 import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
+import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ describe('registerBuildInfoRoute export', { timeout: 10000 }, () => {
 
 describe('build-info route registered in isolation', { timeout: 10000 }, () => {
   let server
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   before(async () => {
     server = await startIsolatedServer()
@@ -69,11 +70,7 @@ describe('build-info route registered in isolation', { timeout: 10000 }, () => {
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('returns 200 with commitShort when GIT_COMMIT_SHA is set', async () => {
@@ -124,7 +121,7 @@ describe('build-info route registered in isolation', { timeout: 10000 }, () => {
 
 describe('handler() still registers /api/build-info', { timeout: 10000 }, () => {
   let server
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   before(async () => {
     const { handler } = await import('../../server/server.js')
@@ -150,11 +147,7 @@ describe('handler() still registers /api/build-info', { timeout: 10000 }, () => 
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('build-info route is still accessible via full handler', async () => {

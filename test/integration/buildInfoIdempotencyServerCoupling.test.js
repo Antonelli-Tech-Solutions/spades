@@ -22,6 +22,7 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
+import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
 function createApp() {
   const app = express()
@@ -44,7 +45,7 @@ function listenOnRandomPort(app) {
 // ── Idempotency guard is per-app, not global ────────────────────────────────
 
 describe('idempotency guard is per-app instance (issue #327)', { timeout: 10000 }, () => {
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
   let serverA, serverB
 
   before(async () => {
@@ -62,19 +63,11 @@ describe('idempotency guard is per-app instance (issue #327)', { timeout: 10000 
   after(async () => {
     await serverA.close()
     await serverB.close()
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('both independent app instances serve the route', { timeout: 5000 }, async () => {
@@ -132,14 +125,10 @@ describe('idempotency guard is per-app instance (issue #327)', { timeout: 10000 
 // ── Silent no-op on re-registration of same app ─────────────────────────────
 
 describe('re-registration on same app is a silent no-op (issue #327)', { timeout: 10000 }, () => {
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('second registerBuildInfoRoute call on same app does not throw', () => {
@@ -194,7 +183,7 @@ describe('re-registration on same app is a silent no-op (issue #327)', { timeout
 // ── Request-time env reading vs registration-time ───────────────────────────
 
 describe('env var is read at request time, not registration time (issue #327)', { timeout: 10000 }, () => {
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
   let server
 
   before(async () => {
@@ -207,19 +196,11 @@ describe('env var is read at request time, not registration time (issue #327)', 
 
   after(async () => {
     await server.close()
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('changing env after registration changes the response', { timeout: 5000 }, async () => {
@@ -282,14 +263,10 @@ describe('env var is read at request time, not registration time (issue #327)', 
 // ── Fresh app per describe block works despite global guard concerns ────────
 
 describe('fresh app per describe block is safe (issue #327)', { timeout: 10000 }, () => {
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   /**
@@ -346,14 +323,10 @@ describe('fresh app per describe block is safe (issue #327)', { timeout: 10000 }
 // ── Edge case: manually clearing the guard re-enables registration ──────────
 
 describe('clearing _buildInfoRegistered allows re-registration (issue #327 edge case)', { timeout: 10000 }, () => {
-  const savedSha = process.env.GIT_COMMIT_SHA
+  const savedSha = saveEnv('GIT_COMMIT_SHA')
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   it('resetting the guard flag and re-registering adds a duplicate handler', () => {

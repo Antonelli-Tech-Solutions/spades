@@ -99,6 +99,14 @@ If a human player leaves a table mid-game, their seat is immediately filled by a
 
 > These bots are intentionally minimal — they are a testing convenience, not the production AI opponent planned for v1.1.
 
+### Linting
+
+```bash
+npm run lint
+```
+
+Runs ESLint against the `test/integration` directory. This check also runs in CI before the test suite.
+
 ### Running Tests
 
 ```bash

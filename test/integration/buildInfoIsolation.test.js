@@ -130,9 +130,13 @@ describe('handler() still registers /api/build-info', { timeout: 10000 }, () => 
     const { handler } = await import('../../server/server.js')
     const app = express()
     app.use(express.json())
-    // Call handler without deps — same as original test, but we only
-    // assert that build-info still works to verify no regression.
-    handler(app)
+    handler(app, {
+      redis: null,
+      mailer: { send() {} },
+      passwordResetMailer: { send() {} },
+      rateLimitConfig: {},
+      wss: null,
+    })
 
     server = await new Promise((resolve) => {
       const srv = app.listen(0, () => {

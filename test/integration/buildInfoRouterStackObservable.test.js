@@ -54,15 +54,19 @@ function createRegisteredApp({ count = 1 } = {}) {
 
 /**
  * Set up a server with registered build-info route, run an async callback
- * with the server's baseUrl, then tear down. Handles env save/restore.
+ * with the server's baseUrl, then tear down. Handles env save/restore
+ * for the given envKey (defaults to GIT_COMMIT_SHA) as a belt-and-suspenders
+ * safeguard so that a mid-test assertion failure cannot leak env mutations.
  */
-async function withBuildInfoServer(appOpts, fn) {
+async function withBuildInfoServer(appOpts, fn, { envKey = ENV_KEY } = {}) {
+  const saved = saveEnv(envKey)
   const app = createRegisteredApp(appOpts)
   const server = await listenOnRandomPort(app)
   try {
     await fn(server.baseUrl, app)
   } finally {
     await server.close()
+    restoreEnv(envKey, saved)
   }
 }
 

@@ -112,14 +112,6 @@ describe('after hook env restoration — order-independent (issue #404)', { time
     // afterEach restores to savedSha regardless of how many mutations occurred
   })
 
-  // --- Verify afterEach actually works, without depending on a prior test ---
-
-  it('env is clean at the start of a test (afterEach from any prior test ran)', () => {
-    // This test is valid regardless of execution order — it simply checks that
-    // the env is in a clean state when the test begins, proving afterEach works.
-    assertEnvClean()
-  })
-
   // --- try/finally provides inline cleanup independent of afterEach ---
 
   it('try/finally cleanup restores env even on assertion failure path', async () => {

@@ -54,6 +54,7 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
     assert.equal(app.locals._buildInfoRegistered, true)
   })
 
+  // app._router.stack is an undocumented Express internal; may break on major upgrades.
   it('only adds one route handler to the stack despite multiple calls', () => {
     const buildInfoLayers = app._router.stack.filter(
       (layer) => layer.route && layer.route.path === '/api/build-info'

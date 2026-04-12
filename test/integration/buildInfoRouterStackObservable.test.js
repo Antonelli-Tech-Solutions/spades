@@ -82,8 +82,7 @@ async function withTwoServers(optsA, optsB, fn) {
   try {
     await fn(serverA.baseUrl, serverB.baseUrl)
   } finally {
-    await serverA.close()
-    await serverB.close()
+    await Promise.allSettled([serverA.close(), serverB.close()])
   }
 }
 

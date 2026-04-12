@@ -162,7 +162,10 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     ws.send(JSON.stringify({ type: 'JOIN_LOBBY', payload: {} }))
     await waitForType(ws, 'JOINED_LOBBY')
 
-    const msgPromise = waitForType(ws, 'TABLE_CREATED')
+    // Buffer all messages so we can match by tableId after the API responds
+    const received = []
+    const onMsg = (data) => received.push(JSON.parse(data.toString()))
+    ws.on('message', onMsg)
 
     const { status, body } = await apiRequest(
       server.baseUrl,
@@ -174,8 +177,15 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     assert.equal(status, 201, 'table creation should succeed')
     const { tableId } = body
 
-    const msgs = await msgPromise
-    const msg = msgs.find(m => m.type === 'TABLE_CREATED' && m.payload?.tableId === tableId)
+    // Poll for our specific TABLE_CREATED (concurrent tests share the Redis pub/sub channel)
+    let msg
+    const deadline = Date.now() + 5000
+    while (!msg && Date.now() < deadline) {
+      msg = received.find(m => m.type === 'TABLE_CREATED' && m.payload?.tableId === tableId)
+      if (!msg) await new Promise(r => setTimeout(r, 50))
+    }
+    ws.removeListener('message', onMsg)
+
     assert.ok(msg, 'should have received a TABLE_CREATED event for the new table')
     assert.equal(msg.payload.visibility, 'public')
     assert.equal(msg.payload.host, PLAYER_A)

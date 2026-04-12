@@ -433,6 +433,17 @@ export async function getActiveTable({ sessionId, playerId }, fetchFn = globalTh
  * @param {typeof fetch} [fetchFn]
  * @returns {Promise<{ sessionId: string, playerId: string, username: string }>}
  */
+export async function getBuildInfo(fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/build-info')
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to fetch build info.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
 export async function loginUser({ email, password }, fetchFn = globalThis.fetch) {
   const res = await fetchFn('/api/auth/login', {
     method: 'POST',

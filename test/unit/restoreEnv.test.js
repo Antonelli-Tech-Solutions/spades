@@ -77,7 +77,6 @@ describe('restoreEnv helper (issue #333)', { timeout: 2000 }, () => {
   // ---------------------------------------------------------------
 
   it('works with GIT_COMMIT_SHA (the real use case)', () => {
-    const originalSha = process.env.GIT_COMMIT_SHA
     const saved = saveEnv('GIT_COMMIT_SHA')
 
     try {
@@ -90,12 +89,7 @@ describe('restoreEnv helper (issue #333)', { timeout: 2000 }, () => {
         assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false)
       }
     } finally {
-      // Belt-and-suspenders: manually restore in case test logic fails
-      if (originalSha !== undefined) {
-        process.env.GIT_COMMIT_SHA = originalSha
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', saved)
     }
   })
 
@@ -111,11 +105,7 @@ describe('restoreEnv helper (issue #333)', { timeout: 2000 }, () => {
         assert.equal(Object.hasOwn(process.env, 'GIT_BRANCH'), false)
       }
     } finally {
-      if (saved !== undefined) {
-        process.env.GIT_BRANCH = saved
-      } else {
-        delete process.env.GIT_BRANCH
-      }
+      restoreEnv('GIT_BRANCH', saved)
     }
   })
 

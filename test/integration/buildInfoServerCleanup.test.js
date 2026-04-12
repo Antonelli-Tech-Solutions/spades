@@ -17,34 +17,14 @@
  */
 import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import express from 'express'
 import net from 'node:net'
 import fs from 'node:fs'
 import path from 'node:path'
 import { registerBuildInfoRoute } from '../../server/server.js'
 import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
+import { createApp, listenOnRandomPort } from '../helpers/serverHelper.js'
 
 const ENV_KEY = 'GIT_COMMIT_SHA'
-
-function createApp() {
-  const app = express()
-  app.use(express.json())
-  return app
-}
-
-function listenOnRandomPort(app) {
-  return new Promise((resolve, reject) => {
-    const srv = app.listen(0, () => {
-      const { port } = srv.address()
-      resolve({
-        port,
-        baseUrl: `http://127.0.0.1:${port}`,
-        close: () => new Promise((res) => srv.close(res)),
-      })
-    })
-    srv.on('error', reject)
-  })
-}
 
 /**
  * Helper: check whether a port is available by trying to listen on it.

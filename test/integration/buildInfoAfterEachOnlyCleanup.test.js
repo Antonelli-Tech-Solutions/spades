@@ -6,7 +6,7 @@
  *
  * This file contains ONLY the pure unit-style tests (no HTTP servers):
  *   1. afterEach restores env after a normal (passing) test
- *   2. afterEach restores env after a test that mutates env
+ *   2. afterEach restores env after an async rejection
  *   3. Sequential tests with different env values stay isolated
  *   4. Delete + restore round-trips work via afterEach alone
  *   5. restoreEnv is idempotent (double-call is harmless but noisy)
@@ -63,9 +63,9 @@ describe('afterEach-only cleanup isolates env between tests (issue #389)', { tim
   })
 })
 
-// — afterEach runs even after env mutation ——————————————————————————————————
+// — afterEach runs even after async rejection ————————————————————————————————
 
-describe('afterEach restores env after mutation in test (issue #389)', { timeout: 2000 }, () => {
+describe('afterEach restores env after async rejection in test (issue #391)', { timeout: 2000 }, () => {
   let savedSha
 
   before(() => {
@@ -76,12 +76,16 @@ describe('afterEach restores env after mutation in test (issue #389)', { timeout
     restoreEnv(ENV_KEY, savedSha)
   })
 
-  it('mutate env then verify afterEach cleans up', () => {
+  it('mutate env then reject — afterEach still cleans up', async () => {
     process.env.GIT_COMMIT_SHA = 'subtest_throw_value_2222222222222222'
     assert.equal(process.env.GIT_COMMIT_SHA, 'subtest_throw_value_2222222222222222')
+    await assert.rejects(
+      Promise.reject(new Error('simulated async failure')),
+      { message: 'simulated async failure' }
+    )
   })
 
-  it('env is restored after previous test — proves afterEach suffices', () => {
+  it('env is restored after previous rejection — proves afterEach suffices', () => {
     if (savedSha !== undefined) {
       assert.equal(process.env.GIT_COMMIT_SHA, savedSha,
         'afterEach should restore env between tests')

@@ -150,6 +150,7 @@ describe('build-info env-var isolation (issue #317)', () => {
   // Nested describe: inner suite must not see leaked state
   // ---------------------------------------------------------------
 
+  // Env cleanup for these nested tests is handled by the parent's afterEach (line 55).
   describe('nested suite after env-deleting tests', () => {
     it('sees correct endpoint behavior — env isolation held', { timeout: 5000 }, async () => {
       // If prior tests leaked a deleted env var into this nested describe,

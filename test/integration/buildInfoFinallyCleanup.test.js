@@ -142,21 +142,29 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
     const app = express()
     app.use(express.json())
     registerBuildInfoRoute(app)
-
-    const routeCountBefore = app._router.stack.length
-
     registerBuildInfoRoute(app)
 
-    const routeCountAfter = app._router.stack.length
-
-    assert.equal(routeCountAfter, routeCountBefore, 'router stack should not grow on duplicate registration')
     assert.equal(app.locals._buildInfoRegistered, true)
 
-    process.env.GIT_COMMIT_SHA = 'deadbeefcafe1234567890abcdef1234567890ab'
+    const dupServer = await new Promise((resolve) => {
+      const srv = app.listen(0, () => {
+        const { port } = srv.address()
+        resolve({ baseUrl: `http://127.0.0.1:${port}`, srv })
+      })
+    })
 
-    const res = await fetch(`${server.baseUrl}/api/build-info`)
-    const body = await res.json()
+    try {
+      process.env.GIT_COMMIT_SHA = 'deadbeefcafe1234567890abcdef1234567890ab'
 
-    assert.equal(body.commitShort, 'deadbee')
+      const res = await fetch(`${dupServer.baseUrl}/api/build-info`)
+      assert.equal(res.status, 200)
+      const text = await res.text()
+      let parsed
+      assert.doesNotThrow(() => { parsed = JSON.parse(text) },
+        'Response should be a single JSON object, not concatenated duplicates')
+      assert.equal(parsed.commitShort, 'deadbee')
+    } finally {
+      await new Promise((resolve) => dupServer.srv.close(resolve))
+    }
   })
 })

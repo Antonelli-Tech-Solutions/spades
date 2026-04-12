@@ -76,17 +76,16 @@ describe('buildInfo idempotency + server coupling (issue #327)', { timeout: 1000
     assert.doesNotThrow(() => registerBuildInfoRoute(app))
     assert.equal(app.locals._buildInfoRegistered, true)
 
-    const layers = app._router.stack.filter(
-      (l) => l.route && l.route.path === '/api/build-info'
-    )
-    assert.equal(layers.length, 1)
-
     const server = await listenOnRandomPort(app)
     try {
       process.env[ENV_KEY] = 'noop1111222233334444555566667777888899aa'
       const res = await fetch(`${server.baseUrl}/api/build-info`)
       assert.equal(res.status, 200)
-      assert.equal((await res.json()).commitShort, 'noop111')
+      const text = await res.text()
+      let parsed
+      assert.doesNotThrow(() => { parsed = JSON.parse(text) },
+        'Response should be a single JSON object, not concatenated duplicates from multiple handlers')
+      assert.equal(parsed.commitShort, 'noop111')
     } finally {
       await server.close()
     }

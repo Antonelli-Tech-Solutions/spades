@@ -6,6 +6,7 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
+import { withEnv } from '../helpers/envHelper.js'
 
 async function startTestServer() {
   const app = express()
@@ -178,10 +179,7 @@ describe('GET /api/build-info', () => {
   // try/finally (issue #316).
 
   it('reflects env var changes between requests (runtime read, not cached at startup)', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
+    await withEnv('GIT_COMMIT_SHA', async () => {
       // First request — set a known SHA
       process.env.GIT_COMMIT_SHA = 'aaa1111bbb2222ccc3333ddd4444eee5555fff66'
       const res1 = await fetch(`${server.baseUrl}/api/build-info`)
@@ -199,15 +197,7 @@ describe('GET /api/build-info', () => {
       const res3 = await fetch(`${server.baseUrl}/api/build-info`)
       const body3 = await res3.json()
       assert.equal(body3.commitShort, null)
-    } finally {
-      // Restore env state so this test never pollutes later tests,
-      // regardless of assertion failures or test ordering.
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
+    })
   })
 
   // Proves the regression guard above does not pollute env state (issue #316).
@@ -217,10 +207,7 @@ describe('GET /api/build-info', () => {
   // relying solely on afterEach — consistent with the pattern established by
   // the regression guard test above.
   it('env state is clean after the regression guard test runs', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
+    await withEnv('GIT_COMMIT_SHA', async () => {
       assert.notEqual(
         process.env.GIT_COMMIT_SHA,
         '9990000888aaabbbcccdddeeefffaaa111222333'
@@ -230,40 +217,24 @@ describe('GET /api/build-info', () => {
       const res = await fetch(`${server.baseUrl}/api/build-info`)
       const body = await res.json()
       assert.equal(body.commitShort, 'clean12')
-    } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
+    })
   })
 
   // Self-contained leak-detection test (issue #339): explicitly runs the
   // clean-check scenario inline so it does not depend on test ordering,
   // parallel execution, or --grep filtering.
   it('GIT_COMMIT_SHA is not leaked by the clean-check test', async () => {
-    const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
-      ? process.env.GIT_COMMIT_SHA
-      : undefined
-    try {
+    await withEnv('GIT_COMMIT_SHA', async () => {
       // --- Reproduce the clean-check scenario inline ---
-      // Save env state the way the clean-check test does
       const innerBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
         ? process.env.GIT_COMMIT_SHA
         : undefined
-      try {
+      await withEnv('GIT_COMMIT_SHA', async () => {
         process.env.GIT_COMMIT_SHA = 'clean123check456'
         const res = await fetch(`${server.baseUrl}/api/build-info`)
         const body = await res.json()
         assert.equal(body.commitShort, 'clean12')
-      } finally {
-        if (innerBefore !== undefined) {
-          process.env.GIT_COMMIT_SHA = innerBefore
-        } else {
-          delete process.env.GIT_COMMIT_SHA
-        }
-      }
+      })
 
       // --- Now verify the cleanup worked ---
       assert.notEqual(
@@ -279,13 +250,7 @@ describe('GET /api/build-info', () => {
         assert.equal(Object.hasOwn(process.env, 'GIT_COMMIT_SHA'), false,
           'GIT_COMMIT_SHA should have been deleted but still exists')
       }
-    } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
+    })
   })
 
   // Verifies that the try/finally pattern correctly restores GIT_COMMIT_SHA
@@ -295,8 +260,8 @@ describe('GET /api/build-info', () => {
     const envBefore = Object.hasOwn(process.env, 'GIT_COMMIT_SHA')
       ? process.env.GIT_COMMIT_SHA
       : undefined
-    try {
-      // Modify env, use it, then let finally restore
+    await withEnv('GIT_COMMIT_SHA', async () => {
+      // Modify env, use it, then withEnv restores automatically
       process.env.GIT_COMMIT_SHA = 'tryfinallypattern1234567890abcdef12345678'
       const res = await fetch(`${server.baseUrl}/api/build-info`)
       const body = await res.json()
@@ -307,14 +272,8 @@ describe('GET /api/build-info', () => {
       const res2 = await fetch(`${server.baseUrl}/api/build-info`)
       const body2 = await res2.json()
       assert.equal(body2.commitShort, 'secondv')
-    } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-    }
-    // After finally, env should be back to what it was before the test
+    })
+    // After withEnv, env should be back to what it was before the test
     if (envBefore !== undefined) {
       assert.equal(process.env.GIT_COMMIT_SHA, envBefore)
     } else {

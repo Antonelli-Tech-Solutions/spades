@@ -42,13 +42,13 @@ function listenOnRandomPort(app) {
 
 /**
  * Create an Express app with build-info route registered `count` times.
- * If `resetGuardBeforeLast` is true, resets the idempotency guard before
+ * If `simulateGuardReset` is true, resets the idempotency guard before
  * the final registration (simulating the guard-reset scenario).
  */
-function createRegisteredApp({ count = 1, resetGuardBeforeLast = false } = {}) {
+function createRegisteredApp({ count = 1, simulateGuardReset = false } = {}) {
   const app = createApp()
   for (let i = 0; i < count; i++) {
-    if (resetGuardBeforeLast && i === count - 1) {
+    if (simulateGuardReset && i === count - 1) {
       app.locals._buildInfoRegistered = false
     }
     registerBuildInfoRoute(app)
@@ -172,7 +172,7 @@ describe('guard reset re-registration still serves correct response (issue #345)
   })
 
   it('returns 200 with correct JSON body after guard reset and re-registration', { timeout: 5000 }, async () => {
-    await withBuildInfoServer({ count: 2, resetGuardBeforeLast: true }, async (baseUrl) => {
+    await withBuildInfoServer({ count: 2, simulateGuardReset: true }, async (baseUrl) => {
       process.env.GIT_COMMIT_SHA = TEST_SHA
       const res = await fetch(`${baseUrl}/api/build-info`)
 
@@ -202,7 +202,7 @@ describe('guard reset re-registration still serves correct response (issue #345)
   })
 
   it('env changes reflect correctly with duplicate handlers from guard reset', { timeout: 5000 }, async () => {
-    await withBuildInfoServer({ count: 2, resetGuardBeforeLast: true }, async (baseUrl) => {
+    await withBuildInfoServer({ count: 2, simulateGuardReset: true }, async (baseUrl) => {
       const values = [
         { sha: 'dup_a_11222233334444555566667777888899001111', expected: 'dup_a_1' },
         { sha: 'dup_b_22333344445555666677778888999900112222', expected: 'dup_b_2' },
@@ -247,7 +247,7 @@ describe('single and double registration produce equivalent observable behavior 
   it('single-registered and guard-reset apps return identical responses', { timeout: 5000 }, async () => {
     await withTwoServers(
       { count: 1 },
-      { count: 2, resetGuardBeforeLast: true },
+      { count: 2, simulateGuardReset: true },
       async (singleUrl, resetUrl) => {
         process.env.GIT_COMMIT_SHA = TEST_SHA
 

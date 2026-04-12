@@ -894,6 +894,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
  * Register only the /api/build-info route on the given Express app.
  * This route has no dependencies (no Redis, no mailer, no DB) and can
  * be registered in isolation for lightweight testing.
+ *
+ * NOTE: This function does not apply CORS headers. When called via
+ * handler(), CORS is handled by the global middleware registered there.
+ * If you use this function outside of handler(), you must add CORS
+ * middleware yourself (see CLAUDE.md: "CORS headers are set manually on
+ * every request — do not remove them").
  */
 export function registerBuildInfoRoute(app) {
   // Guard against duplicate registration — skip if already registered

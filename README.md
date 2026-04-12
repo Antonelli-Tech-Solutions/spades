@@ -645,6 +645,7 @@ test/
     auth/           — Auth API route tests (requires DATABASE_URL)
     social/         — Profile API route tests (requires DATABASE_URL)
     game/           — Game API route tests (requires DATABASE_URL + Redis)
+  ws/               — WebSocket event flow tests
 docs/
   spades_prd.md   — Product requirements (source of truth for all rules)
   TASKS.md        — Task checklist

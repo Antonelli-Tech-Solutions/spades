@@ -14,54 +14,16 @@
  *
  * Refactored for issue #418: error-path tests now use a shared
  * `listenOnPort` helper instead of inlining the promise pattern.
+ *
+ * Refactored for issue #419: helpers (createApp, listenOnRandomPort,
+ * listenOnPort) are now imported from test/helpers/serverHelper.js so
+ * regressions in the shared helper are caught by these tests.
  */
 import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import express from 'express'
 import net from 'node:net'
 import { registerBuildInfoRoute } from '../../server/server.js'
-
-// ── Helpers ──────────────────────────────────────────────────────────────────────
-
-function createApp() {
-  const app = express()
-  app.use(express.json())
-  return app
-}
-
-/**
- * This is the FIXED version of listenOnRandomPort that includes
- * the error listener (the subject of issue #383).
- */
-function listenOnRandomPort(app) {
-  return new Promise((resolve, reject) => {
-    const srv = app.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
-      resolve({
-        baseUrl: `http://127.0.0.1:${port}`,
-        close: () => new Promise((res) => srv.close(res)),
-      })
-    })
-    srv.on('error', (err) => reject(err))
-  })
-}
-
-/**
- * Like listenOnRandomPort, but binds to a specific port.
- * Used by error-path tests to force EADDRINUSE on an occupied port.
- */
-function listenOnPort(app, port) {
-  return new Promise((resolve, reject) => {
-    const srv = app.listen(port, '127.0.0.1', () => {
-      const { address, port: actualPort } = srv.address()
-      resolve({
-        baseUrl: `http://${address}:${actualPort}`,
-        close: () => new Promise((res) => srv.close(res)),
-      })
-    })
-    srv.on('error', (err) => reject(err))
-  })
-}
+import { createApp, listenOnRandomPort, listenOnPort } from '../helpers/serverHelper.js'
 
 /**
  * The BROKEN version (before fix) — no error listener that rejects.

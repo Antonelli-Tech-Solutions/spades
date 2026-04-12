@@ -7,15 +7,19 @@ export function createApp() {
 }
 
 export function listenOnRandomPort(app) {
+  return listenOnPort(app, 0)
+}
+
+export function listenOnPort(app, port) {
   return new Promise((resolve, reject) => {
-    const srv = app.listen(0, () => {
-      const { port } = srv.address()
+    const srv = app.listen(port, '127.0.0.1', () => {
+      const { address, port: actualPort } = srv.address()
       resolve({
-        port,
-        baseUrl: `http://127.0.0.1:${port}`,
+        port: actualPort,
+        baseUrl: `http://${address}:${actualPort}`,
         close: () => new Promise((res) => srv.close(res)),
       })
     })
-    srv.on('error', reject)
+    srv.on('error', (err) => reject(err))
   })
 }

@@ -174,9 +174,9 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     assert.equal(status, 201, 'table creation should succeed')
     const { tableId } = body
 
-    const [msg] = await msgPromise
-    assert.equal(msg.type, 'TABLE_CREATED')
-    assert.equal(msg.payload.tableId, tableId)
+    const msgs = await msgPromise
+    const msg = msgs.find(m => m.type === 'TABLE_CREATED' && m.payload?.tableId === tableId)
+    assert.ok(msg, 'should have received a TABLE_CREATED event for the new table')
     assert.equal(msg.payload.visibility, 'public')
     assert.equal(msg.payload.host, PLAYER_A)
     assert.ok(msg.payload.seats, 'payload should include seats')

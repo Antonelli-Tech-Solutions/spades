@@ -143,6 +143,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
     app.use(express.json())
     registerBuildInfoRoute(app)
 
+    // app._router.stack is an undocumented Express internal; may break on major upgrades.
     const stackLengthAfterFirst = app._router.stack.length
 
     registerBuildInfoRoute(app)

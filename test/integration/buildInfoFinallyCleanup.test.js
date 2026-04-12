@@ -8,7 +8,7 @@
  * These tests exercise the actual route handler: response shape, commit SHA
  * truncation, missing/empty env var handling, and idempotent registration.
  */
-import { describe, it, before, after, afterEach } from 'node:test'
+import { describe, it, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
@@ -44,6 +44,10 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
     await server.close()
   })
 
+  beforeEach(() => {
+
+  })
+
   afterEach(() => {
     restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
@@ -51,7 +55,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   // --- Happy path ---
 
   it('returns the first 7 characters of GIT_COMMIT_SHA as commitShort', { timeout: 10000 }, async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     process.env.GIT_COMMIT_SHA = 'a1b2c3d4e5f6789012345678901234567890abcd'
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
@@ -62,7 +66,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   })
 
   it('returns null for commitShort when GIT_COMMIT_SHA is not set', { timeout: 10000 }, async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     delete process.env.GIT_COMMIT_SHA
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
@@ -75,7 +79,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   // --- Edge cases ---
 
   it('returns null for commitShort when GIT_COMMIT_SHA is empty string', { timeout: 10000 }, async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     process.env.GIT_COMMIT_SHA = ''
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
@@ -86,7 +90,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   })
 
   it('returns full value when GIT_COMMIT_SHA is shorter than 7 characters', { timeout: 10000 }, async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     process.env.GIT_COMMIT_SHA = 'abc'
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
@@ -97,7 +101,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   })
 
   it('returns exactly 7 characters when GIT_COMMIT_SHA is exactly 7 characters', { timeout: 10000 }, async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     process.env.GIT_COMMIT_SHA = 'abcdefg'
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
@@ -108,7 +112,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   })
 
   it('reflects a changed GIT_COMMIT_SHA between requests', { timeout: 10000 }, async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     process.env.GIT_COMMIT_SHA = 'first_commit_sha_1234567890abcdef12345678'
 
     const res1 = await fetch(`${server.baseUrl}/api/build-info`)
@@ -123,7 +127,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   })
 
   it('response contains only the commitShort key', { timeout: 10000 }, async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     process.env.GIT_COMMIT_SHA = 'deadbeefcafe1234567890abcdef1234567890ab'
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
@@ -135,7 +139,7 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
   // --- Idempotent registration ---
 
   it('does not register a duplicate route when called twice on the same app', { timeout: 10000 }, async () => {
-    savedSha = saveEnv('GIT_COMMIT_SHA')
+
     registerBuildInfoRoute(server.app)
 
     process.env.GIT_COMMIT_SHA = 'deadbeefcafe1234567890abcdef1234567890ab'

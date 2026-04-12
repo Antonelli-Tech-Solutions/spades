@@ -62,7 +62,15 @@ describe('afterEach env cleanup is sufficient for build-info (issue #396)', { ti
       'env var should match the saved original after restore')
   })
 
-  it('build-info route reflects the original env when no mutation has occurred in this test', async () => {
+  it('build-info route reflects the original env after in-test mutation and restore', async () => {
+    process.env.GIT_COMMIT_SHA = 'verify_restore_original_abc1234'
+
+    const mutatedRes = await fetch(`${baseUrl}/api/build-info`)
+    const mutatedBody = await mutatedRes.json()
+    assert.equal(mutatedBody.commitShort, 'verify_')
+
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
+
     const res = await fetch(`${baseUrl}/api/build-info`)
     assert.equal(res.status, 200)
     const body = await res.json()

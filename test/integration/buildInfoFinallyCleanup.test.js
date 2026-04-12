@@ -140,14 +140,20 @@ describe('/api/build-info endpoint behavior (issue #372)', () => {
 
   it('does not register a duplicate route when called twice on the same app', { timeout: 10000 }, async () => {
 
+    const routeCountBefore = server.app._router.stack.length
+
     registerBuildInfoRoute(server.app)
+
+    const routeCountAfter = server.app._router.stack.length
+
+    assert.equal(routeCountAfter, routeCountBefore, 'router stack should not grow on duplicate registration')
+    assert.equal(server.app.locals._buildInfoRegistered, true)
 
     process.env.GIT_COMMIT_SHA = 'deadbeefcafe1234567890abcdef1234567890ab'
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
     const body = await res.json()
 
-    assert.equal(server.app.locals._buildInfoRegistered, true)
     assert.equal(body.commitShort, 'deadbee')
   })
 })

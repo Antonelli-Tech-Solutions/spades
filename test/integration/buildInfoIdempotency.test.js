@@ -14,9 +14,10 @@ describe('registerBuildInfoRoute idempotency guard', { timeout: 10000 }, () => {
   let app
   let server
   let baseUrl
-  const savedSha = process.env.GIT_COMMIT_SHA
+  let savedSha
 
   before(async () => {
+    savedSha = process.env.GIT_COMMIT_SHA
     app = express()
     app.use(express.json())
 

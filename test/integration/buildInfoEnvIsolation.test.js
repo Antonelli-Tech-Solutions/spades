@@ -14,6 +14,14 @@ import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
 
+function restoreEnv(key, savedValue) {
+  if (savedValue !== undefined) {
+    process.env[key] = savedValue
+  } else {
+    delete process.env[key]
+  }
+}
+
 async function startTestServer() {
   // DEPENDENCY NOTE (issue #327): This suite creates the server once in before()
   // with a single registerBuildInfoRoute(app) call. The idempotency guard
@@ -48,19 +56,11 @@ describe('build-info env-var isolation (issue #317)', () => {
   after(async () => {
     await server.close()
     // Final restore — belt and suspenders
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   afterEach(() => {
-    if (savedSha !== undefined) {
-      process.env.GIT_COMMIT_SHA = savedSha
-    } else {
-      delete process.env.GIT_COMMIT_SHA
-    }
+    restoreEnv('GIT_COMMIT_SHA', savedSha)
   })
 
   // ---------------------------------------------------------------
@@ -84,11 +84,7 @@ describe('build-info env-var isolation (issue #317)', () => {
       const body2 = await res2.json()
       assert.equal(body2.commitShort, null)
     } finally {
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
     }
 
     // After the finally block, the env var must match pre-test state
@@ -205,12 +201,7 @@ describe('build-info env-var isolation (issue #317)', () => {
     } catch (err) {
       innerError = err
     } finally {
-      // This is the pattern issue #317 requires — always restore
-      if (envBefore !== undefined) {
-        process.env.GIT_COMMIT_SHA = envBefore
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', envBefore)
     }
 
     assert.ok(innerError, 'expected an error from the try block')

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 
 const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
+const MAX_OBSERVERS = 20
 
 /**
  * @typedef {Object} TableState
@@ -8,6 +9,7 @@ const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
  * @property {string} hostPlayerId
  * @property {string|null} name
  * @property {{ north: string|null, east: string|null, south: string|null, west: string|null }} seats
+ * @property {string[]} observers
  * @property {'waiting'|'playing'} status
  * @property {string|null} gameId
  * @property {string} createdAt
@@ -28,6 +30,7 @@ export async function createTable(redis, { hostPlayerId, name = null, visibility
     hostPlayerId,
     name,
     seats: { north: null, east: null, south: null, west: null },
+    observers: [],
     status: 'waiting',
     gameId: null,
     createdAt: new Date().toISOString(),
@@ -103,13 +106,89 @@ export async function sitAtTable(redis, tableId, playerId, seat) {
     throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
   }
 
+  const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
   const updated = {
     ...table,
     seats: { ...table.seats, [seat]: playerId },
+    observers: updatedObservers,
   }
   await saveTable(redis, updated)
   console.log('Player seated:', { tableId, playerId, seat })
   return updated
+}
+
+/**
+ * Join a table as an observer (not seated). Idempotent — returns current state
+ * if the player is already seated or already observing.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @returns {Promise<TableState>}
+ * @throws {Error} If the table is not found
+ */
+export async function joinTable(redis, tableId, playerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  const seated = Object.values(table.seats).includes(playerId)
+  if (seated) return table
+  const observers = table.observers || []
+  if (observers.includes(playerId)) return table
+  if (observers.length >= MAX_OBSERVERS) {
+    throw Object.assign(new Error('Table has reached the maximum number of observers'), { code: 'OBSERVERS_FULL' })
+  }
+  const updated = { ...table, observers: [...observers, playerId] }
+  await saveTable(redis, updated)
+  console.log('Player joined table as observer:', { tableId, playerId })
+  return updated
+}
+
+/**
+ * Stand up from a seat, becoming an observer. Only allowed while waiting.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @returns {Promise<{ table: TableState, seat: string }>}
+ * @throws {Error} If the table is not found, game in progress, or player not seated
+ */
+export async function standFromSeat(redis, tableId, playerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.status === 'playing') {
+    throw Object.assign(new Error('Cannot stand once the game has started'), { code: 'GAME_IN_PROGRESS' })
+  }
+  const seatEntry = Object.entries(table.seats).find(([, id]) => id === playerId)
+  if (!seatEntry) {
+    throw Object.assign(new Error('You are not seated at this table'), { code: 'NOT_SEATED' })
+  }
+  const [seat] = seatEntry
+  const updatedSeats = { ...table.seats, [seat]: null }
+  const observers = [...(table.observers || []), playerId]
+
+  let newHostId = table.hostPlayerId
+  let hostChanged = false
+  if (table.hostPlayerId === playerId) {
+    // Pick next seated human in fixed seat order (north → east → south → west)
+    const seatOrder = ['north', 'east', 'south', 'west']
+    const remainingSeatedHuman = seatOrder
+      .map((s) => updatedSeats[s])
+      .find((id) => id && !id.startsWith('bot:'))
+    if (!remainingSeatedHuman) {
+      throw Object.assign(new Error('Host cannot stand when no other human is seated'), { code: 'HOST_MUST_SIT' })
+    }
+    newHostId = remainingSeatedHuman
+    hostChanged = true
+  }
+
+  const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId, observers }
+  await saveTable(redis, updated)
+  console.log('Player stood from seat:', { tableId, playerId, seat })
+  return { table: updated, seat, hostChanged }
 }
 
 /**
@@ -200,7 +279,18 @@ export async function removePlayerFromTables(redis, playerId) {
     const table = await getTable(redis, entry.tableId)
     if (!table || table.status !== 'waiting') continue
     const seatEntry = Object.entries(table.seats).find(([, id]) => id === playerId)
-    if (!seatEntry) continue
+    const isObserver = (table.observers || []).includes(playerId)
+    if (!seatEntry && !isObserver) continue
+
+    if (!seatEntry && isObserver) {
+      const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
+      const updated = { ...table, observers: updatedObservers }
+      await saveTable(redis, updated)
+      updatedTables.push(updated)
+      console.log('Observer removed from table on logout:', { tableId: table.tableId, playerId })
+      continue
+    }
+
     const [seat] = seatEntry
     const updatedSeats = { ...table.seats, [seat]: null }
 
@@ -243,7 +333,15 @@ export async function leaveTable(redis, tableId, playerId) {
   }
   const seatEntry = Object.entries(table.seats).find(([, id]) => id === playerId)
   if (!seatEntry) {
-    throw Object.assign(new Error('You are not seated at this table'), { code: 'NOT_SEATED' })
+    const observers = table.observers || []
+    if (observers.includes(playerId)) {
+      const updatedObservers = observers.filter((id) => id !== playerId)
+      const updated = { ...table, observers: updatedObservers }
+      await saveTable(redis, updated)
+      console.log('Observer left table:', { tableId, playerId })
+      return { table: updated, wasObserver: true }
+    }
+    throw Object.assign(new Error('You are not at this table'), { code: 'NOT_SEATED' })
   }
   const [seat] = seatEntry
 
@@ -351,7 +449,8 @@ export async function findTableForPlayer(redis, playerId) {
     const table = await getTable(redis, entry.tableId)
     if (!table) continue
     const seated = Object.values(table.seats).includes(playerId)
-    if (!seated) continue
+    const isObserver = (table.observers || []).includes(playerId)
+    if (!seated && !isObserver) continue
     if (table.status === 'playing') {
       const gameState = await getGameState(redis, entry.tableId)
       if (gameState && gameState.phase === 'game_over') continue

@@ -7,6 +7,9 @@ import {
   revealHand as apiRevealHand,
   changeSeat as apiChangeSeat,
   leaveTable as apiLeaveTable,
+  sitAtTable as apiSitAtTable,
+  standFromSeat as apiStandFromSeat,
+  joinTableAsObserver as apiJoinTable,
 } from '../api.js'
 import { createGameSocket, buildWsUrl } from '../gameSocket.js'
 import { navigate } from '../router.js'
@@ -36,6 +39,8 @@ export const FULL_REFRESH_EVENTS = new Set([
   'TABLE_UPDATED',
   'SEAT_TAKEN',
   'SEAT_VACATED',
+  'OBSERVER_JOINED',
+  'OBSERVER_LEFT',
 ])
 
 /**
@@ -461,12 +466,15 @@ export function renderGameScreen(container) {
     const seats = state.seats || {}
     const SEAT_NAMES = ['north', 'east', 'south', 'west']
     const emptySeats = SEAT_NAMES.filter((s) => seats[s] === null)
+    const mySeat = Object.entries(seats).find(([, s]) => s?.playerId === playerId)?.[0]
+    const isSeated = !!mySeat
+
     const rows = SEAT_NAMES.map((s) => {
       const seatInfo = seats[s]
       const occupied = seatInfo !== null
       const cls = occupied ? 'waiting-seat waiting-seat--taken' : 'waiting-seat waiting-seat--empty'
       const label = s.charAt(0).toUpperCase() + s.slice(1)
-      let status = 'Empty'
+      let status = ''
       if (occupied) {
         if (seatInfo.isBot) {
           status = '<span class="seat-bot-badge">BOT</span>'
@@ -475,31 +483,69 @@ export function renderGameScreen(container) {
         } else {
           status = esc(seatInfo.username)
         }
+      } else if (!isSeated) {
+        status = `<button class="btn-secondary btn-sm sit-btn" data-seat="${s}">Sit Here</button>`
+      } else {
+        status = 'Empty'
       }
       const crownHtml = state.hostSeat === s ? `<span class="seat-host-crown" title="Host">${CROWN_ICON}</span>` : ''
       return `<div class="${cls}"><span>${crownHtml}${esc(label)}</span><span class="waiting-seat-status">${status}</span></div>`
     }).join('')
 
-    const mySeat = Object.entries(state.seats).find(([, s]) => s?.playerId === playerId)?.[0]
-    const changeSeatBtns = mySeat
+    const changeSeatBtns = isSeated
       ? emptySeats.map((s) => `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move to ${s.charAt(0).toUpperCase() + s.slice(1)}</button>`).join('')
+      : ''
+
+    const standBtn = isSeated
+      ? `<button class="btn-secondary btn-sm" id="stand-btn">Stand Up</button>`
       : ''
 
     const fillBotsBtn = state.isHost && emptySeats.length > 0
       ? `<button class="btn-primary" id="fill-bots-btn">Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})</button>`
       : ''
 
+    const observers = state.observers || []
+    const observerHtml = observers.length > 0
+      ? `<div class="observer-list"><span class="observer-label">At table:</span> ${observers.map((o) => {
+        const youBadge = o.playerId === playerId ? ' <span class="seat-you-badge">(you)</span>' : ''
+        return `<span class="observer-name">${esc(o.username)}${youBadge}</span>`
+      }).join(', ')}</div>`
+      : ''
+
+    const title = isSeated ? 'Waiting for players\u2026' : 'Choose a Seat'
+
     container.innerHTML = `
       <div class="game-screen">
         <div class="waiting-screen">
-          <h2 class="waiting-title">Waiting for players\u2026</h2>
+          <h2 class="waiting-title">${title}</h2>
           <div class="waiting-seats">${rows}</div>
+          ${observerHtml}
           <div class="form-error waiting-err" role="alert" aria-live="polite"></div>
           ${changeSeatBtns}
+          ${standBtn}
           ${fillBotsBtn}
           <button class="btn-secondary" id="leave-table-btn">Leave Table</button>
         </div>
       </div>`
+
+    container.querySelectorAll('.sit-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const seat = btn.dataset.seat
+        const errEl = container.querySelector('.waiting-err')
+        errEl.textContent = ''
+        container.querySelectorAll('.sit-btn').forEach((b) => { b.disabled = true })
+        btn.textContent = 'Sitting\u2026'
+        try {
+          await apiSitAtTable({ tableId, seat, sessionId, playerId })
+          state = await getGameState({ tableId, sessionId, playerId })
+          render()
+        } catch (err) {
+          errEl.textContent = err.message || 'Failed to sit at this seat.'
+          container.querySelectorAll('.sit-btn').forEach((b) => { b.disabled = false })
+          btn.textContent = 'Sit Here'
+        }
+      })
+    })
 
     container.querySelectorAll('.change-seat-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -520,6 +566,23 @@ export function renderGameScreen(container) {
       })
     })
 
+    container.querySelector('#stand-btn')?.addEventListener('click', async () => {
+      const btn = container.querySelector('#stand-btn')
+      const errEl = container.querySelector('.waiting-err')
+      btn.disabled = true
+      btn.textContent = 'Standing\u2026'
+      errEl.textContent = ''
+      try {
+        await apiStandFromSeat({ tableId, sessionId, playerId })
+        state = await getGameState({ tableId, sessionId, playerId })
+        render()
+      } catch (err) {
+        errEl.textContent = err.message || 'Failed to stand from seat.'
+        btn.disabled = false
+        btn.textContent = 'Stand Up'
+      }
+    })
+
     container.querySelector('#fill-bots-btn')?.addEventListener('click', async () => {
       const btn = container.querySelector('#fill-bots-btn')
       const errEl = container.querySelector('.waiting-err')
@@ -530,7 +593,6 @@ export function renderGameScreen(container) {
         for (const s of emptySeats) {
           await apiAddBot({ tableId, seat: s, sessionId, playerId })
         }
-        // Fetch updated state (game should have started)
         state = await getGameState({ tableId, sessionId, playerId })
         render()
       } catch (err) {
@@ -578,7 +640,7 @@ export function renderGameScreen(container) {
 
   function render() {
     if (!state) return
-    if (state.status === 'waiting') {
+    if (state.status === 'waiting' || state.status === 'spectating') {
       renderWaiting()
       return
     }
@@ -954,9 +1016,21 @@ export function renderGameScreen(container) {
     })
   }
 
+  async function loadInitialState() {
+    try {
+      return await getGameState({ tableId, sessionId, playerId })
+    } catch (err) {
+      if (err.status === 403) {
+        await apiJoinTable({ tableId, sessionId, playerId })
+        return await getGameState({ tableId, sessionId, playerId })
+      }
+      throw err
+    }
+  }
+
   // Initial load
   container.innerHTML = '<div class="game-screen"><p class="game-msg">Loading game\u2026</p></div>'
-  getGameState({ tableId, sessionId, playerId }).then((s) => {
+  loadInitialState().then((s) => {
     if (!mounted) return
     state = s
     // On (re)load, skip any summaries for hands already completed before this session

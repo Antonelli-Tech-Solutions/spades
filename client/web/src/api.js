@@ -311,6 +311,54 @@ export async function addBotToTable({ tableId, seat, sessionId, playerId }, fetc
 }
 
 /**
+ * Join a table as an observer (not seated). Requires a valid session.
+ * @param {{ tableId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tableId: string }>}
+ */
+export async function joinTableAsObserver({ tableId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/join`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to join table.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Stand up from a seat, becoming an observer. Requires a valid session.
+ * @param {{ tableId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tableId: string, previousSeat: string }>}
+ */
+export async function standFromSeat({ tableId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/stand`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to stand from seat.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Leave a waiting table, removing the player from their seat.
  * @param {{ tableId: string, sessionId: string, playerId: string }} data
  * @param {typeof fetch} [fetchFn]

@@ -15,6 +15,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { execSync } from 'node:child_process'
+import { saveEnv, restoreEnv } from '../helpers/envHelper.js'
 
 /** Reproduce the exact startup-fallback logic from app.js. */
 function applyGitFallback() {
@@ -38,7 +39,7 @@ function applyGitFallback() {
 
 describe('app.js git startup fallback', () => {
   it('sets GIT_COMMIT_SHA to a 40-char hex SHA when the env var is absent', { timeout: 5000 }, () => {
-    const saved = process.env.GIT_COMMIT_SHA
+    const saved = saveEnv('GIT_COMMIT_SHA')
     try {
       delete process.env.GIT_COMMIT_SHA
 
@@ -54,16 +55,12 @@ describe('app.js git startup fallback', () => {
         )
       }
     } finally {
-      if (saved !== undefined) {
-        process.env.GIT_COMMIT_SHA = saved
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', saved)
     }
   })
 
   it('does not override GIT_COMMIT_SHA when already set (CI-injected value wins)', { timeout: 5000 }, () => {
-    const saved = process.env.GIT_COMMIT_SHA
+    const saved = saveEnv('GIT_COMMIT_SHA')
     const ciSha = 'abc1234def5678901234567890abcdef12345678'
     try {
       process.env.GIT_COMMIT_SHA = ciSha
@@ -76,16 +73,12 @@ describe('app.js git startup fallback', () => {
         'CI-provided value must not be overwritten by the git fallback',
       )
     } finally {
-      if (saved !== undefined) {
-        process.env.GIT_COMMIT_SHA = saved
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', saved)
     }
   })
 
   it('leaves GIT_COMMIT_SHA unset when git is unavailable (no-op on failure)', { timeout: 5000 }, () => {
-    const saved = process.env.GIT_COMMIT_SHA
+    const saved = saveEnv('GIT_COMMIT_SHA')
     try {
       delete process.env.GIT_COMMIT_SHA
 
@@ -104,17 +97,13 @@ describe('app.js git startup fallback', () => {
         'env var must remain absent when the git command fails',
       )
     } finally {
-      if (saved !== undefined) {
-        process.env.GIT_COMMIT_SHA = saved
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', saved)
     }
   })
 
   it('uses VERCEL_GIT_COMMIT_SHA when GIT_COMMIT_SHA is absent', { timeout: 5000 }, () => {
-    const savedGit = process.env.GIT_COMMIT_SHA
-    const savedVercel = process.env.VERCEL_GIT_COMMIT_SHA
+    const savedGit = saveEnv('GIT_COMMIT_SHA')
+    const savedVercel = saveEnv('VERCEL_GIT_COMMIT_SHA')
     const vercelSha = 'aabbccdd11223344556677889900aabbccddeeff'
     try {
       delete process.env.GIT_COMMIT_SHA
@@ -128,23 +117,15 @@ describe('app.js git startup fallback', () => {
         'GIT_COMMIT_SHA must be set from VERCEL_GIT_COMMIT_SHA',
       )
     } finally {
-      if (savedGit !== undefined) {
-        process.env.GIT_COMMIT_SHA = savedGit
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-      if (savedVercel !== undefined) {
-        process.env.VERCEL_GIT_COMMIT_SHA = savedVercel
-      } else {
-        delete process.env.VERCEL_GIT_COMMIT_SHA
-      }
+      restoreEnv('GIT_COMMIT_SHA', savedGit)
+      restoreEnv('VERCEL_GIT_COMMIT_SHA', savedVercel)
     }
   })
 
   it('uses COMMIT_REF when GIT_COMMIT_SHA and VERCEL_GIT_COMMIT_SHA are absent', { timeout: 5000 }, () => {
-    const savedGit = process.env.GIT_COMMIT_SHA
-    const savedVercel = process.env.VERCEL_GIT_COMMIT_SHA
-    const savedCommitRef = process.env.COMMIT_REF
+    const savedGit = saveEnv('GIT_COMMIT_SHA')
+    const savedVercel = saveEnv('VERCEL_GIT_COMMIT_SHA')
+    const savedCommitRef = saveEnv('COMMIT_REF')
     const netlifySha = '1122334455667788990011223344556677889900'
     try {
       delete process.env.GIT_COMMIT_SHA
@@ -159,21 +140,9 @@ describe('app.js git startup fallback', () => {
         'GIT_COMMIT_SHA must be set from COMMIT_REF',
       )
     } finally {
-      if (savedGit !== undefined) {
-        process.env.GIT_COMMIT_SHA = savedGit
-      } else {
-        delete process.env.GIT_COMMIT_SHA
-      }
-      if (savedVercel !== undefined) {
-        process.env.VERCEL_GIT_COMMIT_SHA = savedVercel
-      } else {
-        delete process.env.VERCEL_GIT_COMMIT_SHA
-      }
-      if (savedCommitRef !== undefined) {
-        process.env.COMMIT_REF = savedCommitRef
-      } else {
-        delete process.env.COMMIT_REF
-      }
+      restoreEnv('GIT_COMMIT_SHA', savedGit)
+      restoreEnv('VERCEL_GIT_COMMIT_SHA', savedVercel)
+      restoreEnv('COMMIT_REF', savedCommitRef)
     }
   })
 })

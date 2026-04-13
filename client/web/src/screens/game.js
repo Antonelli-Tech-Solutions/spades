@@ -269,6 +269,7 @@ function esc(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+    .replace(/`/g, '&#96;')
 }
 
 /**
@@ -1135,8 +1136,8 @@ export function renderGameScreen(container) {
     })
   }).catch((err) => {
     if (!mounted) return
-    if (err.status === 401) { navigate('#/login'); return }
-    if (err.status === 403) { navigate('#/lobby'); return }
+    if (err.status === 401) { cleanup(); navigate('#/login'); return }
+    if (err.status === 403) { cleanup(); navigate('#/lobby'); return }
     container.innerHTML = '<div class="game-screen"><p class="game-msg">Failed to load game. <a href="#/lobby">Back to lobby</a></p></div>'
   })
 }

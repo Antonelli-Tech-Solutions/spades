@@ -483,26 +483,20 @@ export function renderGameScreen(container) {
         if (seatInfo.isBot) {
           status = '<span class="seat-bot-badge">BOT</span>'
         } else if (seatInfo.playerId === playerId) {
-          status = `${esc(seatInfo.username)} <span class="seat-you-badge">(you)</span>`
+          status = `${esc(seatInfo.username)} <span class="seat-you-badge">(you)</span> <button class="btn-secondary btn-sm" id="stand-btn">Stand Up</button>`
         } else {
           status = esc(seatInfo.username)
         }
       } else if (canSit) {
         status = `<button class="btn-secondary btn-sm sit-btn" data-seat="${s}">Sit Here</button>`
+      } else if (isSeated) {
+        status = `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move to ${label}</button>`
       } else {
         status = 'Empty'
       }
       const crownHtml = state.hostSeat === s ? `<span class="seat-host-crown" title="Host">${CROWN_ICON}</span>` : ''
       return `<div class="${cls}"><span>${crownHtml}${esc(label)}</span><span class="waiting-seat-status">${status}</span></div>`
     }).join('')
-
-    const changeSeatBtns = isSeated
-      ? emptySeats.map((s) => `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move to ${s.charAt(0).toUpperCase() + s.slice(1)}</button>`).join('')
-      : ''
-
-    const standBtn = isSeated
-      ? `<button class="btn-secondary btn-sm" id="stand-btn">Stand Up</button>`
-      : ''
 
     const fillBotsBtn = state.isHost && emptySeats.length > 0
       ? `<button class="btn-primary" id="fill-bots-btn">Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})</button>`
@@ -525,8 +519,6 @@ export function renderGameScreen(container) {
           <div class="waiting-seats">${rows}</div>
           ${observerHtml}
           <div class="form-error waiting-err" role="alert" aria-live="polite"></div>
-          ${changeSeatBtns}
-          ${standBtn}
           ${fillBotsBtn}
           <button class="btn-secondary" id="leave-table-btn">Leave Table</button>
         </div>

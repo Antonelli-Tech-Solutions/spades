@@ -41,6 +41,7 @@ export const FULL_REFRESH_EVENTS = new Set([
   'SEAT_VACATED',
   'OBSERVER_JOINED',
   'OBSERVER_LEFT',
+  'HOST_CHANGED',
 ])
 
 /**
@@ -268,6 +269,7 @@ function esc(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+    .replace(/`/g, '&#96;')
 }
 
 /**
@@ -468,6 +470,8 @@ export function renderGameScreen(container) {
     const emptySeats = SEAT_NAMES.filter((s) => seats[s] === null)
     const mySeat = Object.entries(seats).find(([, s]) => s?.playerId === playerId)?.[0]
     const isSeated = !!mySeat
+    const isSpectating = state.status === 'spectating'
+    const canSit = !isSeated && !isSpectating
 
     const rows = SEAT_NAMES.map((s) => {
       const seatInfo = seats[s]
@@ -483,7 +487,7 @@ export function renderGameScreen(container) {
         } else {
           status = esc(seatInfo.username)
         }
-      } else if (!isSeated) {
+      } else if (canSit) {
         status = `<button class="btn-secondary btn-sm sit-btn" data-seat="${s}">Sit Here</button>`
       } else {
         status = 'Empty'
@@ -506,13 +510,13 @@ export function renderGameScreen(container) {
 
     const observers = state.observers || []
     const observerHtml = observers.length > 0
-      ? `<div class="observer-list"><span class="observer-label">At table:</span> ${observers.map((o) => {
+      ? `<div class="observer-list"><span class="observer-label">Spectators:</span> ${observers.map((o) => {
         const youBadge = o.playerId === playerId ? ' <span class="seat-you-badge">(you)</span>' : ''
         return `<span class="observer-name">${esc(o.username)}${youBadge}</span>`
       }).join(', ')}</div>`
       : ''
 
-    const title = isSeated ? 'Waiting for players\u2026' : 'Choose a Seat'
+    const title = isSpectating ? 'Game in Progress' : (isSeated ? 'Waiting for players\u2026' : 'Choose a Seat')
 
     container.innerHTML = `
       <div class="game-screen">
@@ -1033,6 +1037,7 @@ export function renderGameScreen(container) {
   loadInitialState().then((s) => {
     if (!mounted) return
     state = s
+    sessionStorage.setItem('currentTableId', tableId)
     // On (re)load, skip any summaries for hands already completed before this session
     dismissedHandCount = s.handHistory?.length ?? 0
     render()
@@ -1131,8 +1136,8 @@ export function renderGameScreen(container) {
     })
   }).catch((err) => {
     if (!mounted) return
-    if (err.status === 401) { navigate('#/login'); return }
-    if (err.status === 403) { navigate('#/lobby'); return }
+    if (err.status === 401) { cleanup(); navigate('#/login'); return }
+    if (err.status === 403) { cleanup(); navigate('#/lobby'); return }
     container.innerHTML = '<div class="game-screen"><p class="game-msg">Failed to load game. <a href="#/lobby">Back to lobby</a></p></div>'
   })
 }

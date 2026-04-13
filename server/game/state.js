@@ -497,8 +497,7 @@ export function revealHand(state, seat) {
  * myHand is omitted and blindNilEligible is set to true.
  *
  * @param {object} state - Full server game state
- * @param {string} seat - The requesting player's seat
- * @returns {object} Filtered state safe to send to the client
+ * @returns {object} Filtered state safe to send to spectators (no hand data)
  */
 export function getSpectatorView(state) {
   return {

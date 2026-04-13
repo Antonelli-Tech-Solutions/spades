@@ -169,7 +169,10 @@ export async function standFromSeat(redis, tableId, playerId) {
   let newHostId = table.hostPlayerId
   if (table.hostPlayerId === playerId) {
     const remainingSeatedHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
-    newHostId = remainingSeatedHuman || playerId
+    if (!remainingSeatedHuman) {
+      throw Object.assign(new Error('Host cannot stand when no other human is seated'), { code: 'HOST_MUST_SIT' })
+    }
+    newHostId = remainingSeatedHuman
   }
 
   const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId, observers }

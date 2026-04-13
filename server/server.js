@@ -546,6 +546,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'HOST_MUST_SIT') return sendJSON(res, 409, { error: err.message })
       console.error('Stand from seat error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
@@ -771,7 +772,16 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
       if (!seat) {
         const enrichedSeats = await enrichSeats(db, table.seats)
-        return sendJSON(res, 200, { status: 'spectating', seats: enrichedSeats, observers: enrichedObservers, isHost: false, hostSeat: hostSeatWaiting })
+        const spectatorResponse = { status: 'spectating', seats: enrichedSeats, observers: enrichedObservers, isHost: false, hostSeat: hostSeatWaiting }
+        if (gameState) {
+          spectatorResponse.phase = gameState.phase
+          spectatorResponse.scores = gameState.scores
+          spectatorResponse.bags = gameState.bags
+          spectatorResponse.tricksWon = gameState.tricksWon
+          spectatorResponse.currentTrick = gameState.currentTrick
+          spectatorResponse.bids = gameState.bids
+        }
+        return sendJSON(res, 200, spectatorResponse)
       }
 
       const hostSeat = Object.entries(gameState.players).find(([, pid]) => pid === table.hostPlayerId)?.[0] ?? null

@@ -1028,7 +1028,7 @@
         flex-direction: column;
         gap: 0.5rem;
         width: 100%;
-        max-width: 260px;
+        max-width: 360px;
       }
 
       .waiting-seat {
@@ -1038,6 +1038,7 @@
         padding: 0.5rem 0.875rem;
         border-radius: 6px;
         font-size: 0.9rem;
+        min-height: 2.5rem;
       }
 
       .waiting-seat--taken {
@@ -1057,6 +1058,16 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: nowrap;
+      }
+
+      .stand-btn-inline {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.7rem;
+        white-space: nowrap;
       }
 
       .seat-bot-badge {

@@ -500,6 +500,24 @@ export function revealHand(state, seat) {
  * @param {string} seat - The requesting player's seat
  * @returns {object} Filtered state safe to send to the client
  */
+export function getSpectatorView(state) {
+  return {
+    phase: state.phase,
+    scores: state.scores,
+    bags: state.bags,
+    tricksWon: state.tricksWon,
+    currentTrick: state.currentTrick,
+    bids: state.bids,
+    currentPlayerSeat: state.currentPlayerSeat,
+    currentBidderSeat: state.currentBidderSeat,
+    dealerSeat: state.dealerSeat,
+    trickNumber: state.trickNumber,
+    handNumber: state.handNumber,
+    spadesbroken: state.spadesbroken,
+    handHistory: state.handHistory,
+  }
+}
+
 export function getPlayerView(state, seat) {
   const { hands, ...rest } = state
   const isEligible = isEligibleForBlindNil(state.scores, seat)

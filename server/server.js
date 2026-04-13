@@ -26,7 +26,7 @@ import {
   joinTable,
   standFromSeat,
 } from './lobby/table.js'
-import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, substitutePlayerWithBot } from './game/state.js'
+import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
 import { isBot, botBid, botPlay, botBlindNilExchange } from './game/bot.js'
 import { getPartnerSeat, isEligibleForBlindNil } from './game/bid.js'
@@ -523,6 +523,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
       console.error('Join table error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
@@ -539,6 +540,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (wss) {
         wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.seat })
         wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
+        if (result.hostChanged) {
+          const newHostSeat = Object.entries(result.table.seats).find(([, pid]) => pid === result.table.hostPlayerId)?.[0] ?? null
+          wss.broadcast(tableId, 'HOST_CHANGED', { newHostPlayerId: result.table.hostPlayerId, newHostSeat })
+        }
       }
       sendJSON(res, 200, { tableId, previousSeat: result.seat })
     } catch (err) {
@@ -772,14 +777,13 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
       if (!seat) {
         const enrichedSeats = await enrichSeats(db, table.seats)
-        const spectatorResponse = { status: 'spectating', seats: enrichedSeats, observers: enrichedObservers, isHost: false, hostSeat: hostSeatWaiting }
-        if (gameState) {
-          spectatorResponse.phase = gameState.phase
-          spectatorResponse.scores = gameState.scores
-          spectatorResponse.bags = gameState.bags
-          spectatorResponse.tricksWon = gameState.tricksWon
-          spectatorResponse.currentTrick = gameState.currentTrick
-          spectatorResponse.bids = gameState.bids
+        const spectatorResponse = {
+          status: 'spectating',
+          seats: enrichedSeats,
+          observers: enrichedObservers,
+          isHost: false,
+          hostSeat: hostSeatWaiting,
+          ...(gameState ? getSpectatorView(gameState) : {}),
         }
         return sendJSON(res, 200, spectatorResponse)
       }

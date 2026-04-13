@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 
 const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
+const MAX_OBSERVERS = 20
 
 /**
  * @typedef {Object} TableState
@@ -135,6 +136,9 @@ export async function joinTable(redis, tableId, playerId) {
   if (seated) return table
   const observers = table.observers || []
   if (observers.includes(playerId)) return table
+  if (observers.length >= MAX_OBSERVERS) {
+    throw Object.assign(new Error('Table has reached the maximum number of observers'), { code: 'OBSERVERS_FULL' })
+  }
   const updated = { ...table, observers: [...observers, playerId] }
   await saveTable(redis, updated)
   console.log('Player joined table as observer:', { tableId, playerId })
@@ -167,18 +171,24 @@ export async function standFromSeat(redis, tableId, playerId) {
   const observers = [...(table.observers || []), playerId]
 
   let newHostId = table.hostPlayerId
+  let hostChanged = false
   if (table.hostPlayerId === playerId) {
-    const remainingSeatedHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
+    // Pick next seated human in fixed seat order (north → east → south → west)
+    const seatOrder = ['north', 'east', 'south', 'west']
+    const remainingSeatedHuman = seatOrder
+      .map((s) => updatedSeats[s])
+      .find((id) => id && !id.startsWith('bot:'))
     if (!remainingSeatedHuman) {
       throw Object.assign(new Error('Host cannot stand when no other human is seated'), { code: 'HOST_MUST_SIT' })
     }
     newHostId = remainingSeatedHuman
+    hostChanged = true
   }
 
   const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId, observers }
   await saveTable(redis, updated)
   console.log('Player stood from seat:', { tableId, playerId, seat })
-  return { table: updated, seat }
+  return { table: updated, seat, hostChanged }
 }
 
 /**

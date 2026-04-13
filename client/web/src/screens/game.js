@@ -483,14 +483,14 @@ export function renderGameScreen(container) {
         if (seatInfo.isBot) {
           status = '<span class="seat-bot-badge">BOT</span>'
         } else if (seatInfo.playerId === playerId) {
-          status = `${esc(seatInfo.username)} <span class="seat-you-badge">(you)</span> <button class="btn-secondary btn-sm stand-btn-inline" id="stand-btn">Stand Up</button>`
+          status = `<button class="btn-secondary btn-sm stand-btn-inline" id="stand-btn">Stand Up</button>`
         } else {
           status = esc(seatInfo.username)
         }
       } else if (canSit) {
         status = `<button class="btn-secondary btn-sm sit-btn" data-seat="${s}">Sit Here</button>`
       } else if (isSeated) {
-        status = `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move to ${label}</button>`
+        status = `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move Here</button>`
       } else {
         status = 'Empty'
       }

@@ -6,7 +6,7 @@ import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { registerBuildInfoRoute } from '../../server/server.js'
-import { restoreEnv } from '../helpers/envHelper.js'
+import { restoreEnv, saveEnv } from '../helpers/envHelper.js'
 
 async function startTestServer() {
   const app = express()
@@ -46,8 +46,13 @@ describe('GET /api/build-info', () => {
   // ENV-VAR COUPLING: handler must read process.env on each request (issue #306).
   // The "reflects env var changes between requests" regression test guards this.
   const savedSha = process.env.GIT_COMMIT_SHA
+  // Also save fallback vars added for Vercel/Netlify support (issue #570)
+  let savedVercelSha
+  let savedCommitRef
 
   before(async () => {
+    savedVercelSha = saveEnv('VERCEL_GIT_COMMIT_SHA')
+    savedCommitRef = saveEnv('COMMIT_REF')
     server = await startTestServer()
   })
 
@@ -57,6 +62,8 @@ describe('GET /api/build-info', () => {
 
   afterEach(() => {
     restoreEnv('GIT_COMMIT_SHA', savedSha)
+    restoreEnv('VERCEL_GIT_COMMIT_SHA', savedVercelSha)
+    restoreEnv('COMMIT_REF', savedCommitRef)
   })
 
   it('returns the short commit SHA when GIT_COMMIT_SHA is set', async () => {
@@ -70,14 +77,74 @@ describe('GET /api/build-info', () => {
     assert.equal(body.commitShort, 'abc1234')
   })
 
-  it('returns null when GIT_COMMIT_SHA is not set', async () => {
+  it('returns null when GIT_COMMIT_SHA, VERCEL_GIT_COMMIT_SHA, and COMMIT_REF are all not set', async () => {
     delete process.env.GIT_COMMIT_SHA
+    delete process.env.VERCEL_GIT_COMMIT_SHA
+    delete process.env.COMMIT_REF
 
     const res = await fetch(`${server.baseUrl}/api/build-info`)
     assert.equal(res.status, 200)
 
     const body = await res.json()
     assert.equal(body.commitShort, null)
+  })
+
+  // --- Regression tests for Vercel/Netlify fallback chain (issue #570) ---
+
+  it('falls back to VERCEL_GIT_COMMIT_SHA when GIT_COMMIT_SHA is not set', async () => {
+    delete process.env.GIT_COMMIT_SHA
+    delete process.env.COMMIT_REF
+    process.env.VERCEL_GIT_COMMIT_SHA = 'vercel1234567890abcdef1234567890abcdef12'
+
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    assert.equal(res.status, 200)
+
+    const body = await res.json()
+    assert.equal(body.commitShort, 'vercel1')
+  })
+
+  it('falls back to COMMIT_REF when GIT_COMMIT_SHA and VERCEL_GIT_COMMIT_SHA are not set', async () => {
+    delete process.env.GIT_COMMIT_SHA
+    delete process.env.VERCEL_GIT_COMMIT_SHA
+    process.env.COMMIT_REF = 'netlify1234567890abcdef1234567890abcdef1'
+
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    assert.equal(res.status, 200)
+
+    const body = await res.json()
+    assert.equal(body.commitShort, 'netlify')
+  })
+
+  it('GIT_COMMIT_SHA takes precedence over VERCEL_GIT_COMMIT_SHA', async () => {
+    process.env.GIT_COMMIT_SHA = 'primary1234567890abcdef1234567890abcdef1'
+    process.env.VERCEL_GIT_COMMIT_SHA = 'vercel1234567890abcdef1234567890abcdef12'
+
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
+
+    assert.equal(body.commitShort, 'primary')
+  })
+
+  it('GIT_COMMIT_SHA takes precedence over COMMIT_REF', async () => {
+    process.env.GIT_COMMIT_SHA = 'primary1234567890abcdef1234567890abcdef1'
+    delete process.env.VERCEL_GIT_COMMIT_SHA
+    process.env.COMMIT_REF = 'netlify1234567890abcdef1234567890abcdef1'
+
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
+
+    assert.equal(body.commitShort, 'primary')
+  })
+
+  it('VERCEL_GIT_COMMIT_SHA takes precedence over COMMIT_REF', async () => {
+    delete process.env.GIT_COMMIT_SHA
+    process.env.VERCEL_GIT_COMMIT_SHA = 'vercel1234567890abcdef1234567890abcdef12'
+    process.env.COMMIT_REF = 'netlify1234567890abcdef1234567890abcdef1'
+
+    const res = await fetch(`${server.baseUrl}/api/build-info`)
+    const body = await res.json()
+
+    assert.equal(body.commitShort, 'vercel1')
   })
 
   it('truncates a full 40-character SHA to 7 characters', async () => {

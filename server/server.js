@@ -907,7 +907,13 @@ export function registerBuildInfoRoute(app) {
   app.locals._buildInfoRegistered = true
 
   app.get('/api/build-info', (req, res) => {
-    const commitSha = process.env.GIT_COMMIT_SHA || null
+    // Check platform-specific env vars in priority order.
+    // GIT_COMMIT_SHA is set by CI; VERCEL_GIT_COMMIT_SHA is set automatically
+    // by Vercel; COMMIT_REF is set automatically by Netlify.
+    const commitSha = process.env.GIT_COMMIT_SHA
+      || process.env.VERCEL_GIT_COMMIT_SHA
+      || process.env.COMMIT_REF
+      || null
     const shortSha = commitSha ? commitSha.slice(0, 7) : null
     sendJSON(res, 200, { commitShort: shortSha })
   })

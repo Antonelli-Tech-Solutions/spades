@@ -490,7 +490,7 @@ export function renderGameScreen(container) {
       } else if (canSit) {
         status = `<button class="btn-secondary btn-sm sit-btn" data-seat="${s}">Sit Here</button>`
       } else if (isSeated) {
-        status = `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move to ${label}</button>`
+        status = `<button class="btn-secondary btn-sm change-seat-btn" data-seat="${s}">Move Here</button>`
       } else {
         status = 'Empty'
       }

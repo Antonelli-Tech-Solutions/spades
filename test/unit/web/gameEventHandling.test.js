@@ -61,7 +61,7 @@ describe('FULL_REFRESH_EVENTS', { timeout: 2000 }, () => {
     assert.ok(FULL_REFRESH_EVENTS instanceof Set, 'FULL_REFRESH_EVENTS should be a Set')
   })
 
-  const expected = ['HAND_DEALT', 'HAND_SCORED', 'GAME_OVER', 'GAME_STARTED', 'TABLE_UPDATED', 'SEAT_TAKEN', 'SEAT_VACATED']
+  const expected = ['HAND_DEALT', 'HAND_SCORED', 'GAME_OVER', 'GAME_STARTED', 'TABLE_UPDATED', 'SEAT_TAKEN', 'SEAT_VACATED', 'OBSERVER_JOINED', 'OBSERVER_LEFT', 'HOST_CHANGED']
   for (const event of expected) {
     it(`includes ${event}`, { timeout: 2000 }, () => {
       assert.ok(FULL_REFRESH_EVENTS.has(event), `${event} should be a full-refresh event`)

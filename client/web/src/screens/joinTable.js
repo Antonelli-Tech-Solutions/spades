@@ -27,10 +27,10 @@ export async function renderJoinTableScreen(container) {
   const tableId = params.get('tableId')
 
   if (tableId) {
-    renderSeatPicker(container, tableId, sessionId, playerId)
-  } else {
-    renderTableList(container, sessionId, playerId)
+    navigate(`#/table?tableId=${tableId}`)
+    return
   }
+  renderTableList(container, sessionId, playerId)
 }
 
 function escapeHtml(str) {
@@ -108,7 +108,7 @@ async function renderTableList(container, sessionId, playerId) {
   card.querySelectorAll('.join-seat-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tid = btn.dataset.tableId
-      navigate(`#/join?tableId=${tid}`)
+      navigate(`#/table?tableId=${tid}`)
     })
   })
   card.querySelector('#refresh-btn').addEventListener('click', () => renderTableList(container, sessionId, playerId))

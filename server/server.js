@@ -23,6 +23,8 @@ import {
   leaveTable,
   leaveInProgressGame,
   changeSeat,
+  joinTable,
+  standFromSeat,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -266,6 +268,18 @@ async function enrichSeats(db, seats) {
 }
 
 /**
+ * Enrich an observer list (array of playerIds) with usernames.
+ * @param {object} db - pg Pool
+ * @param {string[]} observerIds
+ * @returns {Promise<Array<{ playerId: string, username: string|null }>>}
+ */
+async function enrichObservers(db, observerIds) {
+  if (!observerIds || observerIds.length === 0) return []
+  const usernames = await getPlayerUsernames(db, observerIds)
+  return observerIds.map((id) => ({ playerId: id, username: usernames[id] ?? null }))
+}
+
+/**
  * Register all API route handlers on the given Express app.
  *
  * @param {import('express').Application} app
@@ -496,6 +510,47 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
+  // POST /api/tables/:tableId/join — join a table as observer
+  app.post('/api/tables/:tableId/join', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await joinTable(redisClient, tableId, session.playerId)
+      emitLobbyTableUpdated(wss, table)
+      if (wss) wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
+      sendJSON(res, 200, { tableId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Join table error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/stand — stand up from seat, become observer
+  app.post('/api/tables/:tableId/stand', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const result = await standFromSeat(redisClient, tableId, session.playerId)
+      emitLobbyTableUpdated(wss, result.table)
+      if (wss) {
+        wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.seat })
+        wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
+      }
+      sendJSON(res, 200, { tableId, previousSeat: result.seat })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
+      console.error('Stand from seat error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
   // POST /api/tables/:tableId/sit — sit at a seat
   app.post('/api/tables/:tableId/sit', async (req, res) => {
     const { tableId } = req.params
@@ -615,6 +670,14 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!table) return sendJSON(res, 404, { error: 'Table not found.' })
 
       if (table.status === 'playing') {
+        const isObserver = (table.observers || []).includes(session.playerId)
+        if (isObserver) {
+          const leftResult = await leaveTable(redisClient, tableId, session.playerId)
+          emitLobbyTableUpdated(wss, leftResult.table)
+          if (wss) wss.broadcast(tableId, 'OBSERVER_LEFT', { playerId: session.playerId })
+          console.log('Observer left in-progress table:', { tableId, playerId: session.playerId })
+          return sendJSON(res, 200, { message: 'Left table.' })
+        }
         const result = await leaveInProgressGame(redisClient, tableId, session.playerId)
         if (result.terminated) {
           emitLobbyTableRemoved(wss, table)
@@ -631,6 +694,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       }
 
       const leftResult = await leaveTable(redisClient, tableId, session.playerId)
+      if (leftResult.wasObserver) {
+        emitLobbyTableUpdated(wss, leftResult.table)
+        if (wss) wss.broadcast(tableId, 'OBSERVER_LEFT', { playerId: session.playerId })
+        console.log('Observer left table:', { tableId, playerId: session.playerId })
+        return sendJSON(res, 200, { message: 'Left table.' })
+      }
       if (leftResult.terminated) {
         emitLobbyTableRemoved(wss, table)
         console.log('Player left waiting table, table terminated:', { tableId, playerId: session.playerId })
@@ -688,19 +757,26 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!table) return sendJSON(res, 404, { error: 'Table not found' })
 
       const seat = getSeatForPlayer(table.seats, session.playerId)
-      if (!seat) return sendJSON(res, 403, { error: 'You are not seated at this table' })
+      const isObserver = (table.observers || []).includes(session.playerId)
+      if (!seat && !isObserver) return sendJSON(res, 403, { error: 'You are not at this table' })
 
       const db = getDb()
       const gameState = await getGameState(redisClient, tableId)
       const hostSeatWaiting = Object.entries(table.seats).find(([, pid]) => pid === table.hostPlayerId)?.[0] ?? null
+      const enrichedObservers = await enrichObservers(db, table.observers || [])
       if (!gameState) {
         const enrichedSeats = await enrichSeats(db, table.seats)
-        return sendJSON(res, 200, { status: 'waiting', seats: enrichedSeats, isHost: table.hostPlayerId === session.playerId, hostSeat: hostSeatWaiting })
+        return sendJSON(res, 200, { status: 'waiting', seats: enrichedSeats, observers: enrichedObservers, isHost: table.hostPlayerId === session.playerId, hostSeat: hostSeatWaiting })
+      }
+
+      if (!seat) {
+        const enrichedSeats = await enrichSeats(db, table.seats)
+        return sendJSON(res, 200, { status: 'spectating', seats: enrichedSeats, observers: enrichedObservers, isHost: false, hostSeat: hostSeatWaiting })
       }
 
       const hostSeat = Object.entries(gameState.players).find(([, pid]) => pid === table.hostPlayerId)?.[0] ?? null
       const playerNames = await enrichSeats(db, gameState.players)
-      sendJSON(res, 200, { ...getPlayerView(gameState, seat), playerNames, isHost: table.hostPlayerId === session.playerId, hostSeat })
+      sendJSON(res, 200, { ...getPlayerView(gameState, seat), playerNames, observers: enrichedObservers, isHost: table.hostPlayerId === session.playerId, hostSeat })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Get game state error:', { tableId, error: err.message })

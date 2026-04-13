@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerUser, loginUser, logoutUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable, getGameState, placeBid, playCard, submitBlindNilExchange, revealHand } from '../../../client/web/src/api.js'
+import { registerUser, loginUser, logoutUser, resendVerification, forgotPassword, resetPassword, createTable, listTables, sitAtTable, getGameState, placeBid, playCard, submitBlindNilExchange, revealHand, joinTableAsObserver, standFromSeat } from '../../../client/web/src/api.js'
 
 /**
  * Build a minimal mock fetch that returns the given status and JSON body.
@@ -533,6 +533,60 @@ describe('submitBlindNilExchange', { timeout: 2000 }, () => {
   it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
     await assert.rejects(
       () => submitBlindNilExchange(auth, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => { assert.equal(err.status, 401); return true },
+    )
+  })
+})
+
+describe('joinTableAsObserver', { timeout: 2000 }, () => {
+  const auth = { tableId: 'tid', sessionId: 'sid', playerId: 'pid' }
+
+  it('resolves with tableId on 200', { timeout: 2000 }, async () => {
+    const result = await joinTableAsObserver(auth, mockFetch(200, { tableId: 'tid' }))
+    assert.equal(result.tableId, 'tid')
+  })
+
+  it('throws with status 404 when table not found', { timeout: 2000 }, async () => {
+    await assert.rejects(
+      () => joinTableAsObserver(auth, mockFetch(404, { error: 'Table not found' })),
+      (err) => { assert.equal(err.status, 404); return true },
+    )
+  })
+
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
+    await assert.rejects(
+      () => joinTableAsObserver(auth, mockFetch(401, { error: 'Unauthorized.' })),
+      (err) => { assert.equal(err.status, 401); return true },
+    )
+  })
+})
+
+describe('standFromSeat', { timeout: 2000 }, () => {
+  const auth = { tableId: 'tid', sessionId: 'sid', playerId: 'pid' }
+
+  it('resolves with tableId and previousSeat on 200', { timeout: 2000 }, async () => {
+    const result = await standFromSeat(auth, mockFetch(200, { tableId: 'tid', previousSeat: 'north' }))
+    assert.equal(result.tableId, 'tid')
+    assert.equal(result.previousSeat, 'north')
+  })
+
+  it('throws with status 409 when game in progress', { timeout: 2000 }, async () => {
+    await assert.rejects(
+      () => standFromSeat(auth, mockFetch(409, { error: 'Cannot stand once the game has started' })),
+      (err) => { assert.equal(err.status, 409); return true },
+    )
+  })
+
+  it('throws with status 409 when not seated', { timeout: 2000 }, async () => {
+    await assert.rejects(
+      () => standFromSeat(auth, mockFetch(409, { error: 'You are not seated at this table' })),
+      (err) => { assert.equal(err.status, 409); return true },
+    )
+  })
+
+  it('throws with status 401 when unauthenticated', { timeout: 2000 }, async () => {
+    await assert.rejects(
+      () => standFromSeat(auth, mockFetch(401, { error: 'Unauthorized.' })),
       (err) => { assert.equal(err.status, 401); return true },
     )
   })

@@ -188,7 +188,8 @@ export function applyDelta(state, msg, playerId) {
 
     case 'OBSERVER_JOINED': {
       const obs = { playerId: payload.playerId, username: payload.username }
-      return { ...state, observers: [...(state.observers || []), obs] }
+      const existing = (state.observers || []).filter(o => o.playerId !== payload.playerId)
+      return { ...state, observers: [...existing, obs] }
     }
 
     case 'OBSERVER_LEFT': {

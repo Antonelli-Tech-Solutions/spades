@@ -289,6 +289,8 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Starts the game once all 4 seats are filled. |
 | `POST` | `/api/tables/:tableId/add-bot` | Required (host) | Add a bot to an empty seat. |
 | `POST` | `/api/tables/:tableId/leave` | Required | Leave the table. If a game is in progress, the vacated seat is immediately filled by a bot. |
+| `GET` | `/api/tables/:tableId/join-link` | Required (host) | Generate a single-use shareable join link for the table. |
+| `POST` | `/api/tables/join-link/:token` | Required | Use a join link to sit at the table. Bypasses join policy. |
 | `POST` | `/api/tables/:tableId/terminate` | Required (host) | Terminate the game at any phase. |
 
 #### `GET /api/tables`
@@ -418,6 +420,45 @@ Host-only. Ends the game and removes the table regardless of phase.
 | `401` | Missing or invalid session |
 | `403` | Caller is not the table host |
 | `404` | Table not found |
+
+#### `GET /api/tables/:tableId/join-link`
+
+Host-only. Generates a single-use join link that any authenticated player can use to sit at the table, bypassing the table's `joinPolicy`. The token is stored in Redis and expires with the same TTL as the table (1 hour of inactivity).
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ token, joinUrl }`. `joinUrl` is a full URL using `APP_URL` (e.g. `https://spades.online/join/<token>`). |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the table host |
+| `404` | Table not found |
+
+#### `POST /api/tables/join-link/:token`
+
+Validates and consumes a single-use join link token, then seats the player at the associated table. The token is deleted on use so it cannot be reused. The table's `joinPolicy` is intentionally bypassed — the link itself serves as host authorization.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "seat": "north" }
+```
+
+Valid seat values: `north`, `east`, `south`, `west`.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Seated. Body: `{ tableId, seat }`. Game starts automatically if all 4 seats are now filled. |
+| `400` | Invalid seat value |
+| `401` | Missing or invalid session |
+| `403` | Invalid or expired join link |
+| `404` | Table no longer exists |
+| `409` | Game already in progress, seat is taken, or player is already seated |
 
 ### Game
 

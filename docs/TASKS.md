@@ -134,7 +134,7 @@
 
 ### Social
 
-- [ ] `P1` Build friends list: send, accept, decline requests by username search
+- [x] `P1` Build friends list: send, accept, decline requests by username search
 - [ ] `P1` Show online / offline / in-game status; display table name if player has visibility permission, "Playing at a private table" if not, "In lobby" if between games
 - [ ] `P1` Allow going to a friend's table from the friends list, subject to visibility and join policy
 - [ ] `P1` Implement direct in-app invite via friends list and username search: bypasses visibility and join policy

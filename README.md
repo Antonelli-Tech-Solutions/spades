@@ -324,7 +324,7 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 
 | Status | Meaning |
 |---|---|
-| `201` | Friend request sent |
+| `201` | Friend request sent. Publishes `FRIEND_REQUEST_RECEIVED` to the recipient's personal notification channel. |
 | `400` | Invalid playerId or attempting to friend yourself |
 | `401` | Missing or invalid session |
 | `403` | Either player has blocked the other |
@@ -346,7 +346,7 @@ The `playerId` is the requester whose pending request you want to accept.
 
 | Status | Meaning |
 |---|---|
-| `200` | Friend request accepted |
+| `200` | Friend request accepted. Publishes `FRIEND_REQUEST_ACCEPTED` to the original requester's personal notification channel. |
 | `400` | Invalid playerId |
 | `401` | Missing or invalid session |
 | `403` | Either player has blocked the other |
@@ -883,6 +883,13 @@ Lobby events are broadcast to all lobby subscribers across all server instances 
 Each authenticated WebSocket connection is automatically subscribed to a personal `player:{playerId}:notify` Redis pub/sub channel. This channel delivers social events (friend requests, in-app invites, friends-only table notifications) directly to the target player across all server instances. No client action is required — the subscription happens on connect and is cleaned up on disconnect.
 
 Server-side code can send a notification to any online player via `wss.notifyPlayer(playerId, type, payload)`. When Redis is configured, the message is published to the player's notification channel so all server instances deliver it. Without Redis, it falls back to a local `sendToPlayer` call.
+
+#### Notification Events
+
+| Type | Payload | Trigger |
+|---|---|---|
+| `FRIEND_REQUEST_RECEIVED` | `{ "fromPlayerId": "<uuid>", "fromUsername": "<string>" }` | A friend request is sent to this player. |
+| `FRIEND_REQUEST_ACCEPTED` | `{ "fromPlayerId": "<uuid>", "fromUsername": "<string>" }` | A player accepts this player's friend request. |
 
 ### Heartbeat
 

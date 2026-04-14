@@ -289,6 +289,9 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Starts the game once all 4 seats are filled. |
 | `POST` | `/api/tables/:tableId/add-bot` | Required (host) | Add a bot to an empty seat. |
 | `POST` | `/api/tables/:tableId/leave` | Required | Leave the table. If a game is in progress, the vacated seat is immediately filled by a bot. |
+| `POST` | `/api/tables/:tableId/assign-seat` | Required (host) | Assign a player to a specific seat (pre-game only). |
+| `POST` | `/api/tables/:tableId/kick` | Required (host) | Kick a player from the table. If in-game, the player is replaced by a bot. |
+| `POST` | `/api/tables/:tableId/transfer-host` | Required (host) | Transfer host privileges to another seated player. |
 | `POST` | `/api/tables/:tableId/terminate` | Required (host) | Terminate the game at any phase. |
 
 #### `GET /api/tables`
@@ -403,6 +406,74 @@ Removes the player from their seat. If a game is in progress when the player lea
 | `401` | Missing or invalid session |
 | `404` | Table not found |
 | `409` | Player is not seated at this table |
+
+#### `POST /api/tables/:tableId/assign-seat`
+
+Host-only. Assigns a player to a specific seat. The target player must be at the table (seated elsewhere or observing). If the target is already seated, they are moved to the new seat. Only allowed before the game starts.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<uuid>", "seat": "south" }
+```
+
+Valid seat values: `north`, `east`, `south`, `west`.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Seat assigned. Body: `{ tableId, playerId, seat }` |
+| `400` | Missing playerId or invalid seat value |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the table host |
+| `404` | Table not found |
+| `409` | Game already in progress, seat is taken, or target player is not at this table |
+
+#### `POST /api/tables/:tableId/kick`
+
+Host-only. Kicks a player from the table. If the table is waiting, the seat is vacated. If a game is in progress, the kicked player is replaced by a bot. The host cannot kick themselves.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<uuid>" }
+```
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Player kicked. Body: `{ tableId, kickedPlayerId, seat }` |
+| `400` | Missing playerId |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the table host |
+| `404` | Table not found |
+| `409` | Player is not at this table, or host attempted to kick themselves |
+
+#### `POST /api/tables/:tableId/transfer-host`
+
+Host-only. Transfers host privileges to another seated player. Allowed at any time (waiting or playing). Cannot transfer to a bot.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<uuid>" }
+```
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Host transferred. Body: `{ tableId, newHostPlayerId }` |
+| `400` | Missing playerId |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the current host |
+| `404` | Table not found |
+| `409` | Target player is not seated, or target is a bot |
 
 #### `POST /api/tables/:tableId/terminate`
 
@@ -569,7 +640,13 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 | `JOINED_LOBBY` | `{}` | Confirms the client has joined the lobby channel. |
 | `LEFT_LOBBY` | `{}` | Confirms the client has left the lobby channel. |
 
-Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+Game and table events are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`. Table management events include:
+
+| Type | Payload | Description |
+|---|---|---|
+| `SEAT_ASSIGNED` | `{ "playerId": "<uuid>", "seat": "<seat>" }` | Host assigned a player to a seat. |
+| `PLAYER_KICKED` | `{ "playerId": "<uuid>", "seat": "<seat>" }` | Host kicked a player from the table. `seat` is `null` if the player was an observer. |
+| `HOST_TRANSFERRED` | `{ "oldHost": "<uuid>", "newHost": "<uuid>" }` | Host privileges were transferred to another player. |
 
 Lobby events (table created, table removed, etc.) are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
 

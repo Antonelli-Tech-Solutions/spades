@@ -866,6 +866,8 @@ export async function enforceJoinPolicyForSit(redis, db, table, playerId, { areF
     }
     return
   }
+
+  throw Object.assign(new Error('Unknown join policy'), { code: 'FORBIDDEN' })
 }
 
 export async function listTables(redis) {

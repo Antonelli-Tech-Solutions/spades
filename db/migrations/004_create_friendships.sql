@@ -52,3 +52,9 @@ BEGIN
   END IF;
 END
 $$;
+
+-- Bidirectional unique index: prevents duplicate friendships regardless of direction
+-- (e.g. Alice->Bob and Bob->Alice). The directional UNIQUE constraint above only
+-- prevents exact duplicates; this index covers the reverse-pair race condition.
+CREATE UNIQUE INDEX IF NOT EXISTS friendships_pair_unique_bidi
+ON friendships (LEAST(requester_id, addressee_id), GREATEST(requester_id, addressee_id));

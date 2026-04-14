@@ -682,7 +682,7 @@ export async function createSpectatorLink(redis, tableId, requestingPlayerId) {
   const token = uuidv4()
   const key = `spectatorlink:${token}`
   await redis.set(key, JSON.stringify({ tableId, createdAt: new Date().toISOString() }), { EX: TABLE_TTL_SECONDS })
-  console.log('Spectator link created:', { tableId, tokenPrefix: token.slice(0, 8) })
+  console.log('Spectator link created:', { tableId })
   return token
 }
 

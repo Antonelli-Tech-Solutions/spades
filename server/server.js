@@ -822,13 +822,6 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const result = await kickPlayer(redisClient, tableId, session.playerId, targetPlayerId)
-      if (result.wasPlaying) {
-        const gameState = await getGameState(redisClient, tableId)
-        if (gameState) {
-          const newState = substitutePlayerWithBot(gameState, result.seat)
-          await saveGameState(redisClient, tableId, newState)
-        }
-      }
       emitLobbyTableUpdated(wss, result.table)
       if (wss) {
         wss.broadcast(tableId, 'PLAYER_KICKED', { playerId: targetPlayerId, seat: result.seat })

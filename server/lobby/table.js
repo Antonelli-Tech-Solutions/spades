@@ -490,6 +490,7 @@ export async function terminateTable(redis, tableId) {
   await redis.del(`table:${tableId}`)
   await redis.del(`game:${tableId}`)
   await redis.del(`spectators:${tableId}`)
+  await redis.del(`invited:${tableId}`)
   await redis.hDel('lobby:tables', tableId)
   console.log('Table terminated:', { tableId })
 }
@@ -766,6 +767,105 @@ export async function markPlayerAsSpectator(redis, tableId, playerId) {
 export async function isSpectatorOnly(redis, tableId, playerId) {
   const key = `spectators:${tableId}`
   return redis.sIsMember(key, playerId)
+}
+
+/**
+ * Arrive at a table as an observer. Like joinTable, but also allows arrival
+ * at spectating-disabled tables when the player holds a valid join link
+ * (indicated by `hasJoinLink`).
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @param {{ hasJoinLink?: boolean }} opts
+ * @returns {Promise<TableState>}
+ */
+export async function arriveAtTable(redis, tableId, playerId, { hasJoinLink = false } = {}) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  const seated = Object.values(table.seats).includes(playerId)
+  if (seated) return table
+  const observers = table.observers || []
+  if (observers.includes(playerId)) return table
+
+  if (!table.spectating && !hasJoinLink) {
+    throw Object.assign(new Error('Spectating is not enabled for this table'), { code: 'FORBIDDEN' })
+  }
+
+  if (observers.length >= MAX_OBSERVERS) {
+    throw Object.assign(new Error('Table has reached the maximum number of observers'), { code: 'OBSERVERS_FULL' })
+  }
+
+  const updated = { ...table, observers: [...observers, playerId] }
+  await saveTable(redis, updated)
+  console.log('Player arrived at table:', { tableId, playerId })
+  return updated
+}
+
+/**
+ * Mark a player as invited to a table. Invited players can sit at
+ * invite-only tables without needing a join link.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ */
+export async function markPlayerInvited(redis, tableId, playerId) {
+  const key = `invited:${tableId}`
+  await redis.sAdd(key, playerId)
+  await redis.expire(key, TABLE_TTL_SECONDS)
+}
+
+/**
+ * Check whether a player has been invited to a table.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @returns {Promise<boolean>}
+ */
+export async function isPlayerInvited(redis, tableId, playerId) {
+  return redis.sIsMember(`invited:${tableId}`, playerId)
+}
+
+/**
+ * Enforce the table's join policy. Returns null if the player is allowed
+ * to sit, or throws FORBIDDEN if not.
+ *
+ * - open: anyone may sit
+ * - friends-only: the player must be a friend of the host
+ * - invite-only: the player must have been invited or used a join link
+ *
+ * The host always passes policy checks.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {object} db - pg Pool
+ * @param {TableState} table
+ * @param {string} playerId
+ * @param {{ areFriends: function }} deps — injectable for testing
+ */
+export async function enforceJoinPolicyForSit(redis, db, table, playerId, { areFriends }) {
+  if (playerId === table.hostPlayerId) return
+
+  if (table.joinPolicy === 'open') return
+
+  if (table.joinPolicy === 'friends-only') {
+    const friends = await areFriends(db, playerId, table.hostPlayerId)
+    if (!friends) {
+      throw Object.assign(new Error('Only friends of the host may sit at this table'), { code: 'FORBIDDEN' })
+    }
+    return
+  }
+
+  if (table.joinPolicy === 'invite-only') {
+    const invited = await isPlayerInvited(redis, table.tableId, playerId)
+    if (!invited) {
+      throw Object.assign(new Error('You must be invited to sit at this table'), { code: 'FORBIDDEN' })
+    }
+    return
+  }
 }
 
 export async function listTables(redis) {

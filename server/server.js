@@ -2,6 +2,7 @@ import { registerPlayer, verifyEmailToken, resendVerificationEmail } from './aut
 import { forgotPassword, resetPassword } from './auth/passwordReset.js'
 import { sendVerificationEmail as defaultMailer, sendPasswordResetEmail as defaultPasswordResetMailer } from './auth/email.js'
 import { getPlayerProfile, getPlayerUsernames, isValidUuid } from './social/profile.js'
+import { areFriends } from './social/friends.js'
 import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession, getSession, validateAuthHeaders } from './auth/session.js'
 import { getDb } from './db.js'
@@ -32,6 +33,9 @@ import {
   validateJoinLink,
   createSpectatorLink,
   validateSpectatorLink,
+  arriveAtTable,
+  enforceJoinPolicyForSit,
+  markPlayerInvited,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -543,6 +547,26 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
+  // POST /api/tables/:tableId/arrive — arrive at a table as observer
+  app.post('/api/tables/:tableId/arrive', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await arriveAtTable(redisClient, tableId, session.playerId)
+      emitLobbyTableUpdated(wss, table)
+      if (wss) wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
+      sendJSON(res, 200, { tableId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
+      console.error('Arrive at table error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
   // POST /api/tables/:tableId/join — join a table as observer
   app.post('/api/tables/:tableId/join', async (req, res) => {
     const { tableId } = req.params
@@ -597,6 +621,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      const currentTable = await getTable(redisClient, tableId)
+      if (!currentTable) return sendJSON(res, 404, { error: 'Table not found' })
+      await enforceJoinPolicyForSit(redisClient, db, currentTable, session.playerId, { areFriends })
       const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
 
       // If table is now full, start the game and advance any leading bot turns

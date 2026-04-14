@@ -709,7 +709,9 @@ export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     // eslint-disable-next-line no-await-in-loop
     const result = await redis.executeIsolated(async (isolatedClient) => {
+      const gameKey = `game:${tableId}`
       await isolatedClient.watch(key)
+      await isolatedClient.watch(gameKey)
 
       const raw = await isolatedClient.get(key)
       if (!raw) {
@@ -770,7 +772,6 @@ export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
           newGameState = substitutePlayerWithBot(gameState, seat)
         }
 
-        const gameKey = `game:${tableId}`
         const multi = isolatedClient
           .multi()
           .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })

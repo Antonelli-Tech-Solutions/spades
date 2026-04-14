@@ -1007,8 +1007,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
-  // GET /api/tables/:tableId/join-link — generate a shareable join link (host only)
-  app.get('/api/tables/:tableId/join-link', async (req, res) => {
+  // POST /api/tables/:tableId/join-link — generate a shareable join link (host only)
+  app.post('/api/tables/:tableId/join-link', async (req, res) => {
     const { tableId } = req.params
     try {
       const redisClient = await getRedis()
@@ -1033,9 +1033,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
-      // validateJoinLink consumes the single-use token and bypasses joinPolicy by design
-      const tableId = await validateJoinLink(redisClient, token)
+      // validateJoinLink verifies the token but does not consume it — consumed after successful seating
+      const { tableId, key: tokenKey } = await validateJoinLink(redisClient, token)
       const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
+      await redisClient.del(tokenKey)
+
+      const actualSeat = Object.entries(table.seats).find(([, id]) => id === session.playerId)?.[0]
 
       if (isTableFull(table)) {
         const players = table.seats
@@ -1051,10 +1054,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         }
       } else {
         emitLobbyTableUpdated(wss, table)
-        if (wss) wss.broadcast(tableId, 'SEAT_TAKEN', { seat })
+        if (wss) wss.broadcast(tableId, 'SEAT_TAKEN', { seat: actualSeat })
       }
 
-      sendJSON(res, 200, { tableId, seat })
+      sendJSON(res, 200, { tableId, seat: actualSeat })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })

@@ -614,7 +614,7 @@ export async function createJoinLink(redis, tableId, requestingPlayerId) {
   const token = uuidv4()
   const key = `joinlink:${token}`
   await redis.set(key, JSON.stringify({ tableId, createdAt: new Date().toISOString() }), { EX: TABLE_TTL_SECONDS })
-  console.log('Join link created:', { tableId, token })
+  console.log('Join link created:', { tableId, tokenPrefix: token.slice(0, 8) })
   return token
 }
 
@@ -634,6 +634,10 @@ export async function createJoinLink(redis, tableId, requestingPlayerId) {
  * @returns {Promise<string>} tableId
  */
 export async function validateJoinLink(redis, token) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidRegex.test(token)) {
+    throw Object.assign(new Error('Invalid or expired join link'), { code: 'FORBIDDEN' })
+  }
   const key = `joinlink:${token}`
   const raw = await redis.get(key)
   if (!raw) {
@@ -645,8 +649,7 @@ export async function validateJoinLink(redis, token) {
     await redis.del(key)
     throw Object.assign(new Error('Table no longer exists'), { code: 'NOT_FOUND' })
   }
-  await redis.del(key)
-  return tableId
+  return { tableId, key }
 }
 
 export async function listTables(redis) {

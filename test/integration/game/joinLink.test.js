@@ -108,7 +108,8 @@ describe('Join Link', { skip }, () => {
     const { tableId } = await createRes.json()
 
     const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/join-link`, {
-      headers: { 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
     })
     assert.equal(linkRes.status, 200)
     const body = await linkRes.json()
@@ -132,7 +133,8 @@ describe('Join Link', { skip }, () => {
     const { tableId } = await createRes.json()
 
     const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/join-link`, {
-      headers: { 'x-session-id': guest.sessionId, 'x-player-id': guest.playerId },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-id': guest.sessionId, 'x-player-id': guest.playerId },
     })
     assert.equal(linkRes.status, 403)
   })
@@ -153,7 +155,8 @@ describe('Join Link', { skip }, () => {
     const { tableId } = await createRes.json()
 
     const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/join-link`, {
-      headers: { 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
     })
     const { token } = await linkRes.json()
 
@@ -206,7 +209,8 @@ describe('Join Link', { skip }, () => {
     const { tableId } = await createRes.json()
 
     const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/join-link`, {
-      headers: { 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
     })
     const { token } = await linkRes.json()
 

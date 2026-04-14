@@ -513,6 +513,60 @@ describe('applyDelta', { timeout: 2000 }, () => {
     })
   })
 
+  describe('OBSERVER_JOINED', { timeout: 2000 }, () => {
+    it('adds observer to state.observers', { timeout: 2000 }, () => {
+      const state = { ...baseState, observers: [{ playerId: 'obs-1', username: 'Alice' }] }
+      const result = applyDelta(state, {
+        type: 'OBSERVER_JOINED',
+        payload: { playerId: 'obs-2', username: 'Bob' },
+      }, playerId)
+      assert.equal(result.observers.length, 2)
+      assert.deepEqual(result.observers[1], { playerId: 'obs-2', username: 'Bob' })
+    })
+
+    it('initializes observers array when undefined', { timeout: 2000 }, () => {
+      const state = { ...baseState }
+      delete state.observers
+      const result = applyDelta(state, {
+        type: 'OBSERVER_JOINED',
+        payload: { playerId: 'obs-1', username: 'Alice' },
+      }, playerId)
+      assert.ok(Array.isArray(result.observers), 'observers should be an array')
+      assert.equal(result.observers.length, 1)
+      assert.deepEqual(result.observers[0], { playerId: 'obs-1', username: 'Alice' })
+    })
+  })
+
+  describe('OBSERVER_LEFT', { timeout: 2000 }, () => {
+    it('removes matching observer by playerId', { timeout: 2000 }, () => {
+      const state = {
+        ...baseState,
+        observers: [
+          { playerId: 'obs-1', username: 'Alice' },
+          { playerId: 'obs-2', username: 'Bob' },
+        ],
+      }
+      const result = applyDelta(state, {
+        type: 'OBSERVER_LEFT',
+        payload: { playerId: 'obs-1' },
+      }, playerId)
+      assert.equal(result.observers.length, 1)
+      assert.equal(result.observers[0].playerId, 'obs-2')
+    })
+
+    it('is a no-op for unknown playerId', { timeout: 2000 }, () => {
+      const state = {
+        ...baseState,
+        observers: [{ playerId: 'obs-1', username: 'Alice' }],
+      }
+      const result = applyDelta(state, {
+        type: 'OBSERVER_LEFT',
+        payload: { playerId: 'unknown' },
+      }, playerId)
+      assert.strictEqual(result, state, 'state reference should be unchanged')
+    })
+  })
+
   describe('PLAYER_DISCONNECTED / PLAYER_RECONNECTED', { timeout: 2000 }, () => {
     it('returns state reference unchanged for PLAYER_DISCONNECTED', { timeout: 2000 }, () => {
       const result = applyDelta(baseState, {

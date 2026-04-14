@@ -186,6 +186,18 @@ export function applyDelta(state, msg, playerId) {
       }
     }
 
+    case 'OBSERVER_JOINED': {
+      const obs = { playerId: payload.playerId, username: payload.username }
+      return { ...state, observers: [...(state.observers || []), obs] }
+    }
+
+    case 'OBSERVER_LEFT': {
+      if (!state.observers) return state
+      const filtered = state.observers.filter((o) => o.playerId !== payload.playerId)
+      if (filtered.length === state.observers.length) return state
+      return { ...state, observers: filtered }
+    }
+
     case 'PLAYER_DISCONNECTED':
     case 'PLAYER_RECONNECTED':
       return state  // no state change — re-render for visual update only

@@ -1075,8 +1075,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
-  // GET /api/tables/:tableId/spectator-link — generate a shareable spectator link (host only)
-  app.get('/api/tables/:tableId/spectator-link', async (req, res) => {
+  // POST /api/tables/:tableId/spectator-link — generate a shareable spectator link (host only)
+  app.post('/api/tables/:tableId/spectator-link', async (req, res) => {
     const { tableId } = req.params
     try {
       const redisClient = await getRedis()

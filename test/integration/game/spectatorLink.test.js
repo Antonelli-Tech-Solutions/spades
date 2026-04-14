@@ -108,7 +108,7 @@ describe('Spectator Link', { skip }, () => {
     const { tableId } = await createRes.json()
 
     const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/spectator-link`, {
-      method: 'GET',
+      method: 'POST',
       headers: { 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
     })
     assert.equal(linkRes.status, 200)
@@ -133,7 +133,7 @@ describe('Spectator Link', { skip }, () => {
     const { tableId } = await createRes.json()
 
     const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/spectator-link`, {
-      method: 'GET',
+      method: 'POST',
       headers: { 'x-session-id': guest.sessionId, 'x-player-id': guest.playerId },
     })
     assert.equal(linkRes.status, 403)
@@ -155,7 +155,7 @@ describe('Spectator Link', { skip }, () => {
     const { tableId } = await createRes.json()
 
     const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/spectator-link`, {
-      method: 'GET',
+      method: 'POST',
       headers: { 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
     })
     const { token } = await linkRes.json()
@@ -189,7 +189,7 @@ describe('Spectator Link', { skip }, () => {
     const { tableId } = await createRes.json()
 
     const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/spectator-link`, {
-      method: 'GET',
+      method: 'POST',
       headers: { 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
     })
     const { token } = await linkRes.json()

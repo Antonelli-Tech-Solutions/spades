@@ -106,7 +106,7 @@ export function createWsServer(httpServer, opts = {}) {
   })
 
   // ── Connection handler ──────────────────────────────────────────────────────
-  wss.on('connection', (ws) => {
+  wss.on('connection', async (ws) => {
     const playerId = ws._playerId
     console.log('WebSocket connected:', { playerId })
 
@@ -121,16 +121,17 @@ export function createWsServer(httpServer, opts = {}) {
     const notifyChannel = `player:${playerId}:notify`
     ws._notifyChannel = notifyChannel
     if (subscriber) {
-      const notifyRoomKey = notifyChannel
-      const isNewNotifyRoom = !rooms.has(notifyRoomKey)
+      const isNewNotifyRoom = !rooms.has(notifyChannel)
       if (isNewNotifyRoom) {
-        rooms.set(notifyRoomKey, new Set())
+        rooms.set(notifyChannel, new Set())
       }
-      rooms.get(notifyRoomKey).add(ws)
+      rooms.get(notifyChannel).add(ws)
       if (isNewNotifyRoom) {
-        subscriber.subscribe(notifyRoomKey, onChannelMessage).catch((err) =>
-          console.error('Redis notify subscribe error:', { playerId, error: err.message }),
-        )
+        try {
+          await subscriber.subscribe(notifyChannel, onChannelMessage)
+        } catch (err) {
+          console.error('Redis notify subscribe error:', { playerId, error: err.message })
+        }
       }
     }
 

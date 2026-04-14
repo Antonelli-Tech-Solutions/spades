@@ -34,7 +34,6 @@ import {
   createSpectatorLink,
   validateSpectatorLink,
   arriveAtTable,
-  enforceJoinPolicyForSit,
   markPlayerInvited,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
@@ -562,6 +561,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
       if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 409, { error: err.message })
       console.error('Arrive at table error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
@@ -622,10 +622,9 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const db = getDb()
-      const currentTable = await getTable(redisClient, tableId)
-      if (!currentTable) return sendJSON(res, 404, { error: 'Table not found' })
-      await enforceJoinPolicyForSit(redisClient, db, currentTable, session.playerId, { areFriends })
-      const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
+      const table = await sitAtTable(redisClient, tableId, session.playerId, seat, {
+        policyDeps: { db, areFriends },
+      })
 
       // If table is now full, start the game and advance any leading bot turns
       if (isTableFull(table)) {
@@ -655,6 +654,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'ALREADY_SEATED') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 409, { error: err.message })
       console.error('Sit at table error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }

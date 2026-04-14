@@ -122,47 +122,86 @@ export async function saveTable(redis, table) {
  * @returns {Promise<TableState>}
  * @throws {Error} If the table is not found, game already started, seat is taken, or player already seated
  */
-export async function sitAtTable(redis, tableId, playerId, seat) {
+export async function sitAtTable(redis, tableId, playerId, seat, { policyDeps } = {}) {
   const validSeats = ['north', 'east', 'south', 'west']
   if (!validSeats.includes(seat)) {
     throw Object.assign(new Error(`Invalid seat: ${seat}`), { code: 'INVALID_SEAT' })
   }
 
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+
+      const spectatorOnly = await isSpectatorOnly(redis, tableId, playerId)
+      if (spectatorOnly) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Spectators cannot sit at the table'), { code: 'FORBIDDEN' })
+      }
+
+      if (table.status === 'playing') {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
+      }
+
+      const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
+      if (currentSeat === seat) {
+        await isolatedClient.unwatch()
+        return table
+      }
+      if (currentSeat) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
+      }
+      if (table.seats[seat] !== null) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+      }
+
+      if (policyDeps) {
+        await enforceJoinPolicyForSit(redis, policyDeps.db, table, playerId, { areFriends: policyDeps.areFriends })
+      }
+
+      const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
+      const updated = {
+        ...table,
+        seats: { ...table.seats, [seat]: playerId },
+        observers: updatedObservers,
+      }
+
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Player seated:', { tableId, playerId, seat })
+      return updated
+    })
+
+    if (result !== null) {
+      return result
+    }
   }
 
-  const spectatorOnly = await isSpectatorOnly(redis, tableId, playerId)
-  if (spectatorOnly) {
-    throw Object.assign(new Error('Spectators cannot sit at the table'), { code: 'FORBIDDEN' })
-  }
-
-  if (table.status === 'playing') {
-    throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
-  }
-  // Check idempotent same-seat before checking seat occupancy
-  const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
-  if (currentSeat === seat) {
-    // Already at this exact seat — no-op, return current state
-    return table
-  }
-  if (currentSeat) {
-    throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
-  }
-  if (table.seats[seat] !== null) {
-    throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
-  }
-
-  const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
-  const updated = {
-    ...table,
-    seats: { ...table.seats, [seat]: playerId },
-    observers: updatedObservers,
-  }
-  await saveTable(redis, updated)
-  console.log('Player seated:', { tableId, playerId, seat })
-  return updated
+  throw Object.assign(
+    new Error('Sit could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
 }
 
 /**
@@ -781,27 +820,65 @@ export async function isSpectatorOnly(redis, tableId, playerId) {
  * @returns {Promise<TableState>}
  */
 export async function arriveAtTable(redis, tableId, playerId, { hasJoinLink = false } = {}) {
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
-  }
-  const seated = Object.values(table.seats).includes(playerId)
-  if (seated) return table
-  const observers = table.observers || []
-  if (observers.includes(playerId)) return table
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
 
-  if (!table.spectating && !hasJoinLink) {
-    throw Object.assign(new Error('Spectating is not enabled for this table'), { code: 'FORBIDDEN' })
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+      const seated = Object.values(table.seats).includes(playerId)
+      if (seated) {
+        await isolatedClient.unwatch()
+        return table
+      }
+      const observers = table.observers || []
+      if (observers.includes(playerId)) {
+        await isolatedClient.unwatch()
+        return table
+      }
+
+      if (!table.spectating && !hasJoinLink) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Spectating is not enabled for this table'), { code: 'FORBIDDEN' })
+      }
+
+      if (observers.length >= MAX_OBSERVERS) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table has reached the maximum number of observers'), { code: 'OBSERVERS_FULL' })
+      }
+
+      const updated = { ...table, observers: [...observers, playerId] }
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Player arrived at table:', { tableId, playerId })
+      return updated
+    })
+
+    if (result !== null) {
+      return result
+    }
   }
 
-  if (observers.length >= MAX_OBSERVERS) {
-    throw Object.assign(new Error('Table has reached the maximum number of observers'), { code: 'OBSERVERS_FULL' })
-  }
-
-  const updated = { ...table, observers: [...observers, playerId] }
-  await saveTable(redis, updated)
-  console.log('Player arrived at table:', { tableId, playerId })
-  return updated
+  throw Object.assign(
+    new Error('Arrival could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
 }
 
 /**

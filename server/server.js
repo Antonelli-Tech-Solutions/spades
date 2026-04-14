@@ -1066,6 +1066,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const session = await validateAuthHeaders(redisClient, req)
       // validateJoinLink verifies the token but does not consume it — consumed after successful seating
       const { tableId, key: tokenKey } = await validateJoinLink(redisClient, token)
+      await markPlayerInvited(redisClient, tableId, session.playerId)
       const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
       await redisClient.del(tokenKey)
 

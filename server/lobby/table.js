@@ -18,8 +18,8 @@ const MAX_OBSERVERS = 20
  * @property {boolean} spectating
  */
 
-const VALID_VISIBILITIES = ['public', 'friends-only', 'private']
-const VALID_JOIN_POLICIES = ['open', 'friends-only', 'invite-only']
+export const VALID_VISIBILITIES = ['public', 'friends-only', 'private']
+export const VALID_JOIN_POLICIES = ['open', 'friends-only', 'invite-only']
 
 const JOIN_POLICIES_BY_VISIBILITY = {
   'public': ['open', 'friends-only', 'invite-only'],

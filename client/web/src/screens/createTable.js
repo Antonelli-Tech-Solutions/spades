@@ -2,6 +2,7 @@ import { createTable } from '../api.js'
 import { navigate } from '../router.js'
 import { redirectIfSeated } from '../redirectIfSeated.js'
 
+// Must stay in sync with server/lobby/table.js JOIN_POLICIES_BY_VISIBILITY
 const JOIN_POLICIES_BY_VISIBILITY = {
   'public': ['open', 'friends-only', 'invite-only'],
   'friends-only': ['friends-only', 'invite-only'],

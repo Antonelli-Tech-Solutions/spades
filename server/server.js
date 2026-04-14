@@ -25,6 +25,8 @@ import {
   changeSeat,
   joinTable,
   standFromSeat,
+  VALID_VISIBILITIES,
+  VALID_JOIN_POLICIES,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -494,14 +496,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const trimmed = name.trim()
       if (trimmed.length > 50) return sendJSON(res, 400, { error: 'Table name must be 50 characters or fewer.' })
     }
-    const validVisibilities = ['public', 'friends-only', 'private']
-    if (visibility !== undefined && visibility !== null && !validVisibilities.includes(visibility)) {
-      return sendJSON(res, 400, { error: `Invalid visibility. Must be one of: ${validVisibilities.join(', ')}` })
+    if (visibility !== undefined && visibility !== null && !VALID_VISIBILITIES.includes(visibility)) {
+      return sendJSON(res, 400, { error: `Invalid visibility. Must be one of: ${VALID_VISIBILITIES.join(', ')}` })
     }
-    const resolvedVisibility = visibility || 'public'
-    const validJoinPolicies = ['open', 'friends-only', 'invite-only']
-    if (joinPolicy !== undefined && joinPolicy !== null && !validJoinPolicies.includes(joinPolicy)) {
-      return sendJSON(res, 400, { error: `Invalid joinPolicy. Must be one of: ${validJoinPolicies.join(', ')}` })
+    const resolvedVisibility = visibility ?? 'public'
+    if (joinPolicy !== undefined && joinPolicy !== null && !VALID_JOIN_POLICIES.includes(joinPolicy)) {
+      return sendJSON(res, 400, { error: `Invalid joinPolicy. Must be one of: ${VALID_JOIN_POLICIES.join(', ')}` })
     }
     if (spectating !== undefined && spectating !== null && typeof spectating !== 'boolean') {
       return sendJSON(res, 400, { error: 'spectating must be a boolean.' })
@@ -514,7 +514,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         hostPlayerId: session.playerId,
         name: resolvedName,
         visibility: resolvedVisibility,
-        joinPolicy: joinPolicy || undefined,
+        joinPolicy: joinPolicy ?? undefined,
         spectating: spectating !== undefined && spectating !== null ? spectating : true,
       })
       // Auto-seat the host at north

@@ -1,6 +1,26 @@
 import { isValidUuid } from './profile.js'
 
 /**
+ * Check whether two players are friends.
+ *
+ * @param {object} db - pg Pool
+ * @param {string} playerA - UUID
+ * @param {string} playerB - UUID
+ * @returns {Promise<boolean>}
+ */
+export async function areFriends(db, playerA, playerB) {
+  const result = await db.query(
+    `SELECT 1 FROM friendships
+     WHERE status = 'accepted'
+       AND ((requester_id = $1 AND addressee_id = $2)
+         OR (requester_id = $2 AND addressee_id = $1))
+     LIMIT 1`,
+    [playerA, playerB],
+  )
+  return result.rows.length > 0
+}
+
+/**
  * Search players by username prefix (case-insensitive).
  */
 export async function searchPlayers(db, query, requesterId) {

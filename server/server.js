@@ -226,6 +226,7 @@ function emitLobbyTableUpdated(wss, table) {
     status: table.status,
     visibility: table.visibility,
     observerCount: (table.observers || []).length,
+    spectating: table.spectating,
   })
 }
 

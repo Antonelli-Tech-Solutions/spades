@@ -273,6 +273,23 @@ function esc(s) {
 }
 
 /**
+ * Render the observer rail showing current spectators.
+ * @param {Array<{playerId: string, username: string}>} observers
+ * @param {string} [currentPlayerId] - highlight with "(you)" badge
+ * @returns {string} HTML string
+ */
+export function observerRailHtml(observers, currentPlayerId) {
+  if (!observers || observers.length === 0) {
+    return '<div class="observer-rail"><span class="observer-rail-label">Spectators:</span> <span class="observer-rail-empty">No spectators</span></div>'
+  }
+  const names = observers.map((o) => {
+    const youBadge = currentPlayerId && o.playerId === currentPlayerId ? ' <span class="seat-you-badge">(you)</span>' : ''
+    return `<span class="observer-name">${esc(o.username)}${youBadge}</span>`
+  }).join(', ')
+  return `<div class="observer-rail"><span class="observer-rail-label">Spectators:</span> ${names}</div>`
+}
+
+/**
  * Render 13 face-down card backs for the Blind Nil eligibility window.
  * @returns {string} HTML string
  */
@@ -502,14 +519,6 @@ export function renderGameScreen(container) {
       ? `<button class="btn-primary" id="fill-bots-btn">Fill with Bots (${emptySeats.length} seat${emptySeats.length !== 1 ? 's' : ''})</button>`
       : ''
 
-    const observers = state.observers || []
-    const observerHtml = observers.length > 0
-      ? `<div class="observer-list"><span class="observer-label">Spectators:</span> ${observers.map((o) => {
-        const youBadge = o.playerId === playerId ? ' <span class="seat-you-badge">(you)</span>' : ''
-        return `<span class="observer-name">${esc(o.username)}${youBadge}</span>`
-      }).join(', ')}</div>`
-      : ''
-
     const title = isSpectating ? 'Game in Progress' : (isSeated ? 'Waiting for players\u2026' : 'Choose a Seat')
 
     container.innerHTML = `
@@ -517,7 +526,7 @@ export function renderGameScreen(container) {
         <div class="waiting-screen">
           <h2 class="waiting-title">${title}</h2>
           <div class="waiting-seats">${rows}</div>
-          ${observerHtml}
+          ${observerRailHtml(state.observers || [], playerId)}
           <div class="form-error waiting-err" role="alert" aria-live="polite"></div>
           ${fillBotsBtn}
           <button class="btn-secondary" id="leave-table-btn">Leave Table</button>
@@ -822,6 +831,8 @@ export function renderGameScreen(container) {
         ${showLastTrick && state.completedTricks.length > 0
           ? lastTrickHtml(state.completedTricks[state.completedTricks.length - 1], rel)
           : ''}
+
+        ${observerRailHtml(state.observers || [], playerId)}
 
         <div class="game-controls">
           ${leaveGameButtonHtml()}

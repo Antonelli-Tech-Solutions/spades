@@ -553,8 +553,6 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const db = getDb()
-      const blocked = await isBlockedEitherDirection(db, session.playerId, requesterId)
-      if (blocked) return sendJSON(res, 403, { error: 'Cannot decline friend request from this player.' })
       await declineFriendRequest(db, session.playerId, requesterId)
       sendJSON(res, 200, { message: 'Friend request declined.' })
     } catch (err) {

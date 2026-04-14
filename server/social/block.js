@@ -24,21 +24,11 @@ export async function blockPlayer(db, blockerId, blockedId) {
       [blockerId, blockedId],
     )
 
-    // Remove friendship in either direction
+    // Remove all friendship records in either direction
     await client.query(
       `DELETE FROM friendships
-       WHERE ((requester_id = $1 AND addressee_id = $2)
-          OR  (requester_id = $2 AND addressee_id = $1))
-         AND status = 'accepted'`,
-      [blockerId, blockedId],
-    )
-
-    // Remove any pending friend requests in either direction
-    await client.query(
-      `DELETE FROM friendships
-       WHERE ((requester_id = $1 AND addressee_id = $2)
-          OR  (requester_id = $2 AND addressee_id = $1))
-         AND status = 'pending'`,
+       WHERE (requester_id = $1 AND addressee_id = $2)
+          OR (requester_id = $2 AND addressee_id = $1)`,
       [blockerId, blockedId],
     )
 

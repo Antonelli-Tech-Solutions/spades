@@ -1033,6 +1033,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
+      // validateJoinLink consumes the single-use token and bypasses joinPolicy by design
       const tableId = await validateJoinLink(redisClient, token)
       const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
 

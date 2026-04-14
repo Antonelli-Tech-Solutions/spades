@@ -619,8 +619,15 @@ export async function createJoinLink(redis, tableId, requestingPlayerId) {
 }
 
 /**
- * Validate a join-link token. Returns the associated tableId if the token
- * is valid and the table still exists, otherwise throws.
+ * Validate and consume a join-link token. Returns the associated tableId if
+ * the token is valid and the table still exists, otherwise throws.
+ *
+ * The token is single-use: it is deleted from Redis upon successful
+ * validation so it cannot be reused by another player.
+ *
+ * Callers that seat a player via a validated join link intentionally bypass
+ * the table's joinPolicy — the link itself serves as authorization from the
+ * host.
  *
  * @param {import('redis').RedisClientType} redis
  * @param {string} token
@@ -635,8 +642,10 @@ export async function validateJoinLink(redis, token) {
   const { tableId } = JSON.parse(raw)
   const table = await getTable(redis, tableId)
   if (!table) {
+    await redis.del(key)
     throw Object.assign(new Error('Table no longer exists'), { code: 'NOT_FOUND' })
   }
+  await redis.del(key)
   return tableId
 }
 

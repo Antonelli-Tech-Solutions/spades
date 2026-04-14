@@ -14,17 +14,41 @@ const MAX_OBSERVERS = 20
  * @property {string|null} gameId
  * @property {string} createdAt
  * @property {'public'|'friends-only'|'private'} visibility
+ * @property {'open'|'friends-only'|'invite-only'} joinPolicy
+ * @property {boolean} spectating
  */
+
+const VALID_VISIBILITIES = ['public', 'friends-only', 'private']
+const VALID_JOIN_POLICIES = ['open', 'friends-only', 'invite-only']
+
+const JOIN_POLICIES_BY_VISIBILITY = {
+  'public': ['open', 'friends-only', 'invite-only'],
+  'friends-only': ['friends-only', 'invite-only'],
+  'private': ['invite-only'],
+}
+
+const DEFAULT_JOIN_POLICY = {
+  'public': 'open',
+  'friends-only': 'friends-only',
+  'private': 'invite-only',
+}
+
+export function resolveJoinPolicy(visibility, joinPolicy) {
+  const allowed = JOIN_POLICIES_BY_VISIBILITY[visibility]
+  if (joinPolicy && allowed.includes(joinPolicy)) return joinPolicy
+  return DEFAULT_JOIN_POLICY[visibility]
+}
 
 /**
  * Create a new table in Redis and return its ID.
  *
  * @param {import('redis').RedisClientType} redis
- * @param {{ hostPlayerId: string, name?: string }} opts
+ * @param {{ hostPlayerId: string, name?: string, visibility?: string, joinPolicy?: string, spectating?: boolean }} opts
  * @returns {Promise<TableState>}
  */
-export async function createTable(redis, { hostPlayerId, name = null, visibility = 'public' }) {
+export async function createTable(redis, { hostPlayerId, name = null, visibility = 'public', joinPolicy, spectating = true }) {
   const tableId = uuidv4()
+  const resolvedJoinPolicy = resolveJoinPolicy(visibility, joinPolicy)
   const table = {
     tableId,
     hostPlayerId,
@@ -35,6 +59,8 @@ export async function createTable(redis, { hostPlayerId, name = null, visibility
     gameId: null,
     createdAt: new Date().toISOString(),
     visibility,
+    joinPolicy: resolvedJoinPolicy,
+    spectating: Boolean(spectating),
   }
 
   const key = `table:${tableId}`

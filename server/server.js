@@ -488,21 +488,45 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
   // POST /api/tables — create a new table
   app.post('/api/tables', async (req, res) => {
-    const { name } = req.body ?? {}
+    const { name, visibility, joinPolicy, spectating } = req.body ?? {}
     if (name !== undefined && name !== null) {
       if (typeof name !== 'string') return sendJSON(res, 400, { error: 'Table name must be a string.' })
       const trimmed = name.trim()
       if (trimmed.length > 50) return sendJSON(res, 400, { error: 'Table name must be 50 characters or fewer.' })
     }
+    const validVisibilities = ['public', 'friends-only', 'private']
+    const resolvedVisibility = validVisibilities.includes(visibility) ? visibility : 'public'
+    if (visibility !== undefined && visibility !== null && !validVisibilities.includes(visibility)) {
+      return sendJSON(res, 400, { error: `Invalid visibility. Must be one of: ${validVisibilities.join(', ')}` })
+    }
+    const validJoinPolicies = ['open', 'friends-only', 'invite-only']
+    if (joinPolicy !== undefined && joinPolicy !== null && !validJoinPolicies.includes(joinPolicy)) {
+      return sendJSON(res, 400, { error: `Invalid joinPolicy. Must be one of: ${validJoinPolicies.join(', ')}` })
+    }
+    if (spectating !== undefined && spectating !== null && typeof spectating !== 'boolean') {
+      return sendJSON(res, 400, { error: 'spectating must be a boolean.' })
+    }
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const resolvedName = (typeof name === 'string' && name.trim()) ? name.trim() : null
-      const table = await createTable(redisClient, { hostPlayerId: session.playerId, name: resolvedName })
+      const table = await createTable(redisClient, {
+        hostPlayerId: session.playerId,
+        name: resolvedName,
+        visibility: resolvedVisibility,
+        joinPolicy: joinPolicy || undefined,
+        spectating: spectating !== undefined && spectating !== null ? spectating : true,
+      })
       // Auto-seat the host at north
       const seatedTable = await sitAtTable(redisClient, table.tableId, session.playerId, 'north')
       emitLobbyTableCreated(wss, seatedTable)
-      sendJSON(res, 201, { tableId: table.tableId, name: table.name })
+      sendJSON(res, 201, {
+        tableId: table.tableId,
+        name: table.name,
+        visibility: table.visibility,
+        joinPolicy: table.joinPolicy,
+        spectating: table.spectating,
+      })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Create table error:', { error: err.message })

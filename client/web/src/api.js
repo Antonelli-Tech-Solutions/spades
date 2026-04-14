@@ -94,11 +94,15 @@ export async function resetPassword({ token, newPassword }, fetchFn = globalThis
 
 /**
  * Create a new table. Requires a valid session.
- * @param {{ name?: string, sessionId: string, playerId: string }} data
+ * @param {{ name?: string, visibility?: string, joinPolicy?: string, spectating?: boolean, sessionId: string, playerId: string }} data
  * @param {typeof fetch} [fetchFn]
- * @returns {Promise<{ tableId: string, name: string|null }>}
+ * @returns {Promise<{ tableId: string, name: string|null, visibility: string, joinPolicy: string, spectating: boolean }>}
  */
-export async function createTable({ name, sessionId, playerId }, fetchFn = globalThis.fetch) {
+export async function createTable({ name, visibility, joinPolicy, spectating, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const payload = { name: name || null }
+  if (visibility !== undefined) payload.visibility = visibility
+  if (joinPolicy !== undefined) payload.joinPolicy = joinPolicy
+  if (spectating !== undefined) payload.spectating = spectating
   const res = await fetchFn('/api/tables', {
     method: 'POST',
     headers: {
@@ -106,7 +110,7 @@ export async function createTable({ name, sessionId, playerId }, fetchFn = globa
       'x-session-id': sessionId,
       'x-player-id': playerId,
     },
-    body: JSON.stringify({ name: name || null }),
+    body: JSON.stringify(payload),
   })
   const body = await res.json()
   if (!res.ok) {

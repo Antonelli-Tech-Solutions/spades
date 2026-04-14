@@ -496,7 +496,7 @@ Valid seat values: `north`, `east`, `south`, `west`.
 
 ### Game
 
-All game routes require the caller to be seated at the table. Game state responses are filtered so each player only sees their own hand.
+All game action routes (bid, play, reveal-hand, blind-nil-exchange) require the caller to be seated at the table. The state endpoint is also accessible to spectators. Game state responses are filtered so each player only sees their own hand; spectators receive a public-only view with no hand data.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
@@ -510,15 +510,15 @@ All game routes require the caller to be seated at the table. Game state respons
 
 **Headers:** `x-session-id`, `x-player-id`
 
-Returns a player-specific view of the game. Cards in other players' hands are never included.
+Returns a player-specific view of the game. Cards in other players' hands are never included. Spectators (observers) receive a public-only view with `status: "spectating"` — it includes seats, scores, and phase but never `myHand` or `hands`.
 
 **Responses**
 
 | Status | Meaning |
 |---|---|
-| `200` | Body: game state view (see below), or `{ status: "waiting", seats, isHost, hostSeat }` if the game has not started yet. `seats` is an object keyed by seat name; each value is `null` (empty) or `{ playerId, username, isBot }`. |
+| `200` | Body: game state view (see below), `{ status: "waiting", seats, isHost, hostSeat }` if the game has not started yet, or `{ status: "spectating", seats, phase, scores, ... }` for spectators. `seats` is an object keyed by seat name; each value is `null` (empty) or `{ playerId, username, isBot }`. |
 | `401` | Missing or invalid session |
-| `403` | Player is not seated at this table |
+| `403` | Player is not seated at or observing this table |
 | `404` | Table not found |
 
 The game state view includes: `phase`, `hand` (own cards only), `bids`, `tricks`, `scores`, `bags`, `currentPlayerSeat`, `currentBidderSeat`, `isHost`, `hostSeat`, and other phase-specific fields. It never includes another player's hand.
@@ -640,7 +640,7 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 |---|---|---|
 | `JOINED` | `{ "tableId": "<uuid>" }` | Confirms the client has joined the table room. |
 | `LEFT` | `{ "tableId": "<uuid>" }` | Confirms the client has left the table room. |
-| `JOIN_DENIED` | `{ "tableId": "<uuid>", "reason": "not_seated" \| "table_not_found" \| "error" }` | Sent when a `JOIN` request is rejected because the player is not seated at the table, the table does not exist, or an internal error occurred. |
+| `JOIN_DENIED` | `{ "tableId": "<uuid>", "reason": "not_seated" \| "table_not_found" \| "error" }` | Sent when a `JOIN` request is rejected because the player is neither seated at nor observing the table, the table does not exist, or an internal error occurred. |
 | `JOINED_LOBBY` | `{}` | Confirms the client has joined the lobby channel. |
 | `LEFT_LOBBY` | `{}` | Confirms the client has left the lobby channel. |
 

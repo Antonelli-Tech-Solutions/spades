@@ -28,6 +28,8 @@ import {
   VALID_VISIBILITIES,
   VALID_JOIN_POLICIES,
   validateJoinPolicy,
+  createJoinLink,
+  validateJoinLink,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -1001,6 +1003,70 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'CARD_NOT_IN_HAND') return sendJSON(res, 400, { error: err.message })
       if (err.code === 'ILLEGAL_PLAY') return sendJSON(res, 400, { error: err.message })
       console.error('Play card error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/join-link — generate a shareable join link (host only)
+  app.post('/api/tables/:tableId/join-link', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const token = await createJoinLink(redisClient, tableId, session.playerId)
+      const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '')
+      const joinUrl = `${appUrl}/join/${token}`
+      sendJSON(res, 200, { token, joinUrl })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      console.error('Create join link error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/join-link/:token — use a join link to arrive and sit at a table
+  app.post('/api/tables/join-link/:token', async (req, res) => {
+    const { token } = req.params
+    const { seat } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      // validateJoinLink verifies the token but does not consume it — consumed after successful seating
+      const { tableId, key: tokenKey } = await validateJoinLink(redisClient, token)
+      const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
+      await redisClient.del(tokenKey)
+
+      const actualSeat = Object.entries(table.seats).find(([, id]) => id === session.playerId)?.[0]
+
+      if (isTableFull(table)) {
+        const players = table.seats
+        let gameState = createGame(tableId, players)
+        gameState = advanceBotsWithEvents(gameState, wss, tableId)
+        await saveGameState(redisClient, tableId, gameState)
+        const playingTable = await markTablePlaying(redisClient, tableId, gameState.gameId)
+        emitLobbyTableUpdated(wss, playingTable)
+        if (wss) {
+          wss.broadcast(tableId, 'GAME_STARTED', {})
+          emitHandDealt(wss, gameState)
+          wss.broadcast(tableId, 'TURN_CHANGED', { activeSeat: getActiveSeat(gameState), phase: gameState.phase })
+        }
+      } else {
+        emitLobbyTableUpdated(wss, table)
+        if (wss) wss.broadcast(tableId, 'SEAT_TAKEN', { seat: actualSeat })
+      }
+
+      sendJSON(res, 200, { tableId, seat: actualSeat })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'ALREADY_SEATED') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      console.error('Use join link error:', { token, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

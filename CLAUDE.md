@@ -75,6 +75,7 @@ you MUST:
   - `table:{tableId}` — table config and seat state
   - `session:{sessionId}` — player session
   - `presence:{playerId}` — online/in-game status
+  - `joinlink:{token}` — single-use join link (maps token → tableId, expires with table TTL)
 - Table state expires after 3600 seconds (1 hour) of inactivity
 - WebSocket events follow the pattern `{ type: 'EVENT_NAME', payload: { ... } }`
 

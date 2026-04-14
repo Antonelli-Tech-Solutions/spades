@@ -477,6 +477,7 @@ export async function leaveInProgressGame(redis, tableId, playerId) {
 export async function terminateTable(redis, tableId) {
   await redis.del(`table:${tableId}`)
   await redis.del(`game:${tableId}`)
+  await redis.del(`spectators:${tableId}`)
   await redis.hDel('lobby:tables', tableId)
   console.log('Table terminated:', { tableId })
 }

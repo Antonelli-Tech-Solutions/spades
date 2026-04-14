@@ -237,6 +237,81 @@ describe('POST /api/tables', { skip }, () => {
     })
     assert.equal(res.status, 400)
   })
+
+  it('rejects open joinPolicy with friends-only visibility', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ visibility: 'friends-only', joinPolicy: 'open' }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  it('rejects open joinPolicy with private visibility', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ visibility: 'private', joinPolicy: 'open' }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  it('rejects friends-only joinPolicy with private visibility', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ visibility: 'private', joinPolicy: 'friends-only' }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  it('accepts invite-only joinPolicy with friends-only visibility', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ visibility: 'friends-only', joinPolicy: 'invite-only' }),
+    })
+    assert.equal(res.status, 201)
+    const body = await res.json()
+    assert.equal(body.visibility, 'friends-only')
+    assert.equal(body.joinPolicy, 'invite-only')
+  })
 })
 
 describe('POST /api/tables/:tableId/sit', { skip }, () => {

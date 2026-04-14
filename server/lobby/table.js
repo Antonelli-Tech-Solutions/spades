@@ -122,47 +122,86 @@ export async function saveTable(redis, table) {
  * @returns {Promise<TableState>}
  * @throws {Error} If the table is not found, game already started, seat is taken, or player already seated
  */
-export async function sitAtTable(redis, tableId, playerId, seat) {
+export async function sitAtTable(redis, tableId, playerId, seat, { policyDeps } = {}) {
   const validSeats = ['north', 'east', 'south', 'west']
   if (!validSeats.includes(seat)) {
     throw Object.assign(new Error(`Invalid seat: ${seat}`), { code: 'INVALID_SEAT' })
   }
 
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+
+      const spectatorOnly = await isSpectatorOnly(redis, tableId, playerId)
+      if (spectatorOnly) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Spectators cannot sit at the table'), { code: 'FORBIDDEN' })
+      }
+
+      if (table.status === 'playing') {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
+      }
+
+      const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
+      if (currentSeat === seat) {
+        await isolatedClient.unwatch()
+        return table
+      }
+      if (currentSeat) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
+      }
+      if (table.seats[seat] !== null) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+      }
+
+      if (policyDeps) {
+        await enforceJoinPolicyForSit(redis, policyDeps.db, table, playerId, { areFriends: policyDeps.areFriends })
+      }
+
+      const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
+      const updated = {
+        ...table,
+        seats: { ...table.seats, [seat]: playerId },
+        observers: updatedObservers,
+      }
+
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Player seated:', { tableId, playerId, seat })
+      return updated
+    })
+
+    if (result !== null) {
+      return result
+    }
   }
 
-  const spectatorOnly = await isSpectatorOnly(redis, tableId, playerId)
-  if (spectatorOnly) {
-    throw Object.assign(new Error('Spectators cannot sit at the table'), { code: 'FORBIDDEN' })
-  }
-
-  if (table.status === 'playing') {
-    throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
-  }
-  // Check idempotent same-seat before checking seat occupancy
-  const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
-  if (currentSeat === seat) {
-    // Already at this exact seat — no-op, return current state
-    return table
-  }
-  if (currentSeat) {
-    throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
-  }
-  if (table.seats[seat] !== null) {
-    throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
-  }
-
-  const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
-  const updated = {
-    ...table,
-    seats: { ...table.seats, [seat]: playerId },
-    observers: updatedObservers,
-  }
-  await saveTable(redis, updated)
-  console.log('Player seated:', { tableId, playerId, seat })
-  return updated
+  throw Object.assign(
+    new Error('Sit could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
 }
 
 /**
@@ -490,6 +529,7 @@ export async function terminateTable(redis, tableId) {
   await redis.del(`table:${tableId}`)
   await redis.del(`game:${tableId}`)
   await redis.del(`spectators:${tableId}`)
+  await redis.del(`invited:${tableId}`)
   await redis.hDel('lobby:tables', tableId)
   console.log('Table terminated:', { tableId })
 }
@@ -766,6 +806,145 @@ export async function markPlayerAsSpectator(redis, tableId, playerId) {
 export async function isSpectatorOnly(redis, tableId, playerId) {
   const key = `spectators:${tableId}`
   return redis.sIsMember(key, playerId)
+}
+
+/**
+ * Arrive at a table as an observer. Like joinTable, but also allows arrival
+ * at spectating-disabled tables when the player holds a valid join link
+ * (indicated by `hasJoinLink`).
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @param {{ hasJoinLink?: boolean }} opts
+ * @returns {Promise<TableState>}
+ */
+export async function arriveAtTable(redis, tableId, playerId, { hasJoinLink = false } = {}) {
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+      const seated = Object.values(table.seats).includes(playerId)
+      if (seated) {
+        await isolatedClient.unwatch()
+        return table
+      }
+      const observers = table.observers || []
+      if (observers.includes(playerId)) {
+        await isolatedClient.unwatch()
+        return table
+      }
+
+      if (!table.spectating && !hasJoinLink) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Spectating is not enabled for this table'), { code: 'FORBIDDEN' })
+      }
+
+      if (observers.length >= MAX_OBSERVERS) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table has reached the maximum number of observers'), { code: 'OBSERVERS_FULL' })
+      }
+
+      const updated = { ...table, observers: [...observers, playerId] }
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Player arrived at table:', { tableId, playerId })
+      return updated
+    })
+
+    if (result !== null) {
+      return result
+    }
+  }
+
+  throw Object.assign(
+    new Error('Arrival could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
+}
+
+/**
+ * Mark a player as invited to a table. Invited players can sit at
+ * invite-only tables without needing a join link.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ */
+export async function markPlayerInvited(redis, tableId, playerId) {
+  const key = `invited:${tableId}`
+  await redis.sAdd(key, playerId)
+  await redis.expire(key, TABLE_TTL_SECONDS)
+}
+
+/**
+ * Check whether a player has been invited to a table.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @returns {Promise<boolean>}
+ */
+export async function isPlayerInvited(redis, tableId, playerId) {
+  return redis.sIsMember(`invited:${tableId}`, playerId)
+}
+
+/**
+ * Enforce the table's join policy. Returns null if the player is allowed
+ * to sit, or throws FORBIDDEN if not.
+ *
+ * - open: anyone may sit
+ * - friends-only: the player must be a friend of the host
+ * - invite-only: the player must have been invited or used a join link
+ *
+ * The host always passes policy checks.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {object} db - pg Pool
+ * @param {TableState} table
+ * @param {string} playerId
+ * @param {{ areFriends: function }} deps — injectable for testing
+ */
+export async function enforceJoinPolicyForSit(redis, db, table, playerId, { areFriends }) {
+  if (playerId === table.hostPlayerId) return
+
+  if (table.joinPolicy === 'open') return
+
+  if (table.joinPolicy === 'friends-only') {
+    const friends = await areFriends(db, playerId, table.hostPlayerId)
+    if (!friends) {
+      throw Object.assign(new Error('Only friends of the host may sit at this table'), { code: 'FORBIDDEN' })
+    }
+    return
+  }
+
+  if (table.joinPolicy === 'invite-only') {
+    const invited = await isPlayerInvited(redis, table.tableId, playerId)
+    if (!invited) {
+      throw Object.assign(new Error('You must be invited to sit at this table'), { code: 'FORBIDDEN' })
+    }
+    return
+  }
+
+  throw Object.assign(new Error('Unknown join policy'), { code: 'FORBIDDEN' })
 }
 
 export async function listTables(redis) {

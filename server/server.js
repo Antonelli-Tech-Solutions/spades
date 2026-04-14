@@ -2,6 +2,7 @@ import { registerPlayer, verifyEmailToken, resendVerificationEmail } from './aut
 import { forgotPassword, resetPassword } from './auth/passwordReset.js'
 import { sendVerificationEmail as defaultMailer, sendPasswordResetEmail as defaultPasswordResetMailer } from './auth/email.js'
 import { getPlayerProfile, getPlayerUsernames, isValidUuid } from './social/profile.js'
+import { areFriends } from './social/friends.js'
 import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession, getSession, validateAuthHeaders } from './auth/session.js'
 import { getDb } from './db.js'
@@ -32,6 +33,8 @@ import {
   validateJoinLink,
   createSpectatorLink,
   validateSpectatorLink,
+  arriveAtTable,
+  markPlayerInvited,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -545,6 +548,27 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
+  // POST /api/tables/:tableId/arrive — arrive at a table as observer
+  app.post('/api/tables/:tableId/arrive', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await arriveAtTable(redisClient, tableId, session.playerId)
+      emitLobbyTableUpdated(wss, table)
+      if (wss) wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
+      sendJSON(res, 200, { tableId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 409, { error: err.message })
+      console.error('Arrive at table error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
   // POST /api/tables/:tableId/join — join a table as observer
   app.post('/api/tables/:tableId/join', async (req, res) => {
     const { tableId } = req.params
@@ -600,7 +624,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
-      const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
+      const db = getDb()
+      const table = await sitAtTable(redisClient, tableId, session.playerId, seat, {
+        policyDeps: { db, areFriends },
+      })
 
       // If table is now full, start the game and advance any leading bot turns
       if (isTableFull(table)) {
@@ -630,6 +657,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'ALREADY_SEATED') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 409, { error: err.message })
       console.error('Sit at table error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
@@ -1041,6 +1069,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const session = await validateAuthHeaders(redisClient, req)
       // validateJoinLink verifies the token but does not consume it — consumed after successful seating
       const { tableId, key: tokenKey } = await validateJoinLink(redisClient, token)
+      await markPlayerInvited(redisClient, tableId, session.playerId)
       const table = await sitAtTable(redisClient, tableId, session.playerId, seat)
       await redisClient.del(tokenKey)
 

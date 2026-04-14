@@ -106,7 +106,7 @@ export function createWsServer(httpServer, opts = {}) {
   })
 
   // ── Connection handler ──────────────────────────────────────────────────────
-  wss.on('connection', (ws) => {
+  wss.on('connection', async (ws) => {
     const playerId = ws._playerId
     console.log('WebSocket connected:', { playerId })
 
@@ -115,6 +115,25 @@ export function createWsServer(httpServer, opts = {}) {
       playerConnections.set(playerId, new Set())
     }
     playerConnections.get(playerId).add(ws)
+
+    // Subscribe to personal notification channel for social events
+    // (friend requests, in-app invites, friends-only table notifications).
+    const notifyChannel = `player:${playerId}:notify`
+    ws._notifyChannel = notifyChannel
+    if (subscriber) {
+      const isNewNotifyRoom = !rooms.has(notifyChannel)
+      if (isNewNotifyRoom) {
+        rooms.set(notifyChannel, new Set())
+      }
+      rooms.get(notifyChannel).add(ws)
+      if (isNewNotifyRoom) {
+        try {
+          await subscriber.subscribe(notifyChannel, onChannelMessage)
+        } catch (err) {
+          console.error('Redis notify subscribe error:', { playerId, error: err.message })
+        }
+      }
+    }
 
     // Heartbeat state
     ws._isAlive = true
@@ -342,6 +361,20 @@ export function createWsServer(httpServer, opts = {}) {
           }
         }
       }
+      // Clean up personal notification channel
+      if (ws._notifyChannel) {
+        const notifyRoomKey = ws._notifyChannel
+        rooms.get(notifyRoomKey)?.delete(ws)
+        if ((rooms.get(notifyRoomKey)?.size ?? 0) === 0) {
+          rooms.delete(notifyRoomKey)
+          if (subscriber) {
+            subscriber.unsubscribe(notifyRoomKey).catch((err) =>
+              console.error('Redis notify unsubscribe error:', { roomKey: notifyRoomKey, error: err.message }),
+            )
+          }
+        }
+      }
+
       playerConnections.get(playerId)?.delete(ws)
       if (playerConnections.get(playerId)?.size === 0) {
         playerConnections.delete(playerId)
@@ -484,6 +517,22 @@ export function createWsServer(httpServer, opts = {}) {
       if (ws.readyState === ws.constructor.OPEN) {
         ws.send(msg)
       }
+    }
+  }
+
+  /**
+   * Send a notification to a specific player via their personal notification channel.
+   * When Redis is configured, publishes to `player:{playerId}:notify` so all server
+   * instances deliver the event. Without Redis, falls back to local sendToPlayer.
+   */
+  wss.notifyPlayer = (playerId, type, payload) => {
+    const msg = JSON.stringify({ type, payload })
+    if (redis) {
+      redis.publish(`player:${playerId}:notify`, msg).catch((err) =>
+        console.error('Redis notify publish error:', { playerId, error: err.message }),
+      )
+    } else {
+      wss.sendToPlayer(playerId, type, payload)
     }
   }
 

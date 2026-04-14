@@ -516,11 +516,15 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (blocked) return sendJSON(res, 403, { error: 'Cannot send friend request to this player.' })
       await sendFriendRequest(db, session.playerId, toPlayerId)
       if (redisClient) {
-        const notifyChannel = `player:${toPlayerId}:notify`
-        await redisClient.publish(notifyChannel, JSON.stringify({
-          type: 'FRIEND_REQUEST_RECEIVED',
-          payload: { fromPlayerId: session.playerId, fromUsername: session.username },
-        }))
+        try {
+          const notifyChannel = `player:${toPlayerId}:notify`
+          await redisClient.publish(notifyChannel, JSON.stringify({
+            type: 'FRIEND_REQUEST_RECEIVED',
+            payload: { fromPlayerId: session.playerId, fromUsername: session.username },
+          }))
+        } catch (pubErr) {
+          console.error('Failed to publish friend request notification:', { error: pubErr.message })
+        }
       }
       sendJSON(res, 201, { message: 'Friend request sent.' })
     } catch (err) {
@@ -544,11 +548,15 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (blocked) return sendJSON(res, 403, { error: 'Cannot accept friend request from this player.' })
       await acceptFriendRequest(db, session.playerId, requesterId)
       if (redisClient) {
-        const notifyChannel = `player:${requesterId}:notify`
-        await redisClient.publish(notifyChannel, JSON.stringify({
-          type: 'FRIEND_REQUEST_ACCEPTED',
-          payload: { fromPlayerId: session.playerId, fromUsername: session.username },
-        }))
+        try {
+          const notifyChannel = `player:${requesterId}:notify`
+          await redisClient.publish(notifyChannel, JSON.stringify({
+            type: 'FRIEND_REQUEST_ACCEPTED',
+            payload: { fromPlayerId: session.playerId, fromUsername: session.username },
+          }))
+        } catch (pubErr) {
+          console.error('Failed to publish friend accept notification:', { error: pubErr.message })
+        }
       }
       sendJSON(res, 200, { message: 'Friend request accepted.' })
     } catch (err) {

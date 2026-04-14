@@ -88,9 +88,13 @@ export async function renderCreateTableScreen(container) {
   function updateJoinPolicyOptions() {
     const vis = visibilitySelect.value
     const allowed = buildJoinPolicyOptions(vis)
-    joinPolicySelect.innerHTML = allowed
-      .map((p) => `<option value="${p}">${JOIN_POLICY_LABELS[p]}</option>`)
-      .join('')
+    joinPolicySelect.innerHTML = ''
+    for (const p of allowed) {
+      const opt = document.createElement('option')
+      opt.value = p
+      opt.textContent = JOIN_POLICY_LABELS[p]
+      joinPolicySelect.appendChild(opt)
+    }
     if (allowed.length <= 1) {
       joinPolicyGroup.style.display = 'none'
     } else {

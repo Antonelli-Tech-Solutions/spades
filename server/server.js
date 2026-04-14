@@ -496,25 +496,25 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const trimmed = name.trim()
       if (trimmed.length > 50) return sendJSON(res, 400, { error: 'Table name must be 50 characters or fewer.' })
     }
-    if (visibility !== undefined && visibility !== null && !VALID_VISIBILITIES.includes(visibility)) {
-      return sendJSON(res, 400, { error: `Invalid visibility. Must be one of: ${VALID_VISIBILITIES.join(', ')}` })
-    }
-    const resolvedVisibility = visibility ?? 'public'
-    if (joinPolicy !== undefined && joinPolicy !== null && !VALID_JOIN_POLICIES.includes(joinPolicy)) {
-      return sendJSON(res, 400, { error: `Invalid joinPolicy. Must be one of: ${VALID_JOIN_POLICIES.join(', ')}` })
-    }
-    if (spectating !== undefined && spectating !== null && typeof spectating !== 'boolean') {
-      return sendJSON(res, 400, { error: 'spectating must be a boolean.' })
-    }
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
+      if (visibility !== undefined && visibility !== null && !VALID_VISIBILITIES.includes(visibility)) {
+        return sendJSON(res, 400, { error: `Invalid visibility. Must be one of: ${VALID_VISIBILITIES.join(', ')}` })
+      }
+      const resolvedVisibility = visibility ?? 'public'
+      if (joinPolicy !== undefined && joinPolicy !== null && !VALID_JOIN_POLICIES.includes(joinPolicy)) {
+        return sendJSON(res, 400, { error: `Invalid joinPolicy. Must be one of: ${VALID_JOIN_POLICIES.join(', ')}` })
+      }
+      if (spectating !== undefined && spectating !== null && typeof spectating !== 'boolean') {
+        return sendJSON(res, 400, { error: 'spectating must be a boolean.' })
+      }
       const resolvedName = (typeof name === 'string' && name.trim()) ? name.trim() : null
       const table = await createTable(redisClient, {
         hostPlayerId: session.playerId,
         name: resolvedName,
         visibility: resolvedVisibility,
-        joinPolicy: joinPolicy ?? undefined,
+        joinPolicy,
         spectating: spectating !== undefined && spectating !== null ? spectating : true,
       })
       // Auto-seat the host at north

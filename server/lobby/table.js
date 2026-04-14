@@ -35,6 +35,7 @@ const DEFAULT_JOIN_POLICY = {
 
 export function resolveJoinPolicy(visibility, joinPolicy) {
   const allowed = JOIN_POLICIES_BY_VISIBILITY[visibility]
+  if (!allowed) return 'open'
   if (joinPolicy && allowed.includes(joinPolicy)) return joinPolicy
   return DEFAULT_JOIN_POLICY[visibility]
 }

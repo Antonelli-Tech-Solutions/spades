@@ -695,7 +695,7 @@ Current screens:
 - **Lobby** (`#/lobby`) — main menu after login; shows options to create or join a table; redirects back to the game screen if the player is already seated
 - **Create Table** (`#/create`) — form to create a new table with an optional name, visibility, join policy, and spectator toggle; redirects to the join screen for the new table on success
 - **Join Table** (`#/join?tableId=<id>`) — browsable list of open tables; if `?tableId=` is provided, shows the seat picker for that specific table directly
-- **Game** (`#/table?tableId=<id>`) — in-game screen; handles bidding, Blind Nil reveal/exchange, card play, and end-of-hand summaries
+- **Game** (`#/table?tableId=<id>`) — in-game screen; handles bidding, Blind Nil reveal/exchange, card play, end-of-hand summaries, and an observer rail showing current spectators
 
 On successful login the session is stored in `sessionStorage` (`sessionId`, `playerId`, `username`) and the player is routed to `#/lobby`.
 

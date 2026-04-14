@@ -191,7 +191,7 @@ export function createWsServer(httpServer, opts = {}) {
           const isObserver = (table.observers || []).includes(playerId)
           if (!isSeated && !isObserver) {
             console.log('WebSocket JOIN denied — not seated or observing:', { playerId, tableId })
-            ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'not_seated' } }))
+            ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'not_seated_or_observing' } }))
             return
           }
         } catch (err) {

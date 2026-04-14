@@ -286,6 +286,7 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `GET` | `/api/tables` | Required | List all open (waiting) tables. |
 | `GET` | `/api/player/table` | Required | Returns the `tableId` the authenticated player is currently seated at, or `null`. |
 | `POST` | `/api/tables` | Required | Create a new table. |
+| `POST` | `/api/tables/:tableId/join` | Required | Join a table as a spectator (observer). Requires spectating to be enabled on the table. |
 | `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Starts the game once all 4 seats are filled. |
 | `POST` | `/api/tables/:tableId/add-bot` | Required (host) | Add a bot to an empty seat. |
 | `POST` | `/api/tables/:tableId/leave` | Required | Leave the table. If a game is in progress, the vacated seat is immediately filled by a bot. |
@@ -303,10 +304,10 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 
 | Status | Meaning |
 |---|---|
-| `200` | Body: `{ tables: [{ tableId, name, seats, hostPlayerId }] }` — only waiting (not yet started) tables |
+| `200` | Body: `{ tables: [{ tableId, name, seats, hostPlayerId, observerCount, spectating }] }` — only waiting (not yet started) tables |
 | `401` | Missing or invalid session |
 
-`seats` is an object keyed by seat name (`north`, `east`, `south`, `west`). Each value is either `null` (empty) or `{ playerId, username, isBot }`.
+`seats` is an object keyed by seat name (`north`, `east`, `south`, `west`). Each value is either `null` (empty) or `{ playerId, username, isBot }`. `observerCount` is the number of spectators currently watching the table. `spectating` indicates whether the host has enabled spectating.
 
 #### `GET /api/player/table`
 
@@ -349,6 +350,22 @@ All fields are optional:
 | `201` | Table created. Body: `{ tableId, name, visibility, joinPolicy, spectating }` |
 | `400` | Invalid name, visibility, joinPolicy, or spectating value |
 | `401` | Missing or invalid session |
+
+#### `POST /api/tables/:tableId/join`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Joins the table as a spectator (observer). The table must have spectating enabled. Players who arrive via this endpoint can watch the game but cannot sit down — use a join link or the `/sit` endpoint to take a seat.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Joined as observer. Body: `{ tableId }` |
+| `401` | Missing or invalid session |
+| `403` | Spectating is disabled for this table |
+| `404` | Table not found |
+| `409` | Observer slots are full |
 
 #### `POST /api/tables/:tableId/sit`
 
@@ -648,7 +665,13 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
 
-Lobby events (table created, table removed, etc.) are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+Lobby events are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+
+| Type | Payload | Description |
+|---|---|---|
+| `TABLE_CREATED` | `{ tableId, name, host, seats, visibility }` | A new public table was created. |
+| `TABLE_UPDATED` | `{ tableId, name, host, seats, status, visibility, observerCount, spectating }` | A public table's state changed (seat taken/vacated, game started, observer joined, etc.). |
+| `TABLE_REMOVED` | `{ tableId }` | A public table was removed (terminated, all players left, or expired). |
 
 ### Personal Notification Channel
 

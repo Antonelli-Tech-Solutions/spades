@@ -729,6 +729,12 @@ export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
       }
 
       const seatEntry = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
+
+      if (seatEntry && seatEntry[1].startsWith('bot:')) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Cannot kick a bot'), { code: 'INVALID_TARGET' })
+      }
+
       const isObserver = (table.observers || []).includes(targetPlayerId)
 
       if (!seatEntry && !isObserver) {
@@ -758,26 +764,25 @@ export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
         const botId = `bot:${seat}`
         const updated = { ...table, seats: { ...table.seats, [seat]: botId } }
 
-        const txResult = await isolatedClient
+        const gameState = await getGameState(isolatedClient, tableId)
+        let newGameState = null
+        if (gameState) {
+          newGameState = substitutePlayerWithBot(gameState, seat)
+        }
+
+        const gameKey = `game:${tableId}`
+        const multi = isolatedClient
           .multi()
           .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
-          .exec()
+        if (newGameState) {
+          multi.set(gameKey, JSON.stringify(newGameState), { EX: TABLE_TTL_SECONDS })
+        }
+        const txResult = await multi.exec()
 
         if (txResult === null) {
           return null
         }
 
-        try {
-          const gameState = await getGameState(redis, tableId)
-          if (gameState) {
-            const newState = substitutePlayerWithBot(gameState, seat)
-            await saveGameState(redis, tableId, newState)
-          }
-        } catch (err) {
-          await saveTable(redis, table)
-          console.error('Failed to update game state during kick, reverted table state:', { tableId, targetPlayerId, seat, error: err.message })
-          throw err
-        }
         console.log('Host kicked player during game, replaced by bot:', { tableId, hostPlayerId, targetPlayerId, seat })
         return { table: updated, seat, wasPlaying: true }
       }

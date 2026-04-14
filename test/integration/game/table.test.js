@@ -104,6 +104,139 @@ describe('POST /api/tables', { skip }, () => {
     const res = await fetch(`${server.baseUrl}/api/tables`, { method: 'POST' })
     assert.equal(res.status, 401)
   })
+
+  it('returns default values when no config params are provided', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: { 'x-session-id': sessionId, 'x-player-id': playerId },
+    })
+    assert.equal(res.status, 201)
+    const body = await res.json()
+    assert.equal(body.visibility, 'public')
+    assert.equal(body.joinPolicy, 'open')
+    assert.equal(body.spectating, true)
+  })
+
+  it('accepts visibility: friends-only', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ visibility: 'friends-only' }),
+    })
+    assert.equal(res.status, 201)
+    const body = await res.json()
+    assert.equal(body.visibility, 'friends-only')
+  })
+
+  it('accepts visibility: private', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ visibility: 'private' }),
+    })
+    assert.equal(res.status, 201)
+    const body = await res.json()
+    assert.equal(body.visibility, 'private')
+  })
+
+  it('accepts spectating: false', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ spectating: false }),
+    })
+    assert.equal(res.status, 201)
+    const body = await res.json()
+    assert.equal(body.spectating, false)
+  })
+
+  it('stores joinPolicy: invite-only with public visibility', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ visibility: 'public', joinPolicy: 'invite-only' }),
+    })
+    assert.equal(res.status, 201)
+    const body = await res.json()
+    assert.equal(body.joinPolicy, 'invite-only')
+  })
+
+  it('rejects invalid visibility with 400', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ visibility: 'unknown' }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  it('rejects non-boolean spectating with 400', { timeout: 10000 }, async () => {
+    const { sessionId, playerId } = await loginPlayer(
+      server.baseUrl,
+      'host@gtest.spades.invalid',
+      'password123',
+    )
+    const res = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId,
+        'x-player-id': playerId,
+      },
+      body: JSON.stringify({ spectating: 'yes' }),
+    })
+    assert.equal(res.status, 400)
+  })
 })
 
 describe('POST /api/tables/:tableId/sit', { skip }, () => {

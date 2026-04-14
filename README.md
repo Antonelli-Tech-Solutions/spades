@@ -672,7 +672,7 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 
 | `OBSERVER_JOINED` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when a player joins as a spectator-only observer via a spectator link. |
 
-Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`. **Observers (spectators) are excluded from events that contain private hand data:** `HAND_DEALT`, `HAND_REVEALED`, and `BLIND_NIL_EXCHANGE_PROMPT` are never sent to observer connections.
 
 Lobby events are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
 

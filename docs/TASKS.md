@@ -139,7 +139,7 @@
 - [x] `P1` Allow going to a friend's table from the friends list, subject to visibility and join policy
 - [ ] `P1` Implement direct in-app invite via friends list and username search: bypasses visibility and join policy
 - [ ] `P1` Deliver in-app invite notifications with one-click join; notify host on decline
-- [ ] `P1` Implement block: prevent friend requests and game invitations from blocked players
+- [x] `P1` Implement block: prevent friend requests and game invitations from blocked players
 - [ ] `P1` Deliver friend request notifications in-app and via push (if enabled)
 
 ---

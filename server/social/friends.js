@@ -37,7 +37,7 @@ export async function searchPlayers(db, query, requesterId) {
        AND id != $2
      ORDER BY username
      LIMIT 20`,
-    [`${trimmed}%`, requesterId],
+    [`${trimmed.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`, requesterId],
   )
   return result.rows.map((row) => ({ playerId: row.id, username: row.username }))
 }

@@ -498,7 +498,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   })
 
   // POST /api/friends/request
-  app.post('/api/friends/request', async (req, res) => {
+  app.post('/api/friends/request', socialRateLimiter, async (req, res) => {
     const { playerId: toPlayerId } = req.body ?? {}
     try {
       const redisClient = await getRedis()

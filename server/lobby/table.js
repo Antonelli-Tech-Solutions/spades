@@ -21,7 +21,7 @@ const MAX_OBSERVERS = 20
 export const VALID_VISIBILITIES = ['public', 'friends-only', 'private']
 export const VALID_JOIN_POLICIES = ['open', 'friends-only', 'invite-only']
 
-const JOIN_POLICIES_BY_VISIBILITY = {
+export const JOIN_POLICIES_BY_VISIBILITY = {
   'public': ['open', 'friends-only', 'invite-only'],
   'friends-only': ['friends-only', 'invite-only'],
   'private': ['invite-only'],
@@ -38,6 +38,16 @@ export function resolveJoinPolicy(visibility, joinPolicy) {
   if (!allowed) return 'open'
   if (joinPolicy && allowed.includes(joinPolicy)) return joinPolicy
   return DEFAULT_JOIN_POLICY[visibility]
+}
+
+export function validateJoinPolicy(visibility, joinPolicy) {
+  if (!joinPolicy) return null
+  const allowed = JOIN_POLICIES_BY_VISIBILITY[visibility]
+  if (!allowed) return null
+  if (!allowed.includes(joinPolicy)) {
+    return `Join policy '${joinPolicy}' is not allowed for '${visibility}' visibility. Allowed: ${allowed.join(', ')}`
+  }
+  return null
 }
 
 /**

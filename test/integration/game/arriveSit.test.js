@@ -54,8 +54,8 @@ async function ensureTables(db) {
       UNIQUE(player_id, friend_id)
     )
   `)
-  await db.query(`DELETE FROM friendships WHERE player_id IN (SELECT id FROM players WHERE email LIKE '%${EMAIL_DOMAIN}')`)
-  await db.query(`DELETE FROM players WHERE email LIKE '%${EMAIL_DOMAIN}'`)
+  await db.query(`DELETE FROM friendships WHERE player_id IN (SELECT id FROM players WHERE email LIKE $1)`, [`%${EMAIL_DOMAIN}`])
+  await db.query(`DELETE FROM players WHERE email LIKE $1`, [`%${EMAIL_DOMAIN}`])
 }
 
 async function insertVerifiedPlayer(db, { email, username, password }) {

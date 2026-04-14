@@ -29,7 +29,11 @@ function wsConnect(server, headers = {}, wsOpts = {}) {
   const { port } = server.address()
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers, ...wsOpts })
-    ws.once('open', () => resolve(ws))
+    ws.once('open', () => {
+      // Allow the server's async connection handler (notify-channel subscribe) to
+      // finish before the test sends application-level messages.
+      setTimeout(() => resolve(ws), 100)
+    })
     ws.once('error', reject)
     ws.once('unexpected-response', (_req, res) => {
       reject(Object.assign(new Error(`HTTP ${res.statusCode}`), { statusCode: res.statusCode }))

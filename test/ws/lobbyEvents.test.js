@@ -48,7 +48,7 @@ function wsConnect(server, headers = {}) {
   const { port } = server.httpServer.address()
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers })
-    ws.once('open', () => resolve(ws))
+    ws.once('open', () => { setTimeout(() => resolve(ws), 100) })
     ws.once('error', reject)
     ws.once('unexpected-response', (_req, res) => {
       reject(Object.assign(new Error(`HTTP ${res.statusCode}`), { statusCode: res.statusCode }))

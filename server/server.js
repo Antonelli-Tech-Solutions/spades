@@ -790,6 +790,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   app.post('/api/tables/:tableId/assign-seat', async (req, res) => {
     const { tableId } = req.params
     const { playerId: targetPlayerId, seat } = req.body ?? {}
+    if (!targetPlayerId) return sendJSON(res, 400, { error: 'playerId is required' })
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
@@ -805,6 +806,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'NOT_AT_TABLE') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
       console.error('Assign seat error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
@@ -815,6 +817,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   app.post('/api/tables/:tableId/kick', async (req, res) => {
     const { tableId } = req.params
     const { playerId: targetPlayerId } = req.body ?? {}
+    if (!targetPlayerId) return sendJSON(res, 400, { error: 'playerId is required' })
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
@@ -839,6 +842,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   app.post('/api/tables/:tableId/transfer-host', async (req, res) => {
     const { tableId } = req.params
     const { playerId: newHostPlayerId } = req.body ?? {}
+    if (!newHostPlayerId) return sendJSON(res, 400, { error: 'playerId is required' })
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)

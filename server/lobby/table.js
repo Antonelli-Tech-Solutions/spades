@@ -624,6 +624,10 @@ export async function assignSeat(redis, tableId, hostPlayerId, targetPlayerId, s
   }
 
   const currentSeat = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)?.[0]
+  const isObserver = (table.observers || []).includes(targetPlayerId)
+  if (!currentSeat && !isObserver) {
+    throw Object.assign(new Error('Target player is not at this table'), { code: 'NOT_AT_TABLE' })
+  }
   if (currentSeat === seat) {
     return table
   }

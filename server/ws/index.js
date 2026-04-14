@@ -59,15 +59,24 @@ export function createWsServer(httpServer, opts = {}) {
   // Exposed so callers can await subscriber readiness before exercising pub/sub paths
   wss._subscriberReady = subscriberReady
 
+  const OBSERVER_BLOCKED_TYPES = new Set(['HAND_DEALT', 'HAND_REVEALED', 'BLIND_NIL_EXCHANGE_PROMPT'])
+
   // Forward a Redis pub/sub message to all local WebSocket clients in the matching room.
   // The message is already a JSON string (published by broadcast / broadcastLobby).
+  // Observers are filtered out for event types that contain private hand data.
   const onChannelMessage = (message, channel) => {
     const room = rooms.get(channel)
     if (!room) return
+    let parsedType = null
     for (const ws of room) {
-      if (ws.readyState === ws.constructor.OPEN) {
-        ws.send(message)
+      if (ws.readyState !== ws.constructor.OPEN) continue
+      if (ws._isObserver) {
+        if (parsedType === null) {
+          try { parsedType = JSON.parse(message).type ?? '' } catch { parsedType = '' }
+        }
+        if (OBSERVER_BLOCKED_TYPES.has(parsedType)) continue
       }
+      ws.send(message)
     }
   }
 
@@ -198,6 +207,10 @@ export function createWsServer(httpServer, opts = {}) {
           console.error('WebSocket JOIN auth error:', { playerId, tableId, error: err.message })
           ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'error' } }))
           return
+        }
+
+        if (isObserver) {
+          ws._isObserver = true
         }
 
         const roomKey = `table:${tableId}`

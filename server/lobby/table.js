@@ -594,6 +594,145 @@ export async function changeSeat(redis, tableId, playerId, newSeat) {
  * @param {import('redis').RedisClientType} redis
  * @returns {Promise<Array<{ tableId: string, name: string|null, hostPlayerId: string, seats: object, seatsAvailable: number }>>}
  */
+/**
+ * Host assigns a player to a specific seat (pre-game only).
+ * The target player must be at the table (seated elsewhere or observing) or not yet at the table.
+ * If the target is already seated elsewhere, they are moved to the new seat.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} hostPlayerId
+ * @param {string} targetPlayerId
+ * @param {'north'|'east'|'south'|'west'} seat
+ * @returns {Promise<TableState>}
+ */
+export async function assignSeat(redis, tableId, hostPlayerId, targetPlayerId, seat) {
+  const validSeats = ['north', 'east', 'south', 'west']
+  if (!validSeats.includes(seat)) {
+    throw Object.assign(new Error(`Invalid seat: ${seat}`), { code: 'INVALID_SEAT' })
+  }
+
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== hostPlayerId) {
+    throw Object.assign(new Error('Only the host can assign seats'), { code: 'FORBIDDEN' })
+  }
+  if (table.status === 'playing') {
+    throw Object.assign(new Error('Cannot assign seats once the game has started'), { code: 'GAME_IN_PROGRESS' })
+  }
+
+  const currentSeat = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)?.[0]
+  if (currentSeat === seat) {
+    return table
+  }
+  if (table.seats[seat] !== null) {
+    throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+  }
+
+  const updatedSeats = { ...table.seats }
+  if (currentSeat) {
+    updatedSeats[currentSeat] = null
+  }
+  updatedSeats[seat] = targetPlayerId
+
+  const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+  const updated = { ...table, seats: updatedSeats, observers: updatedObservers }
+  await saveTable(redis, updated)
+  console.log('Host assigned seat:', { tableId, hostPlayerId, targetPlayerId, seat })
+  return updated
+}
+
+/**
+ * Host kicks a player from the table.
+ * If the table is waiting, the seat is vacated.
+ * If the table is playing, the player is replaced by a bot.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} hostPlayerId
+ * @param {string} targetPlayerId
+ * @returns {Promise<{ table: TableState, seat: string|null, wasPlaying: boolean }>}
+ */
+export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== hostPlayerId) {
+    throw Object.assign(new Error('Only the host can kick players'), { code: 'FORBIDDEN' })
+  }
+  if (targetPlayerId === hostPlayerId) {
+    throw Object.assign(new Error('Host cannot kick themselves'), { code: 'CANNOT_KICK_SELF' })
+  }
+
+  const seatEntry = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
+  const isObserver = (table.observers || []).includes(targetPlayerId)
+
+  if (!seatEntry && !isObserver) {
+    throw Object.assign(new Error('Player is not at this table'), { code: 'NOT_SEATED' })
+  }
+
+  if (!seatEntry && isObserver) {
+    const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+    const updated = { ...table, observers: updatedObservers }
+    await saveTable(redis, updated)
+    console.log('Host kicked observer:', { tableId, hostPlayerId, targetPlayerId })
+    return { table: updated, seat: null, wasPlaying: false }
+  }
+
+  const [seat] = seatEntry
+  if (table.status === 'playing') {
+    const botId = `bot:${seat}`
+    const updated = { ...table, seats: { ...table.seats, [seat]: botId } }
+    await saveTable(redis, updated)
+    console.log('Host kicked player during game, replaced by bot:', { tableId, hostPlayerId, targetPlayerId, seat })
+    return { table: updated, seat, wasPlaying: true }
+  }
+
+  const updated = { ...table, seats: { ...table.seats, [seat]: null } }
+  await saveTable(redis, updated)
+  console.log('Host kicked player:', { tableId, hostPlayerId, targetPlayerId, seat })
+  return { table: updated, seat, wasPlaying: false }
+}
+
+/**
+ * Transfer host privileges to another seated player.
+ * Allowed at any time (waiting or playing).
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} currentHostId
+ * @param {string} newHostId
+ * @returns {Promise<TableState>}
+ */
+export async function transferHost(redis, tableId, currentHostId, newHostId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== currentHostId) {
+    throw Object.assign(new Error('Only the host can transfer host privileges'), { code: 'FORBIDDEN' })
+  }
+  if (newHostId === currentHostId) {
+    return table
+  }
+
+  const targetSeat = Object.entries(table.seats).find(([, id]) => id === newHostId)
+  if (!targetSeat) {
+    throw Object.assign(new Error('Target player is not seated at this table'), { code: 'NOT_SEATED' })
+  }
+  if (newHostId.startsWith('bot:')) {
+    throw Object.assign(new Error('Cannot transfer host to a bot'), { code: 'INVALID_TARGET' })
+  }
+
+  const updated = { ...table, hostPlayerId: newHostId }
+  await saveTable(redis, updated)
+  console.log('Host transferred:', { tableId, oldHost: currentHostId, newHost: newHostId })
+  return updated
+}
+
 export async function listTables(redis) {
   const raw = await redis.hGetAll('lobby:tables')
   const result = []

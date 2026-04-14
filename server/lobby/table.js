@@ -594,6 +594,52 @@ export async function changeSeat(redis, tableId, playerId, newSeat) {
  * @param {import('redis').RedisClientType} redis
  * @returns {Promise<Array<{ tableId: string, name: string|null, hostPlayerId: string, seats: object, seatsAvailable: number }>>}
  */
+/**
+ * Create a join-link token for a table. Only the host may generate one.
+ * The token is stored in Redis and expires with the same TTL as the table.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} requestingPlayerId
+ * @returns {Promise<string>} The token
+ */
+export async function createJoinLink(redis, tableId, requestingPlayerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== requestingPlayerId) {
+    throw Object.assign(new Error('Only the host can generate a join link'), { code: 'FORBIDDEN' })
+  }
+  const token = uuidv4()
+  const key = `joinlink:${token}`
+  await redis.set(key, JSON.stringify({ tableId, createdAt: new Date().toISOString() }), { EX: TABLE_TTL_SECONDS })
+  console.log('Join link created:', { tableId, token })
+  return token
+}
+
+/**
+ * Validate a join-link token. Returns the associated tableId if the token
+ * is valid and the table still exists, otherwise throws.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} token
+ * @returns {Promise<string>} tableId
+ */
+export async function validateJoinLink(redis, token) {
+  const key = `joinlink:${token}`
+  const raw = await redis.get(key)
+  if (!raw) {
+    throw Object.assign(new Error('Invalid or expired join link'), { code: 'FORBIDDEN' })
+  }
+  const { tableId } = JSON.parse(raw)
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table no longer exists'), { code: 'NOT_FOUND' })
+  }
+  return tableId
+}
+
 export async function listTables(redis) {
   const raw = await redis.hGetAll('lobby:tables')
   const result = []

@@ -2,6 +2,23 @@ import { createTable } from '../api.js'
 import { navigate } from '../router.js'
 import { redirectIfSeated } from '../redirectIfSeated.js'
 
+// Must stay in sync with server/lobby/table.js JOIN_POLICIES_BY_VISIBILITY
+const JOIN_POLICIES_BY_VISIBILITY = {
+  'public': ['open', 'friends-only', 'invite-only'],
+  'friends-only': ['friends-only', 'invite-only'],
+  'private': ['invite-only'],
+}
+
+const JOIN_POLICY_LABELS = {
+  'open': 'Open',
+  'friends-only': 'Friends Only',
+  'invite-only': 'Invite Only',
+}
+
+function buildJoinPolicyOptions(visibility) {
+  return JOIN_POLICIES_BY_VISIBILITY[visibility] || ['open']
+}
+
 /**
  * Render the create table screen into `container`.
  * On success, navigates to the join table screen (#/join) for the new table.
@@ -32,6 +49,28 @@ export async function renderCreateTableScreen(container) {
             placeholder="e.g. Friday Night Spades"
           />
         </div>
+        <div class="form-group">
+          <label for="table-visibility">Visibility</label>
+          <select id="table-visibility" name="visibility">
+            <option value="public" selected>Public</option>
+            <option value="friends-only">Friends Only</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        <div class="form-group" id="join-policy-group">
+          <label for="table-join-policy">Join Policy</label>
+          <select id="table-join-policy" name="joinPolicy">
+            <option value="open" selected>Open</option>
+            <option value="friends-only">Friends Only</option>
+            <option value="invite-only">Invite Only</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="table-spectating">
+            <input type="checkbox" id="table-spectating" name="spectating" checked />
+            Allow Spectators
+          </label>
+        </div>
         <div class="form-error" id="create-table-error" role="alert" aria-live="polite"></div>
         <button type="submit" id="create-table-btn" class="btn-primary">Create Table</button>
       </form>
@@ -42,6 +81,29 @@ export async function renderCreateTableScreen(container) {
   const form = container.querySelector('#create-table-form')
   const errorEl = container.querySelector('#create-table-error')
   const btn = container.querySelector('#create-table-btn')
+  const visibilitySelect = container.querySelector('#table-visibility')
+  const joinPolicySelect = container.querySelector('#table-join-policy')
+  const joinPolicyGroup = container.querySelector('#join-policy-group')
+
+  function updateJoinPolicyOptions() {
+    const vis = visibilitySelect.value
+    const allowed = buildJoinPolicyOptions(vis)
+    joinPolicySelect.innerHTML = ''
+    for (const p of allowed) {
+      const opt = document.createElement('option')
+      opt.value = p
+      opt.textContent = JOIN_POLICY_LABELS[p]
+      joinPolicySelect.appendChild(opt)
+    }
+    if (allowed.length <= 1) {
+      joinPolicyGroup.style.display = 'none'
+    } else {
+      joinPolicyGroup.style.display = ''
+    }
+  }
+
+  visibilitySelect.addEventListener('change', updateJoinPolicyOptions)
+  updateJoinPolicyOptions()
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
@@ -60,12 +122,23 @@ export async function renderCreateTableScreen(container) {
       return
     }
 
+    const visibility = visibilitySelect.value
+    const joinPolicy = joinPolicySelect.value
+    const spectating = container.querySelector('#table-spectating').checked
+
     btn.disabled = true
     btn.textContent = 'Creating\u2026'
 
     try {
-      const { tableId } = await createTable({ name: name || null, sessionId, playerId })
-      console.log('Table created:', { tableId, name: name || null })
+      const { tableId } = await createTable({
+        name: name || null,
+        visibility,
+        joinPolicy,
+        spectating,
+        sessionId,
+        playerId,
+      })
+      console.log('Table created:', { tableId, name: name || null, visibility, joinPolicy, spectating })
       sessionStorage.setItem('currentTableId', tableId)
       navigate(`#/table?tableId=${tableId}`)
     } catch (err) {

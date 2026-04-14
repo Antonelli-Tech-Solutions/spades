@@ -25,6 +25,8 @@ import {
   changeSeat,
   joinTable,
   standFromSeat,
+  VALID_VISIBILITIES,
+  VALID_JOIN_POLICIES,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -488,7 +490,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
   // POST /api/tables — create a new table
   app.post('/api/tables', async (req, res) => {
-    const { name } = req.body ?? {}
+    const { name, visibility, joinPolicy, spectating } = req.body ?? {}
     if (name !== undefined && name !== null) {
       if (typeof name !== 'string') return sendJSON(res, 400, { error: 'Table name must be a string.' })
       const trimmed = name.trim()
@@ -497,12 +499,34 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
+      if (visibility !== undefined && visibility !== null && !VALID_VISIBILITIES.includes(visibility)) {
+        return sendJSON(res, 400, { error: `Invalid visibility. Must be one of: ${VALID_VISIBILITIES.join(', ')}` })
+      }
+      const resolvedVisibility = visibility ?? 'public'
+      if (joinPolicy !== undefined && joinPolicy !== null && !VALID_JOIN_POLICIES.includes(joinPolicy)) {
+        return sendJSON(res, 400, { error: `Invalid joinPolicy. Must be one of: ${VALID_JOIN_POLICIES.join(', ')}` })
+      }
+      if (spectating !== undefined && spectating !== null && typeof spectating !== 'boolean') {
+        return sendJSON(res, 400, { error: 'spectating must be a boolean.' })
+      }
       const resolvedName = (typeof name === 'string' && name.trim()) ? name.trim() : null
-      const table = await createTable(redisClient, { hostPlayerId: session.playerId, name: resolvedName })
+      const table = await createTable(redisClient, {
+        hostPlayerId: session.playerId,
+        name: resolvedName,
+        visibility: resolvedVisibility,
+        joinPolicy,
+        spectating: spectating !== undefined && spectating !== null ? spectating : true,
+      })
       // Auto-seat the host at north
       const seatedTable = await sitAtTable(redisClient, table.tableId, session.playerId, 'north')
       emitLobbyTableCreated(wss, seatedTable)
-      sendJSON(res, 201, { tableId: table.tableId, name: table.name })
+      sendJSON(res, 201, {
+        tableId: table.tableId,
+        name: table.name,
+        visibility: table.visibility,
+        joinPolicy: table.joinPolicy,
+        spectating: table.spectating,
+      })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Create table error:', { error: err.message })

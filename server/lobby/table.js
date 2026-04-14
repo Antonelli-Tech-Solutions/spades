@@ -481,6 +481,11 @@ export async function leaveInProgressGame(redis, tableId, playerId) {
  * @param {string} tableId
  */
 export async function terminateTable(redis, tableId) {
+  const tokens = await redis.sMembers(`spectatorlinks:${tableId}`)
+  if (tokens.length > 0) {
+    await redis.del(tokens.map((t) => `spectatorlink:${t}`))
+  }
+  await redis.del(`spectatorlinks:${tableId}`)
   await redis.del(`table:${tableId}`)
   await redis.del(`game:${tableId}`)
   await redis.del(`spectators:${tableId}`)
@@ -694,6 +699,8 @@ export async function createSpectatorLink(redis, tableId, requestingPlayerId) {
   const token = uuidv4()
   const key = `spectatorlink:${token}`
   await redis.set(key, JSON.stringify({ tableId, createdAt: new Date().toISOString() }), { EX: TABLE_TTL_SECONDS })
+  await redis.sAdd(`spectatorlinks:${tableId}`, token)
+  await redis.expire(`spectatorlinks:${tableId}`, TABLE_TTL_SECONDS)
   console.log('Spectator link created:', { tableId })
   return token
 }

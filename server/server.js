@@ -12,6 +12,12 @@ import {
   getPendingRequests,
   removeFriend,
 } from './social/friends.js'
+import {
+  blockPlayer,
+  unblockPlayer,
+  getBlockList,
+  isBlockedEitherDirection,
+} from './social/block.js'
 import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession, getSession, validateAuthHeaders } from './auth/session.js'
 import { getDb } from './db.js'
@@ -506,6 +512,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const db = getDb()
+      const blocked = await isBlockedEitherDirection(db, session.playerId, toPlayerId)
+      if (blocked) return sendJSON(res, 403, { error: 'Cannot send friend request to this player.' })
       await sendFriendRequest(db, session.playerId, toPlayerId)
       sendJSON(res, 201, { message: 'Friend request sent.' })
     } catch (err) {
@@ -525,6 +533,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const db = getDb()
+      const blocked = await isBlockedEitherDirection(db, session.playerId, requesterId)
+      if (blocked) return sendJSON(res, 403, { error: 'Cannot accept friend request from this player.' })
       await acceptFriendRequest(db, session.playerId, requesterId)
       sendJSON(res, 200, { message: 'Friend request accepted.' })
     } catch (err) {
@@ -656,6 +666,61 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 409, { error: err.message })
       console.error('Go to friend table error:', { friendId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Block Routes
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // POST /api/players/:playerId/block
+  app.post('/api/players/:playerId/block', async (req, res) => {
+    const { playerId: blockedId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      await blockPlayer(db, session.playerId, blockedId)
+      sendJSON(res, 201, { message: 'Player blocked.' })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Block player error:', { blockedId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // DELETE /api/players/:playerId/block
+  app.delete('/api/players/:playerId/block', async (req, res) => {
+    const { playerId: blockedId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      await unblockPlayer(db, session.playerId, blockedId)
+      sendJSON(res, 200, { message: 'Player unblocked.' })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Unblock player error:', { blockedId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // GET /api/players/blocked
+  app.get('/api/players/blocked', async (req, res) => {
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      const blocked = await getBlockList(db, session.playerId)
+      sendJSON(res, 200, { blocked })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Get block list error:', { error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

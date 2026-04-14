@@ -34,6 +34,7 @@ export REDIS_URL="redis://localhost:6379"
 psql $DATABASE_URL -f db/migrations/001_create_players.sql
 psql $DATABASE_URL -f db/migrations/002_create_profile_and_games.sql
 psql $DATABASE_URL -f db/migrations/003_create_password_reset_tokens.sql
+psql $DATABASE_URL -f db/migrations/004_create_friendships.sql
 
 # Start the server (default port 3000)
 npm start
@@ -278,6 +279,118 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `200` | Password updated. Player can now sign in with the new password. |
 | `400` | Missing/invalid token, expired token, or password too short |
 | `500` | Internal server error |
+
+### Social / Friends
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/players/search?username=<query>` | Required | Search players by username prefix (case-insensitive). Rate limited. |
+| `POST` | `/api/friends/request` | Required | Send a friend request. Rate limited. |
+| `POST` | `/api/friends/accept` | Required | Accept a pending friend request. |
+| `POST` | `/api/friends/decline` | Required | Decline a pending friend request. |
+| `GET` | `/api/friends` | Required | List accepted friends and pending incoming requests. |
+| `DELETE` | `/api/friends/:playerId` | Required | Remove an accepted friend. |
+
+#### `GET /api/players/search`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Query parameters:** `username` — prefix to search (required, max 50 characters). The requesting player is excluded from results. Returns up to 20 matches ordered alphabetically.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ players: [{ playerId, username }] }` |
+| `400` | Missing or invalid username query |
+| `401` | Missing or invalid session |
+
+#### `POST /api/friends/request`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<uuid>" }
+```
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `201` | Friend request sent |
+| `400` | Invalid playerId or attempting to friend yourself |
+| `401` | Missing or invalid session |
+| `404` | Target player not found |
+| `409` | Already friends or request already pending |
+
+#### `POST /api/friends/accept`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<uuid>" }
+```
+
+The `playerId` is the requester whose pending request you want to accept.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Friend request accepted |
+| `400` | Invalid playerId |
+| `401` | Missing or invalid session |
+| `404` | No pending friend request found |
+
+#### `POST /api/friends/decline`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<uuid>" }
+```
+
+The `playerId` is the requester whose pending request you want to decline. The friendship row is deleted.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Friend request declined |
+| `400` | Invalid playerId |
+| `401` | Missing or invalid session |
+| `404` | No pending friend request found |
+
+#### `GET /api/friends`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Returns two arrays: `friends` (accepted friendships) and `pending` (incoming requests awaiting your response).
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ friends: [{ playerId, username, since }], pending: [{ playerId, username, sentAt }] }` |
+| `401` | Missing or invalid session |
+
+#### `DELETE /api/friends/:playerId`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Removes an accepted friendship. Both directions are deleted.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Friend removed |
+| `400` | Invalid playerId |
+| `401` | Missing or invalid session |
+| `404` | Friendship not found |
 
 ### Tables & Lobby
 
@@ -760,6 +873,7 @@ db/
     001_create_players.sql
     002_create_profile_and_games.sql
     003_create_password_reset_tokens.sql
+    004_create_friendships.sql
 test/
   unit/
     auth/           — Pure logic tests (no DB required)
@@ -770,7 +884,7 @@ test/
     middleware/     — Rate limiter unit tests
   integration/
     auth/           — Auth API route tests (requires DATABASE_URL)
-    social/         — Profile API route tests (requires DATABASE_URL)
+    social/         — Profile and friends API route tests (requires DATABASE_URL)
     game/           — Game API route tests (requires DATABASE_URL + Redis)
   ws/               — WebSocket event flow tests
 docs/

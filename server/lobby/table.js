@@ -123,35 +123,69 @@ export async function sitAtTable(redis, tableId, playerId, seat) {
     throw Object.assign(new Error(`Invalid seat: ${seat}`), { code: 'INVALID_SEAT' })
   }
 
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
-  }
-  if (table.status === 'playing') {
-    throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
-  }
-  // Check idempotent same-seat before checking seat occupancy
-  const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
-  if (currentSeat === seat) {
-    // Already at this exact seat — no-op, return current state
-    return table
-  }
-  if (currentSeat) {
-    throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
-  }
-  if (table.seats[seat] !== null) {
-    throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+
+      if (table.status === 'playing') {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
+      }
+      const currentSeat = Object.entries(table.seats).find(([, id]) => id === playerId)?.[0]
+      if (currentSeat === seat) {
+        await isolatedClient.unwatch()
+        return table
+      }
+      if (currentSeat) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Player is already seated at this table'), { code: 'ALREADY_SEATED' })
+      }
+      if (table.seats[seat] !== null) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+      }
+
+      const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
+      const updated = {
+        ...table,
+        seats: { ...table.seats, [seat]: playerId },
+        observers: updatedObservers,
+      }
+
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Player seated:', { tableId, playerId, seat })
+      return updated
+    })
+
+    if (result !== null) {
+      return result
+    }
   }
 
-  const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
-  const updated = {
-    ...table,
-    seats: { ...table.seats, [seat]: playerId },
-    observers: updatedObservers,
-  }
-  await saveTable(redis, updated)
-  console.log('Player seated:', { tableId, playerId, seat })
-  return updated
+  throw Object.assign(
+    new Error('Sit could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
 }
 
 /**
@@ -584,40 +618,77 @@ export async function assignSeat(redis, tableId, hostPlayerId, targetPlayerId, s
     throw Object.assign(new Error(`Invalid seat: ${seat}`), { code: 'INVALID_SEAT' })
   }
 
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
-  }
-  if (table.hostPlayerId !== hostPlayerId) {
-    throw Object.assign(new Error('Only the host can assign seats'), { code: 'FORBIDDEN' })
-  }
-  if (table.status === 'playing') {
-    throw Object.assign(new Error('Cannot assign seats once the game has started'), { code: 'GAME_IN_PROGRESS' })
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+
+      if (table.hostPlayerId !== hostPlayerId) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Only the host can assign seats'), { code: 'FORBIDDEN' })
+      }
+      if (table.status === 'playing') {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Cannot assign seats once the game has started'), { code: 'GAME_IN_PROGRESS' })
+      }
+
+      const currentSeat = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)?.[0]
+      const isObserver = (table.observers || []).includes(targetPlayerId)
+      if (!currentSeat && !isObserver) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Target player is not at this table'), { code: 'NOT_AT_TABLE' })
+      }
+      if (currentSeat === seat) {
+        await isolatedClient.unwatch()
+        return table
+      }
+      if (table.seats[seat] !== null) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
+      }
+
+      const updatedSeats = { ...table.seats }
+      if (currentSeat) {
+        updatedSeats[currentSeat] = null
+      }
+      updatedSeats[seat] = targetPlayerId
+
+      const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+      const updated = { ...table, seats: updatedSeats, observers: updatedObservers }
+
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Host assigned seat:', { tableId, hostPlayerId, targetPlayerId, seat })
+      return updated
+    })
+
+    if (result !== null) {
+      return result
+    }
   }
 
-  const currentSeat = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)?.[0]
-  const isObserver = (table.observers || []).includes(targetPlayerId)
-  if (!currentSeat && !isObserver) {
-    throw Object.assign(new Error('Target player is not at this table'), { code: 'NOT_AT_TABLE' })
-  }
-  if (currentSeat === seat) {
-    return table
-  }
-  if (table.seats[seat] !== null) {
-    throw Object.assign(new Error('Seat is already taken'), { code: 'SEAT_TAKEN' })
-  }
-
-  const updatedSeats = { ...table.seats }
-  if (currentSeat) {
-    updatedSeats[currentSeat] = null
-  }
-  updatedSeats[seat] = targetPlayerId
-
-  const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
-  const updated = { ...table, seats: updatedSeats, observers: updatedObservers }
-  await saveTable(redis, updated)
-  console.log('Host assigned seat:', { tableId, hostPlayerId, targetPlayerId, seat })
-  return updated
+  throw Object.assign(
+    new Error('Seat assignment could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
 }
 
 /**
@@ -632,56 +703,109 @@ export async function assignSeat(redis, tableId, hostPlayerId, targetPlayerId, s
  * @returns {Promise<{ table: TableState, seat: string|null, wasPlaying: boolean }>}
  */
 export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
-  }
-  if (table.hostPlayerId !== hostPlayerId) {
-    throw Object.assign(new Error('Only the host can kick players'), { code: 'FORBIDDEN' })
-  }
-  if (targetPlayerId === hostPlayerId) {
-    throw Object.assign(new Error('Host cannot kick themselves'), { code: 'CANNOT_KICK_SELF' })
-  }
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
 
-  const seatEntry = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
-  const isObserver = (table.observers || []).includes(targetPlayerId)
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
 
-  if (!seatEntry && !isObserver) {
-    throw Object.assign(new Error('Player is not at this table'), { code: 'NOT_SEATED' })
-  }
-
-  if (!seatEntry && isObserver) {
-    const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
-    const updated = { ...table, observers: updatedObservers }
-    await saveTable(redis, updated)
-    console.log('Host kicked observer:', { tableId, hostPlayerId, targetPlayerId })
-    return { table: updated, seat: null, wasPlaying: false }
-  }
-
-  const [seat] = seatEntry
-  if (table.status === 'playing') {
-    const botId = `bot:${seat}`
-    const updated = { ...table, seats: { ...table.seats, [seat]: botId } }
-    await saveTable(redis, updated)
-    try {
-      const gameState = await getGameState(redis, tableId)
-      if (gameState) {
-        const newState = substitutePlayerWithBot(gameState, seat)
-        await saveGameState(redis, tableId, newState)
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
       }
-    } catch (err) {
-      await saveTable(redis, table)
-      console.error('Failed to update game state during kick, reverted table state:', { tableId, targetPlayerId, seat, error: err.message })
-      throw err
+
+      const table = JSON.parse(raw)
+
+      if (table.hostPlayerId !== hostPlayerId) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Only the host can kick players'), { code: 'FORBIDDEN' })
+      }
+      if (targetPlayerId === hostPlayerId) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Host cannot kick themselves'), { code: 'CANNOT_KICK_SELF' })
+      }
+
+      const seatEntry = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
+      const isObserver = (table.observers || []).includes(targetPlayerId)
+
+      if (!seatEntry && !isObserver) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Player is not at this table'), { code: 'NOT_SEATED' })
+      }
+
+      if (!seatEntry && isObserver) {
+        const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+        const updated = { ...table, observers: updatedObservers }
+
+        const txResult = await isolatedClient
+          .multi()
+          .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+          .exec()
+
+        if (txResult === null) {
+          return null
+        }
+
+        console.log('Host kicked observer:', { tableId, hostPlayerId, targetPlayerId })
+        return { table: updated, seat: null, wasPlaying: false }
+      }
+
+      const [seat] = seatEntry
+      if (table.status === 'playing') {
+        const botId = `bot:${seat}`
+        const updated = { ...table, seats: { ...table.seats, [seat]: botId } }
+
+        const txResult = await isolatedClient
+          .multi()
+          .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+          .exec()
+
+        if (txResult === null) {
+          return null
+        }
+
+        try {
+          const gameState = await getGameState(redis, tableId)
+          if (gameState) {
+            const newState = substitutePlayerWithBot(gameState, seat)
+            await saveGameState(redis, tableId, newState)
+          }
+        } catch (err) {
+          await saveTable(redis, table)
+          console.error('Failed to update game state during kick, reverted table state:', { tableId, targetPlayerId, seat, error: err.message })
+          throw err
+        }
+        console.log('Host kicked player during game, replaced by bot:', { tableId, hostPlayerId, targetPlayerId, seat })
+        return { table: updated, seat, wasPlaying: true }
+      }
+
+      const updated = { ...table, seats: { ...table.seats, [seat]: null } }
+
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Host kicked player:', { tableId, hostPlayerId, targetPlayerId, seat })
+      return { table: updated, seat, wasPlaying: false }
+    })
+
+    if (result !== null) {
+      return result
     }
-    console.log('Host kicked player during game, replaced by bot:', { tableId, hostPlayerId, targetPlayerId, seat })
-    return { table: updated, seat, wasPlaying: true }
   }
 
-  const updated = { ...table, seats: { ...table.seats, [seat]: null } }
-  await saveTable(redis, updated)
-  console.log('Host kicked player:', { tableId, hostPlayerId, targetPlayerId, seat })
-  return { table: updated, seat, wasPlaying: false }
+  throw Object.assign(
+    new Error('Kick could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
 }
 
 /**
@@ -695,29 +819,65 @@ export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
  * @returns {Promise<TableState>}
  */
 export async function transferHost(redis, tableId, currentHostId, newHostId) {
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
-  }
-  if (table.hostPlayerId !== currentHostId) {
-    throw Object.assign(new Error('Only the host can transfer host privileges'), { code: 'FORBIDDEN' })
-  }
-  if (newHostId === currentHostId) {
-    return table
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+
+      if (table.hostPlayerId !== currentHostId) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Only the host can transfer host privileges'), { code: 'FORBIDDEN' })
+      }
+      if (newHostId === currentHostId) {
+        await isolatedClient.unwatch()
+        return table
+      }
+
+      const targetSeat = Object.entries(table.seats).find(([, id]) => id === newHostId)
+      if (!targetSeat) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Target player is not seated at this table'), { code: 'NOT_SEATED' })
+      }
+      if (newHostId.startsWith('bot:')) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Cannot transfer host to a bot'), { code: 'INVALID_TARGET' })
+      }
+
+      const updated = { ...table, hostPlayerId: newHostId }
+
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Host transferred:', { tableId, oldHost: currentHostId, newHost: newHostId })
+      return updated
+    })
+
+    if (result !== null) {
+      return result
+    }
   }
 
-  const targetSeat = Object.entries(table.seats).find(([, id]) => id === newHostId)
-  if (!targetSeat) {
-    throw Object.assign(new Error('Target player is not seated at this table'), { code: 'NOT_SEATED' })
-  }
-  if (newHostId.startsWith('bot:')) {
-    throw Object.assign(new Error('Cannot transfer host to a bot'), { code: 'INVALID_TARGET' })
-  }
-
-  const updated = { ...table, hostPlayerId: newHostId }
-  await saveTable(redis, updated)
-  console.log('Host transferred:', { tableId, oldHost: currentHostId, newHost: newHostId })
-  return updated
+  throw Object.assign(
+    new Error('Host transfer could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
 }
 
 export async function listTables(redis) {

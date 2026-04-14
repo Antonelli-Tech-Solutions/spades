@@ -40,7 +40,9 @@ function wsConnect(server, headers = {}) {
   const { port } = server.address()
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers })
-    ws.once('open', () => resolve(ws))
+    ws.once('open', () => {
+      setTimeout(() => resolve(ws), 100)
+    })
     ws.once('error', reject)
     ws.once('unexpected-response', (_req, res) => {
       reject(Object.assign(new Error(`HTTP ${res.statusCode}`), { statusCode: res.statusCode }))
@@ -269,7 +271,7 @@ describe('Disconnect/reconnect integration: window and expiry behaviour', { skip
         await disconnectP
 
         // Wait for reconnect window to expire (300 ms + buffer)
-        await delay(500)
+        await delay(800)
 
         // South player calls GET /state — should see the waitingForReconnect stall indicator
         const stateRes = await fetch(`${baseUrl}/api/tables/${tableId}/state`, {
@@ -321,7 +323,7 @@ describe('Disconnect/reconnect integration: window and expiry behaviour', { skip
         await disconnectP
 
         // Wait for reconnect window to expire and waitingForReconnect to be written to Redis
-        await delay(500)
+        await delay(800)
 
         // POST /bid while stalled — waitingForReconnect check fires first (before bid turn validation)
         const bidRes = await fetch(`${baseUrl}/api/tables/${tableId}/bid`, {
@@ -370,7 +372,7 @@ describe('Disconnect/reconnect integration: window and expiry behaviour', { skip
         await disconnectP
 
         // Wait for reconnect window to expire
-        await delay(500)
+        await delay(800)
 
         // POST /play while stalled — waitingForReconnect check fires before card validation
         // North is currentPlayerSeat but is stalled; south would also be blocked

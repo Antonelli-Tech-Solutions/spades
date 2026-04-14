@@ -290,6 +290,8 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `POST` | `/api/friends/decline` | Required | Decline a pending friend request. |
 | `GET` | `/api/friends` | Required | List accepted friends and pending incoming requests. |
 | `DELETE` | `/api/friends/:playerId` | Required | Remove an accepted friend. |
+| `GET` | `/api/friends/:friendId/table` | Required | Check if a friend is at a visible table and whether "Go to Table" is available. |
+| `POST` | `/api/friends/:friendId/go-to-table` | Required | Navigate to a friend's table as an observer. |
 
 #### `GET /api/players/search`
 
@@ -391,6 +393,36 @@ Removes an accepted friendship. Both directions are deleted.
 | `400` | Invalid playerId |
 | `401` | Missing or invalid session |
 | `404` | Friendship not found |
+
+#### `GET /api/friends/:friendId/table`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Checks whether a friend is currently at a table that is visible to the requester. Returns the table info and whether the "Go to Table" action is available (based on spectating and join policy). Returns `{ table: null }` if the friend is not at a table or the table is not visible.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ table: { tableId, name, hostPlayerId, status, visibility, spectating } \| null, canGoToTable: boolean }` |
+| `401` | Missing or invalid session |
+| `403` | Not friends with this player |
+
+#### `POST /api/friends/:friendId/go-to-table`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Navigates to a friend's table as an observer. Requires that the table is visible to the requester and that either spectating is enabled or the requester has seating rights under the table's join policy. Broadcasts `OBSERVER_JOINED` to the table room.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ tableId }` — successfully arrived at the table |
+| `401` | Missing or invalid session |
+| `403` | Not friends, table not visible, or no permission to go to table |
+| `404` | Friend is not at a table |
+| `409` | Observers full or concurrent modification |
 
 ### Tables & Lobby
 
@@ -783,7 +815,7 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 | `JOINED_LOBBY` | `{}` | Confirms the client has joined the lobby channel. |
 | `LEFT_LOBBY` | `{}` | Confirms the client has left the lobby channel. |
 
-| `OBSERVER_JOINED` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when a player joins as a spectator-only observer via a spectator link. |
+| `OBSERVER_JOINED` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when a player joins as a spectator-only observer (via a spectator link or the friends list "Go to Table" action). |
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`. **Observers (spectators) are excluded from events that contain private hand data:** `HAND_DEALT`, `HAND_REVEALED`, and `BLIND_NIL_EXCHANGE_PROMPT` are never sent to observer connections.
 

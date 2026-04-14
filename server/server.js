@@ -30,6 +30,8 @@ import {
   validateJoinPolicy,
   createJoinLink,
   validateJoinLink,
+  createSpectatorLink,
+  validateSpectatorLink,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -620,6 +622,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
       if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'ALREADY_SEATED') return sendJSON(res, 409, { error: err.message })
@@ -1067,6 +1070,46 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'ALREADY_SEATED') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
       console.error('Use join link error:', { token, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/spectator-link — generate a shareable spectator link (host only)
+  app.post('/api/tables/:tableId/spectator-link', async (req, res) => {
+    const { tableId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const token = await createSpectatorLink(redisClient, tableId, session.playerId)
+      const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '')
+      const spectatorUrl = `${appUrl}/spectate/${token}`
+      sendJSON(res, 200, { token, spectatorUrl })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      console.error('Create spectator link error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/spectator-link/:token — use a spectator link to join as observer only
+  app.post('/api/tables/spectator-link/:token', async (req, res) => {
+    const { token } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const { tableId } = await validateSpectatorLink(redisClient, token)
+      const table = await joinTable(redisClient, tableId, session.playerId, { asSpectator: true })
+      emitLobbyTableUpdated(wss, table)
+      if (wss) wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
+      sendJSON(res, 200, { tableId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
+      console.error('Use spectator link error:', { token, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

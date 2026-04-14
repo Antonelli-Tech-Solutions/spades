@@ -783,6 +783,8 @@ export async function listTables(redis) {
       hostPlayerId: table.hostPlayerId,
       seats: table.seats,
       seatsAvailable,
+      observerCount: (table.observers || []).length,
+      spectating: table.spectating,
     })
   }
   return result

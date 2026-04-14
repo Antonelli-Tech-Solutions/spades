@@ -179,6 +179,11 @@ function tableRowHtml(table) {
     seatsLabel += ` (${botCount} bot${botCount !== 1 ? 's' : ''})`
   }
 
+  const observerCount = table.observerCount || 0
+  const spectatorLabel = observerCount > 0
+    ? `<span class="table-row-spectators">${observerCount} spectator${observerCount !== 1 ? 's' : ''}</span>`
+    : ''
+
   const occupantNames = normalized
     .filter((v) => v !== null && !v.isBot && v.username)
     .map((v) => escapeHtml(v.username))
@@ -192,6 +197,7 @@ function tableRowHtml(table) {
       <div class="table-row-info">
         <span class="table-row-name">${name}</span>
         <span class="table-row-seats">${seatsLabel}</span>
+        ${spectatorLabel}
         ${occupantSummary}
       </div>
       <button class="btn-secondary join-seat-btn" data-table-id="${escapeHtml(table.tableId)}"${disabled}>Join</button>

@@ -495,10 +495,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (trimmed.length > 50) return sendJSON(res, 400, { error: 'Table name must be 50 characters or fewer.' })
     }
     const validVisibilities = ['public', 'friends-only', 'private']
-    const resolvedVisibility = validVisibilities.includes(visibility) ? visibility : 'public'
     if (visibility !== undefined && visibility !== null && !validVisibilities.includes(visibility)) {
       return sendJSON(res, 400, { error: `Invalid visibility. Must be one of: ${validVisibilities.join(', ')}` })
     }
+    const resolvedVisibility = visibility || 'public'
     const validJoinPolicies = ['open', 'friends-only', 'invite-only']
     if (joinPolicy !== undefined && joinPolicy !== null && !validJoinPolicies.includes(joinPolicy)) {
       return sendJSON(res, 400, { error: `Invalid joinPolicy. Must be one of: ${validJoinPolicies.join(', ')}` })

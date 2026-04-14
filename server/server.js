@@ -2,7 +2,16 @@ import { registerPlayer, verifyEmailToken, resendVerificationEmail } from './aut
 import { forgotPassword, resetPassword } from './auth/passwordReset.js'
 import { sendVerificationEmail as defaultMailer, sendPasswordResetEmail as defaultPasswordResetMailer } from './auth/email.js'
 import { getPlayerProfile, getPlayerUsernames, isValidUuid } from './social/profile.js'
-import { areFriends } from './social/friends.js'
+import {
+  areFriends,
+  searchPlayers,
+  sendFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+  getFriends,
+  getPendingRequests,
+  removeFriend,
+} from './social/friends.js'
 import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession, getSession, validateAuthHeaders } from './auth/session.js'
 import { getDb } from './db.js'
@@ -458,6 +467,121 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       sendJSON(res, 200, { message: 'Logged out successfully.' })
     } catch (err) {
       console.error('Logout error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Social / Friends Routes
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const socialRateLimiter = createRateLimiter(redis ?? null, {
+    keyPrefix: 'social',
+    ...rateLimitConfig,
+  })
+
+  // GET /api/players/search?username=<query>
+  app.get('/api/players/search', socialRateLimiter, async (req, res) => {
+    const { username } = req.query
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      const players = await searchPlayers(db, username, session.playerId)
+      sendJSON(res, 200, { players })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
+      console.error('Player search error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/friends/request
+  app.post('/api/friends/request', socialRateLimiter, async (req, res) => {
+    const { playerId: toPlayerId } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      await sendFriendRequest(db, session.playerId, toPlayerId)
+      sendJSON(res, 201, { message: 'Friend request sent.' })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'DUPLICATE') return sendJSON(res, 409, { error: err.message })
+      console.error('Friend request error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/friends/accept
+  app.post('/api/friends/accept', async (req, res) => {
+    const { playerId: requesterId } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      await acceptFriendRequest(db, session.playerId, requesterId)
+      sendJSON(res, 200, { message: 'Friend request accepted.' })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Accept friend request error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/friends/decline
+  app.post('/api/friends/decline', async (req, res) => {
+    const { playerId: requesterId } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      await declineFriendRequest(db, session.playerId, requesterId)
+      sendJSON(res, 200, { message: 'Friend request declined.' })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Decline friend request error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // GET /api/friends
+  app.get('/api/friends', async (req, res) => {
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      const friends = await getFriends(db, session.playerId)
+      const pending = await getPendingRequests(db, session.playerId)
+      sendJSON(res, 200, { friends, pending })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Get friends error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // DELETE /api/friends/:playerId
+  app.delete('/api/friends/:playerId', async (req, res) => {
+    const { playerId: friendId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      await removeFriend(db, session.playerId, friendId)
+      sendJSON(res, 200, { message: 'Friend removed.' })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Remove friend error:', { error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

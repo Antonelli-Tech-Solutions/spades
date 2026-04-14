@@ -175,17 +175,23 @@ export async function sitAtTable(redis, tableId, playerId, seat) {
  * @returns {Promise<TableState>}
  * @throws {Error} If the table is not found
  */
-export async function joinTable(redis, tableId, playerId) {
+export async function joinTable(redis, tableId, playerId, { asSpectator = false } = {}) {
   const table = await getTable(redis, tableId)
   if (!table) {
     throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
   }
   const seated = Object.values(table.seats).includes(playerId)
   if (seated) return table
+  if (!table.spectating) {
+    throw Object.assign(new Error('Spectating is not enabled for this table'), { code: 'FORBIDDEN' })
+  }
   const observers = table.observers || []
   if (observers.includes(playerId)) return table
   if (observers.length >= MAX_OBSERVERS) {
     throw Object.assign(new Error('Table has reached the maximum number of observers'), { code: 'OBSERVERS_FULL' })
+  }
+  if (asSpectator) {
+    await markPlayerAsSpectator(redis, tableId, playerId)
   }
   const updated = { ...table, observers: [...observers, playerId] }
   await saveTable(redis, updated)

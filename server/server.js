@@ -32,7 +32,6 @@ import {
   validateJoinLink,
   createSpectatorLink,
   validateSpectatorLink,
-  markPlayerAsSpectator,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -1101,8 +1100,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const { tableId } = await validateSpectatorLink(redisClient, token)
-      await markPlayerAsSpectator(redisClient, tableId, session.playerId)
-      const table = await joinTable(redisClient, tableId, session.playerId)
+      const table = await joinTable(redisClient, tableId, session.playerId, { asSpectator: true })
       emitLobbyTableUpdated(wss, table)
       if (wss) wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
       sendJSON(res, 200, { tableId })

@@ -579,6 +579,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       sendJSON(res, 200, { tableId })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
       console.error('Join table error:', { tableId, error: err.message })

@@ -44,6 +44,8 @@ import {
   validateSpectatorLink,
   arriveAtTable,
   markPlayerInvited,
+  canSeeTable,
+  canGoToTable,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -582,6 +584,78 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       console.error('Remove friend error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // GET /api/friends/:friendId/table — check if a friend is at a visible table
+  app.get('/api/friends/:friendId/table', async (req, res) => {
+    const { friendId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      const friends = await areFriends(db, session.playerId, friendId)
+      if (!friends) return sendJSON(res, 403, { error: 'Not friends with this player' })
+      const tableId = await findTableForPlayer(redisClient, friendId)
+      if (!tableId) return sendJSON(res, 200, { table: null })
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 200, { table: null })
+      const visible = await canSeeTable(db, table, session.playerId, { areFriends })
+      if (!visible) return sendJSON(res, 200, { table: null })
+      const goToTable = await canGoToTable(redisClient, db, table, session.playerId, { areFriends })
+      sendJSON(res, 200, {
+        table: {
+          tableId: table.tableId,
+          name: table.name,
+          hostPlayerId: table.hostPlayerId,
+          status: table.status,
+          visibility: table.visibility,
+          spectating: table.spectating,
+        },
+        canGoToTable: goToTable,
+      })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Get friend table error:', { friendId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/friends/:friendId/go-to-table — navigate to a friend's table (arrive as observer)
+  app.post('/api/friends/:friendId/go-to-table', async (req, res) => {
+    const { friendId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const db = getDb()
+      const friends = await areFriends(db, session.playerId, friendId)
+      if (!friends) {
+        return sendJSON(res, 403, { error: 'Not friends with this player' })
+      }
+      const tableId = await findTableForPlayer(redisClient, friendId)
+      if (!tableId) {
+        return sendJSON(res, 404, { error: 'Friend is not at a table' })
+      }
+      const table = await getTable(redisClient, tableId)
+      if (!table) {
+        return sendJSON(res, 404, { error: 'Friend is not at a table' })
+      }
+      const goToTable = await canGoToTable(redisClient, db, table, session.playerId, { areFriends })
+      if (!goToTable) {
+        return sendJSON(res, 403, { error: 'You do not have permission to go to this table' })
+      }
+      const updated = await arriveAtTable(redisClient, tableId, session.playerId)
+      emitLobbyTableUpdated(wss, updated)
+      if (wss) wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
+      sendJSON(res, 200, { tableId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 409, { error: err.message })
+      console.error('Go to friend table error:', { friendId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

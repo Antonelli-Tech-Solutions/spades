@@ -968,3 +968,54 @@ export async function listTables(redis) {
   }
   return result
 }
+
+/**
+ * Check whether a player has visibility into a table based on its visibility setting.
+ *
+ * - public: anyone can see
+ * - friends-only: only friends of the host can see
+ * - private: not visible through the friends list
+ *
+ * @param {object} db - pg Pool
+ * @param {TableState} table
+ * @param {string} requesterId
+ * @param {{ areFriends: function }} deps
+ * @returns {Promise<boolean>}
+ */
+export async function canSeeTable(db, table, requesterId, { areFriends }) {
+  if (requesterId === table.hostPlayerId) return true
+  if (table.visibility === 'public') return true
+  if (table.visibility === 'friends-only') {
+    return areFriends(db, requesterId, table.hostPlayerId)
+  }
+  return false
+}
+
+/**
+ * Determine whether the "Go to Table" action should be available for a player
+ * looking at a friend's table entry. The action is available when:
+ *
+ * 1. The table is visible to the requester (canSeeTable), AND
+ * 2. Either spectating is enabled, OR the player has seating rights
+ *    (i.e. the join policy would let them sit).
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {object} db - pg Pool
+ * @param {TableState} table
+ * @param {string} requesterId
+ * @param {{ areFriends: function }} deps
+ * @returns {Promise<boolean>}
+ */
+export async function canGoToTable(redis, db, table, requesterId, { areFriends }) {
+  const visible = await canSeeTable(db, table, requesterId, { areFriends })
+  if (!visible) return false
+
+  if (table.spectating) return true
+
+  try {
+    await enforceJoinPolicyForSit(redis, db, table, requesterId, { areFriends })
+    return true
+  } catch {
+    return false
+  }
+}

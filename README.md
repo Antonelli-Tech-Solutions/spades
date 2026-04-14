@@ -561,6 +561,12 @@ Game events (bid placed, card played, trick complete, etc.) are broadcast to all
 
 Lobby events (table created, table removed, etc.) are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
 
+### Personal Notification Channel
+
+Each authenticated WebSocket connection is automatically subscribed to a personal `player:{playerId}:notify` Redis pub/sub channel. This channel delivers social events (friend requests, in-app invites, friends-only table notifications) directly to the target player across all server instances. No client action is required — the subscription happens on connect and is cleaned up on disconnect.
+
+Server-side code can send a notification to any online player via `wss.notifyPlayer(playerId, type, payload)`. When Redis is configured, the message is published to the player's notification channel so all server instances deliver it. Without Redis, it falls back to a local `sendToPlayer` call.
+
 ### Heartbeat
 
 The server sends a WebSocket ping every **30 seconds**. Clients must respond with a pong (handled automatically by standard WebSocket implementations). If no pong is received within **10 seconds** of the ping, the connection is terminated.
@@ -632,7 +638,7 @@ server/
   lobby/
     table.js        — Table creation, seat management, lobby index
   ws/
-    index.js        — WebSocket server (auth upgrade, JOIN/LEAVE rooms, heartbeat, broadcast helpers)
+    index.js        — WebSocket server (auth upgrade, JOIN/LEAVE rooms, heartbeat, broadcast helpers, personal notification channels)
   anticheat/
     validate.js     — Server-side move validation (turn, card legality)
   middleware/

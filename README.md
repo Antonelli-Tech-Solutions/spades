@@ -321,17 +321,29 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 
 **Body**
 ```json
-{ "name": "Alice's Table" }
+{ "name": "Alice's Table", "visibility": "public", "joinPolicy": "open", "spectating": true }
 ```
 
-`name` is optional (max 50 characters). If omitted, a default name is used.
+All fields are optional:
+- `name` — table display name (max 50 characters). If omitted, a default name is used.
+- `visibility` — `"public"` (default), `"friends-only"`, or `"private"`. Controls who can see the table in the lobby.
+- `joinPolicy` — `"open"`, `"friends-only"`, or `"invite-only"`. Must be compatible with the chosen visibility (see below). If omitted or incompatible, defaults to the most permissive policy allowed by the visibility.
+- `spectating` — `true` (default) or `false`. Whether spectators can watch the table.
+
+**Visibility / join policy compatibility:**
+
+| Visibility | Allowed join policies | Default |
+|---|---|---|
+| `public` | `open`, `friends-only`, `invite-only` | `open` |
+| `friends-only` | `friends-only`, `invite-only` | `friends-only` |
+| `private` | `invite-only` | `invite-only` |
 
 **Responses**
 
 | Status | Meaning |
 |---|---|
-| `201` | Table created. Body: `{ tableId, name }` |
-| `400` | Name is not a string or exceeds 50 characters |
+| `201` | Table created. Body: `{ tableId, name, visibility, joinPolicy, spectating }` |
+| `400` | Invalid name, visibility, joinPolicy, or spectating value |
 | `401` | Missing or invalid session |
 
 #### `POST /api/tables/:tableId/sit`
@@ -581,7 +593,7 @@ Current screens:
 - **Forgot Password** (`#/forgot-password`) — email input form; shows a "check your email" confirmation on submit (always, to prevent enumeration)
 - **Reset Password** (`#/reset-password?token=<uuid>`) — new password form; shows success screen on completion or an error screen for invalid/expired links
 - **Lobby** (`#/lobby`) — main menu after login; shows options to create or join a table; redirects back to the game screen if the player is already seated
-- **Create Table** (`#/create`) — form to create a new table with an optional name; redirects to the join screen for the new table on success
+- **Create Table** (`#/create`) — form to create a new table with an optional name, visibility, join policy, and spectator toggle; redirects to the join screen for the new table on success
 - **Join Table** (`#/join?tableId=<id>`) — browsable list of open tables; if `?tableId=` is provided, shows the seat picker for that specific table directly
 - **Game** (`#/table?tableId=<id>`) — in-game screen; handles bidding, Blind Nil reveal/exchange, card play, and end-of-hand summaries
 

@@ -27,6 +27,7 @@ import {
   standFromSeat,
   VALID_VISIBILITIES,
   VALID_JOIN_POLICIES,
+  validateJoinPolicy,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -508,6 +509,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       }
       if (spectating !== undefined && spectating !== null && typeof spectating !== 'boolean') {
         return sendJSON(res, 400, { error: 'spectating must be a boolean.' })
+      }
+      const joinPolicyError = validateJoinPolicy(resolvedVisibility, joinPolicy)
+      if (joinPolicyError) {
+        return sendJSON(res, 400, { error: joinPolicyError })
       }
       const resolvedName = (typeof name === 'string' && name.trim()) ? name.trim() : null
       const table = await createTable(redisClient, {

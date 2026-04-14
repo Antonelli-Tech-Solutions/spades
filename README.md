@@ -327,7 +327,7 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 All fields are optional:
 - `name` — table display name (max 50 characters). If omitted, a default name is used.
 - `visibility` — `"public"` (default), `"friends-only"`, or `"private"`. Controls who can see the table in the lobby.
-- `joinPolicy` — `"open"`, `"friends-only"`, or `"invite-only"`. Must be compatible with the chosen visibility (see below). If omitted or incompatible, defaults to the most permissive policy allowed by the visibility.
+- `joinPolicy` — `"open"`, `"friends-only"`, or `"invite-only"`. Must be compatible with the chosen visibility (see below). If omitted, defaults to the most permissive policy allowed by the visibility. If an incompatible value is provided, the request is rejected with `400`.
 - `spectating` — `true` (default) or `false`. Whether spectators can watch the table.
 
 **Visibility / join policy compatibility:**

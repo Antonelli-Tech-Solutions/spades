@@ -35,6 +35,7 @@ psql $DATABASE_URL -f db/migrations/001_create_players.sql
 psql $DATABASE_URL -f db/migrations/002_create_profile_and_games.sql
 psql $DATABASE_URL -f db/migrations/003_create_password_reset_tokens.sql
 psql $DATABASE_URL -f db/migrations/004_create_friendships.sql
+psql $DATABASE_URL -f db/migrations/005_create_player_blocks.sql
 
 # Start the server (default port 3000)
 npm start
@@ -292,6 +293,9 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `DELETE` | `/api/friends/:playerId` | Required | Remove an accepted friend. |
 | `GET` | `/api/friends/:friendId/table` | Required | Check if a friend is at a visible table and whether "Go to Table" is available. |
 | `POST` | `/api/friends/:friendId/go-to-table` | Required | Navigate to a friend's table as an observer. |
+| `POST` | `/api/players/:playerId/block` | Required | Block a player. Removes any existing friendship and pending requests. |
+| `DELETE` | `/api/players/:playerId/block` | Required | Unblock a player. |
+| `GET` | `/api/players/blocked` | Required | List all players you have blocked. |
 
 #### `GET /api/players/search`
 
@@ -323,6 +327,7 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `201` | Friend request sent |
 | `400` | Invalid playerId or attempting to friend yourself |
 | `401` | Missing or invalid session |
+| `403` | Either player has blocked the other |
 | `404` | Target player not found |
 | `409` | Already friends or request already pending |
 
@@ -344,6 +349,7 @@ The `playerId` is the requester whose pending request you want to accept.
 | `200` | Friend request accepted |
 | `400` | Invalid playerId |
 | `401` | Missing or invalid session |
+| `403` | Either player has blocked the other |
 | `404` | No pending friend request found |
 
 #### `POST /api/friends/decline`
@@ -364,6 +370,7 @@ The `playerId` is the requester whose pending request you want to decline. The f
 | `200` | Friend request declined |
 | `400` | Invalid playerId |
 | `401` | Missing or invalid session |
+| `403` | Either player has blocked the other |
 | `404` | No pending friend request found |
 
 #### `GET /api/friends`
@@ -423,6 +430,49 @@ Navigates to a friend's table as an observer. Requires that the table is visible
 | `403` | Not friends, table not visible, or no permission to go to table |
 | `404` | Friend is not at a table |
 | `409` | Observers full or concurrent modification |
+
+#### `POST /api/players/:playerId/block`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Blocks the target player. If a friendship or pending friend request exists between the two players (in either direction), it is removed. Blocking is idempotent — blocking an already-blocked player succeeds silently.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `201` | Player blocked |
+| `400` | Invalid playerId or attempting to block yourself |
+| `401` | Missing or invalid session |
+| `404` | Target player not found |
+
+#### `DELETE /api/players/:playerId/block`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Unblocks the target player. After unblocking, the players can send friend requests to each other again. The previous friendship is not restored — they must re-add each other.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Player unblocked |
+| `400` | Invalid playerId |
+| `401` | Missing or invalid session |
+| `404` | Block not found |
+
+#### `GET /api/players/blocked`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Returns the list of players blocked by the authenticated player, ordered by most recently blocked first.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ blocked: [{ playerId, username, blockedAt }] }` |
+| `401` | Missing or invalid session |
 
 ### Tables & Lobby
 
@@ -894,6 +944,7 @@ server/
     email.js         — Email builders and senders (verification + password reset)
   social/
     profile.js      — Player profile data access
+    block.js        — Player blocking and block-check logic
   game/
     state.js        — Game state machine (create, bid, play, score)
     bid.js          — Bidding logic and partnership bid resolution
@@ -915,6 +966,7 @@ db/
     002_create_profile_and_games.sql
     003_create_password_reset_tokens.sql
     004_create_friendships.sql
+    005_create_player_blocks.sql
 test/
   unit/
     auth/           — Pure logic tests (no DB required)

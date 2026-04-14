@@ -673,6 +673,9 @@ export async function createSpectatorLink(redis, tableId, requestingPlayerId) {
   if (!table) {
     throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
   }
+  if (!table.spectating) {
+    throw Object.assign(new Error('Spectating is disabled for this table'), { code: 'FORBIDDEN' })
+  }
   if (table.hostPlayerId !== requestingPlayerId) {
     throw Object.assign(new Error('Only the host can generate a spectator link'), { code: 'FORBIDDEN' })
   }
@@ -708,6 +711,9 @@ export async function validateSpectatorLink(redis, token) {
   if (!table) {
     await redis.del(key)
     throw Object.assign(new Error('Table no longer exists'), { code: 'NOT_FOUND' })
+  }
+  if (!table.spectating) {
+    throw Object.assign(new Error('Spectating is disabled for this table'), { code: 'FORBIDDEN' })
   }
   return { tableId }
 }

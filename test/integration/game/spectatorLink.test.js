@@ -217,6 +217,29 @@ describe('Spectator Link', { skip }, () => {
     assert.ok(body.error)
   })
 
+  it('cannot generate spectator link when spectating is disabled', { timeout: 10000 }, async () => {
+    const host = players[0]
+    const createRes = await fetch(`${server.baseUrl}/api/tables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': host.sessionId,
+        'x-player-id': host.playerId,
+      },
+      body: JSON.stringify({ visibility: 'private', spectating: false }),
+    })
+    assert.equal(createRes.status, 201)
+    const { tableId } = await createRes.json()
+
+    const linkRes = await fetch(`${server.baseUrl}/api/tables/${tableId}/spectator-link`, {
+      method: 'POST',
+      headers: { 'x-session-id': host.sessionId, 'x-player-id': host.playerId },
+    })
+    assert.equal(linkRes.status, 403)
+    const body = await linkRes.json()
+    assert.ok(body.error)
+  })
+
   it('expired or invalid spectator token returns 403', { timeout: 10000 }, async () => {
     const guest = players[1]
     const fakeToken = '00000000-0000-0000-0000-000000000000'

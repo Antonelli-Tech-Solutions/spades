@@ -865,7 +865,8 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 | `JOINED_LOBBY` | `{}` | Confirms the client has joined the lobby channel. |
 | `LEFT_LOBBY` | `{}` | Confirms the client has left the lobby channel. |
 
-| `OBSERVER_JOINED` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when a player joins as a spectator-only observer (via a spectator link or the friends list "Go to Table" action). |
+| `OBSERVER_JOINED` | `{ "playerId": "<uuid>", "username": "<string>" }` | Broadcast to the table room when a player joins as a spectator-only observer (via a spectator link or the friends list "Go to Table" action). |
+| `OBSERVER_LEFT` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when an observer leaves the table. |
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`. **Observers (spectators) are excluded from events that contain private hand data:** `HAND_DEALT`, `HAND_REVEALED`, and `BLIND_NIL_EXCHANGE_PROMPT` are never sent to observer connections.
 

@@ -23,7 +23,6 @@ import {
   leaveTable,
   leaveInProgressGame,
   changeSeat,
-  joinTable,
   standFromSeat,
   VALID_VISIBILITIES,
   VALID_JOIN_POLICIES,
@@ -539,25 +538,6 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Create table error:', { error: err.message })
-      sendJSON(res, 500, { error: 'Internal server error' })
-    }
-  })
-
-  // POST /api/tables/:tableId/join — join a table as observer
-  app.post('/api/tables/:tableId/join', async (req, res) => {
-    const { tableId } = req.params
-    try {
-      const redisClient = await getRedis()
-      const session = await validateAuthHeaders(redisClient, req)
-      const table = await joinTable(redisClient, tableId, session.playerId)
-      emitLobbyTableUpdated(wss, table)
-      if (wss) wss.broadcast(tableId, 'OBSERVER_JOINED', { playerId: session.playerId })
-      sendJSON(res, 200, { tableId })
-    } catch (err) {
-      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
-      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
-      if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
-      console.error('Join table error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

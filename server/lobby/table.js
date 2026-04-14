@@ -2,7 +2,6 @@ import { v4 as uuidv4 } from 'uuid'
 import { substitutePlayerWithBot } from '../game/state.js'
 
 const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
-const MAX_OBSERVERS = 20
 
 /**
  * @typedef {Object} TableState
@@ -152,34 +151,6 @@ export async function sitAtTable(redis, tableId, playerId, seat) {
   }
   await saveTable(redis, updated)
   console.log('Player seated:', { tableId, playerId, seat })
-  return updated
-}
-
-/**
- * Join a table as an observer (not seated). Idempotent — returns current state
- * if the player is already seated or already observing.
- *
- * @param {import('redis').RedisClientType} redis
- * @param {string} tableId
- * @param {string} playerId
- * @returns {Promise<TableState>}
- * @throws {Error} If the table is not found
- */
-export async function joinTable(redis, tableId, playerId) {
-  const table = await getTable(redis, tableId)
-  if (!table) {
-    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
-  }
-  const seated = Object.values(table.seats).includes(playerId)
-  if (seated) return table
-  const observers = table.observers || []
-  if (observers.includes(playerId)) return table
-  if (observers.length >= MAX_OBSERVERS) {
-    throw Object.assign(new Error('Table has reached the maximum number of observers'), { code: 'OBSERVERS_FULL' })
-  }
-  const updated = { ...table, observers: [...observers, playerId] }
-  await saveTable(redis, updated)
-  console.log('Player joined table as observer:', { tableId, playerId })
   return updated
 }
 

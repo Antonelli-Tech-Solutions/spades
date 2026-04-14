@@ -48,7 +48,7 @@ function wsConnect(server, headers = {}) {
   const { port } = server.httpServer.address()
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers })
-    ws.once('open', () => resolve(ws))
+    ws.once('open', () => { setTimeout(() => resolve(ws), 100) })
     ws.once('error', reject)
     ws.once('unexpected-response', (_req, res) => {
       reject(Object.assign(new Error(`HTTP ${res.statusCode}`), { statusCode: res.statusCode }))
@@ -312,6 +312,7 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
 
     const [msg] = await msgPromise
     assert.equal(msg.payload.seats.east, PLAYER_B, 'east seat should be occupied by PLAYER_B')
+    assert.equal(msg.payload.visibility, 'public')
 
     // Cleanup
     await redis.del(`table:${tableId}`)
@@ -363,6 +364,7 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     assert.equal(msg.type, 'TABLE_UPDATED')
     assert.equal(msg.payload.tableId, tableId)
     assert.equal(msg.payload.seats.north, null, 'north seat should be freed after logout')
+    assert.equal(msg.payload.visibility, 'public')
 
     // Re-seed session for cleanup (session was deleted by logout)
     await redis.set(`session:${SESSION_A}`, JSON.stringify({ playerId: PLAYER_A, username: 'LobbyEvtHostA' }))
@@ -417,6 +419,7 @@ describe('Lobby WebSocket events for Public tables', { skip }, () => {
     assert.equal(msg.type, 'TABLE_UPDATED')
     assert.equal(msg.payload.tableId, tableId)
     assert.equal(msg.payload.seats.east, null, 'east seat should be freed after player left')
+    assert.equal(msg.payload.visibility, 'public')
 
     // Cleanup
     await redis.del(`table:${tableId}`)

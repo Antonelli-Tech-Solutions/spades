@@ -17,7 +17,7 @@ function wsConnect(server, headers = {}, timeoutMs = TEST_TIMEOUT_MS) {
       reject(new Error(`wsConnect timed out after ${timeoutMs}ms`))
     }, timeoutMs)
     const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers })
-    ws.once('open', () => { clearTimeout(timer); resolve(ws) })
+    ws.once('open', () => { clearTimeout(timer); setTimeout(() => resolve(ws), 100) })
     ws.once('error', (err) => { clearTimeout(timer); reject(err) })
     ws.once('unexpected-response', (_req, res) => {
       clearTimeout(timer)

@@ -286,7 +286,8 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `GET` | `/api/tables` | Required | List all open (waiting) tables. |
 | `GET` | `/api/player/table` | Required | Returns the `tableId` the authenticated player is currently seated at, or `null`. |
 | `POST` | `/api/tables` | Required | Create a new table. |
-| `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Starts the game once all 4 seats are filled. |
+| `POST` | `/api/tables/:tableId/arrive` | Required | Arrive at a table as an observer. Requires spectating to be enabled (unless player has a join link). |
+| `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Enforces the table's join policy. Starts the game once all 4 seats are filled. |
 | `POST` | `/api/tables/:tableId/add-bot` | Required (host) | Add a bot to an empty seat. |
 | `POST` | `/api/tables/:tableId/leave` | Required | Leave the table. If a game is in progress, the vacated seat is immediately filled by a bot. |
 | `GET` | `/api/tables/:tableId/join-link` | Required (host) | Generate a single-use shareable join link for the table. |
@@ -350,6 +351,22 @@ All fields are optional:
 | `400` | Invalid name, visibility, joinPolicy, or spectating value |
 | `401` | Missing or invalid session |
 
+#### `POST /api/tables/:tableId/arrive`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Arrives at the table as an observer. The table must have spectating enabled unless the player holds a valid join link. If the player is already seated or already an observer, the call is idempotent and returns the current table state.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Arrived as observer. Body: `{ tableId }` |
+| `401` | Missing or invalid session |
+| `403` | Spectating is disabled for this table |
+| `404` | Table not found |
+| `409` | Observer slots are full, or concurrent modification — retry |
+
 #### `POST /api/tables/:tableId/sit`
 
 **Headers:** `x-session-id`, `x-player-id`
@@ -361,6 +378,8 @@ All fields are optional:
 
 Valid seat values: `north`, `east`, `south`, `west`.
 
+The table's join policy is enforced: `open` allows anyone, `friends-only` requires friendship with the host, and `invite-only` requires a prior invitation (e.g. via join link). The host always passes policy checks.
+
 **Responses**
 
 | Status | Meaning |
@@ -368,9 +387,9 @@ Valid seat values: `north`, `east`, `south`, `west`.
 | `200` | Seated. Body: `{ tableId, seat }`. Game starts automatically if all 4 seats are now filled. |
 | `400` | Invalid seat value |
 | `401` | Missing or invalid session |
-| `403` | Player is a spectator-only observer and cannot sit |
+| `403` | Player is a spectator-only observer, or join policy forbids seating |
 | `404` | Table not found |
-| `409` | Game already in progress, seat is taken, or player is already seated at this table |
+| `409` | Game already in progress, seat is taken, player is already seated, or concurrent modification — retry |
 
 #### `POST /api/tables/:tableId/add-bot`
 

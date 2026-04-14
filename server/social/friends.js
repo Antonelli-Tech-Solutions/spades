@@ -63,7 +63,7 @@ export async function sendFriendRequest(db, fromPlayerId, toPlayerId) {
     await client.query('BEGIN')
 
     const existing = await client.query(
-      `SELECT id, status FROM friendships
+      `SELECT id, status, requester_id, addressee_id FROM friendships
        WHERE (requester_id = $1 AND addressee_id = $2)
           OR (requester_id = $2 AND addressee_id = $1)
        FOR UPDATE`,
@@ -76,6 +76,11 @@ export async function sendFriendRequest(db, fromPlayerId, toPlayerId) {
         throw Object.assign(new Error('already friends'), { code: 'DUPLICATE' })
       }
       if (row.status === 'pending') {
+        if (row.requester_id === toPlayerId && row.addressee_id === fromPlayerId) {
+          await client.query(`UPDATE friendships SET status = 'accepted', updated_at = NOW() WHERE id = $1`, [row.id])
+          await client.query('COMMIT')
+          return { success: true, autoAccepted: true }
+        }
         throw Object.assign(new Error('friend request already pending'), { code: 'DUPLICATE' })
       }
     }

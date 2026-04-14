@@ -127,6 +127,12 @@ export async function sitAtTable(redis, tableId, playerId, seat) {
   if (!table) {
     throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
   }
+
+  const spectatorOnly = await isSpectatorOnly(redis, tableId, playerId)
+  if (spectatorOnly) {
+    throw Object.assign(new Error('Spectators cannot sit at the table'), { code: 'FORBIDDEN' })
+  }
+
   if (table.status === 'playing') {
     throw Object.assign(new Error('Game already in progress'), { code: 'GAME_IN_PROGRESS' })
   }
@@ -650,6 +656,87 @@ export async function validateJoinLink(redis, token) {
     throw Object.assign(new Error('Table no longer exists'), { code: 'NOT_FOUND' })
   }
   return { tableId, key }
+}
+
+/**
+ * Create a shareable spectator link for a table (host only).
+ * The token is stored in Redis and expires with the table TTL.
+ * Unlike join links, spectator links grant observe-only access.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} requestingPlayerId
+ * @returns {Promise<string>} The token
+ */
+export async function createSpectatorLink(redis, tableId, requestingPlayerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== requestingPlayerId) {
+    throw Object.assign(new Error('Only the host can generate a spectator link'), { code: 'FORBIDDEN' })
+  }
+  const token = uuidv4()
+  const key = `spectatorlink:${token}`
+  await redis.set(key, JSON.stringify({ tableId, createdAt: new Date().toISOString() }), { EX: TABLE_TTL_SECONDS })
+  console.log('Spectator link created:', { tableId, tokenPrefix: token.slice(0, 8) })
+  return token
+}
+
+/**
+ * Validate a spectator-link token. Returns the associated tableId if
+ * the token is valid and the table still exists, otherwise throws.
+ *
+ * Spectator links are multi-use — they are NOT deleted after validation.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} token
+ * @returns {Promise<{ tableId: string }>}
+ */
+export async function validateSpectatorLink(redis, token) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidRegex.test(token)) {
+    throw Object.assign(new Error('Invalid or expired spectator link'), { code: 'FORBIDDEN' })
+  }
+  const key = `spectatorlink:${token}`
+  const raw = await redis.get(key)
+  if (!raw) {
+    throw Object.assign(new Error('Invalid or expired spectator link'), { code: 'FORBIDDEN' })
+  }
+  const { tableId } = JSON.parse(raw)
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    await redis.del(key)
+    throw Object.assign(new Error('Table no longer exists'), { code: 'NOT_FOUND' })
+  }
+  return { tableId }
+}
+
+/**
+ * Mark a player as spectator-only for a table. Spectator-only players
+ * cannot sit down even if join policy would allow it.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ */
+export async function markPlayerAsSpectator(redis, tableId, playerId) {
+  const key = `spectators:${tableId}`
+  await redis.sAdd(key, playerId)
+  await redis.expire(key, TABLE_TTL_SECONDS)
+}
+
+/**
+ * Check if a player is marked as spectator-only for a table.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @returns {Promise<boolean>}
+ */
+export async function isSpectatorOnly(redis, tableId, playerId) {
+  const key = `spectators:${tableId}`
+  return redis.sIsMember(key, playerId)
 }
 
 export async function listTables(redis) {

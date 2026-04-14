@@ -129,8 +129,8 @@
 - [ ] `P0` Build shareable join link: bypasses both visibility and join policy; grants seating rights
 - [ ] `P0` Build shareable spectator link: bypasses visibility only; grants observe access but not seating rights
 - [ ] `P0` Implement observe-only spectator state: spectators can see the game but cannot interact or influence play
-- [ ] `P0` Allow any player who can see a table to spectate, subject to the host's spectating setting
-- [ ] `P1` Display spectators in a separate observer rail, distinct from seated players
+- [x] `P0` Allow any player who can see a table to spectate, subject to the host's spectating setting
+- [x] `P1` Display spectators in a separate observer rail, distinct from seated players
 
 ### Social
 

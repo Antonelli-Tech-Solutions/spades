@@ -288,6 +288,8 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `POST` | `/api/tables` | Required | Create a new table. |
 | `POST` | `/api/tables/:tableId/arrive` | Required | Arrive at a table as an observer. Requires spectating to be enabled (unless player has a join link). |
 | `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Enforces the table's join policy. Starts the game once all 4 seats are filled. |
+| `POST` | `/api/tables/:tableId/join` | Required | Join a table as a spectator (observer). Requires spectating to be enabled on the table. |
+| `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Starts the game once all 4 seats are filled. |
 | `POST` | `/api/tables/:tableId/add-bot` | Required (host) | Add a bot to an empty seat. |
 | `POST` | `/api/tables/:tableId/leave` | Required | Leave the table. If a game is in progress, the vacated seat is immediately filled by a bot. |
 | `GET` | `/api/tables/:tableId/join-link` | Required (host) | Generate a single-use shareable join link for the table. |
@@ -304,10 +306,10 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 
 | Status | Meaning |
 |---|---|
-| `200` | Body: `{ tables: [{ tableId, name, seats, hostPlayerId }] }` — only waiting (not yet started) tables |
+| `200` | Body: `{ tables: [{ tableId, name, seats, hostPlayerId, observerCount, spectating }] }` — only waiting (not yet started) tables |
 | `401` | Missing or invalid session |
 
-`seats` is an object keyed by seat name (`north`, `east`, `south`, `west`). Each value is either `null` (empty) or `{ playerId, username, isBot }`.
+`seats` is an object keyed by seat name (`north`, `east`, `south`, `west`). Each value is either `null` (empty) or `{ playerId, username, isBot }`. `observerCount` is the number of spectators currently watching the table. `spectating` indicates whether the host has enabled spectating.
 
 #### `GET /api/player/table`
 
@@ -356,6 +358,11 @@ All fields are optional:
 **Headers:** `x-session-id`, `x-player-id`
 
 Arrives at the table as an observer. The table must have spectating enabled unless the player holds a valid join link. If the player is already seated or already an observer, the call is idempotent and returns the current table state.
+#### `POST /api/tables/:tableId/join`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Joins the table as a spectator (observer). The table must have spectating enabled. Players who arrive via this endpoint can watch the game but cannot sit down — use a join link or the `/sit` endpoint to take a seat.
 
 **Responses**
 
@@ -667,7 +674,13 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
 
-Lobby events (table created, table removed, etc.) are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+Lobby events are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+
+| Type | Payload | Description |
+|---|---|---|
+| `TABLE_CREATED` | `{ tableId, name, host, seats, visibility }` | A new public table was created. |
+| `TABLE_UPDATED` | `{ tableId, name, host, seats, status, visibility, observerCount, spectating }` | A public table's state changed (seat taken/vacated, game started, observer joined, etc.). |
+| `TABLE_REMOVED` | `{ tableId }` | A public table was removed (terminated, all players left, or expired). |
 
 ### Personal Notification Channel
 
@@ -691,7 +704,7 @@ Current screens:
 - **Lobby** (`#/lobby`) — main menu after login; shows options to create or join a table; redirects back to the game screen if the player is already seated
 - **Create Table** (`#/create`) — form to create a new table with an optional name, visibility, join policy, and spectator toggle; redirects to the join screen for the new table on success
 - **Join Table** (`#/join?tableId=<id>`) — browsable list of open tables; if `?tableId=` is provided, shows the seat picker for that specific table directly
-- **Game** (`#/table?tableId=<id>`) — in-game screen; handles bidding, Blind Nil reveal/exchange, card play, and end-of-hand summaries
+- **Game** (`#/table?tableId=<id>`) — in-game screen; handles bidding, Blind Nil reveal/exchange, card play, end-of-hand summaries, and an observer rail showing current spectators
 
 On successful login the session is stored in `sessionStorage` (`sessionId`, `playerId`, `username`) and the player is routed to `#/lobby`.
 

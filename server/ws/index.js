@@ -188,9 +188,10 @@ export function createWsServer(httpServer, opts = {}) {
           }
           const table = JSON.parse(tableData)
           const isSeated = Object.values(table.seats).includes(playerId)
-          if (!isSeated) {
-            console.log('WebSocket JOIN denied — not seated:', { playerId, tableId })
-            ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'not_seated' } }))
+          const isObserver = (table.observers || []).includes(playerId)
+          if (!isSeated && !isObserver) {
+            console.log('WebSocket JOIN denied — not seated or observer:', { playerId, tableId })
+            ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'not_at_table' } }))
             return
           }
         } catch (err) {

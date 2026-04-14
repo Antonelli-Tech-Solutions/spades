@@ -515,6 +515,13 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const blocked = await isBlockedEitherDirection(db, session.playerId, toPlayerId)
       if (blocked) return sendJSON(res, 403, { error: 'Cannot send friend request to this player.' })
       await sendFriendRequest(db, session.playerId, toPlayerId)
+      if (redisClient) {
+        const notifyChannel = `player:${toPlayerId}:notify`
+        await redisClient.publish(notifyChannel, JSON.stringify({
+          type: 'FRIEND_REQUEST_RECEIVED',
+          payload: { fromPlayerId: session.playerId, fromUsername: session.username },
+        }))
+      }
       sendJSON(res, 201, { message: 'Friend request sent.' })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
@@ -536,6 +543,13 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const blocked = await isBlockedEitherDirection(db, session.playerId, requesterId)
       if (blocked) return sendJSON(res, 403, { error: 'Cannot accept friend request from this player.' })
       await acceptFriendRequest(db, session.playerId, requesterId)
+      if (redisClient) {
+        const notifyChannel = `player:${requesterId}:notify`
+        await redisClient.publish(notifyChannel, JSON.stringify({
+          type: 'FRIEND_REQUEST_ACCEPTED',
+          payload: { fromPlayerId: session.playerId, fromUsername: session.username },
+        }))
+      }
       sendJSON(res, 200, { message: 'Friend request accepted.' })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })

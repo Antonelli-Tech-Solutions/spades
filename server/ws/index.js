@@ -203,14 +203,13 @@ export function createWsServer(httpServer, opts = {}) {
             ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'not_seated_or_observing' } }))
             return
           }
+          if (isObserver) {
+            ws._isObserver = true
+          }
         } catch (err) {
           console.error('WebSocket JOIN auth error:', { playerId, tableId, error: err.message })
           ws.send(JSON.stringify({ type: 'JOIN_DENIED', payload: { tableId, reason: 'error' } }))
           return
-        }
-
-        if (isObserver) {
-          ws._isObserver = true
         }
 
         const roomKey = `table:${tableId}`
@@ -482,6 +481,7 @@ export function createWsServer(httpServer, opts = {}) {
       if (!room) return
       for (const ws of room) {
         if (ws.readyState === ws.constructor.OPEN) {
+          if (ws._isObserver && OBSERVER_BLOCKED_TYPES.has(type)) continue
           ws.send(msg)
         }
       }

@@ -2,6 +2,7 @@ import { registerPlayer, verifyEmailToken, resendVerificationEmail } from './aut
 import { forgotPassword, resetPassword } from './auth/passwordReset.js'
 import { sendVerificationEmail as defaultMailer, sendPasswordResetEmail as defaultPasswordResetMailer } from './auth/email.js'
 import { getPlayerProfile, getPlayerUsernames, isValidUuid } from './social/profile.js'
+<<<<<<< fix/issue-607
 import {
   areFriends,
   searchPlayers,
@@ -12,6 +13,9 @@ import {
   getPendingRequests,
   removeFriend,
 } from './social/friends.js'
+=======
+import { areFriends } from './social/friends.js'
+>>>>>>> dev
 import { loginPlayer } from './auth/login.js'
 import { createSession, deleteSession, getSession, validateAuthHeaders } from './auth/session.js'
 import { getDb } from './db.js'

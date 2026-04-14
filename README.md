@@ -399,6 +399,8 @@ Removes an accepted friendship. Both directions are deleted.
 | `GET` | `/api/tables` | Required | List all open (waiting) tables. |
 | `GET` | `/api/player/table` | Required | Returns the `tableId` the authenticated player is currently seated at, or `null`. |
 | `POST` | `/api/tables` | Required | Create a new table. |
+| `POST` | `/api/tables/:tableId/arrive` | Required | Arrive at a table as an observer. Requires spectating to be enabled (unless player has a join link). |
+| `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Enforces the table's join policy. Starts the game once all 4 seats are filled. |
 | `POST` | `/api/tables/:tableId/join` | Required | Join a table as a spectator (observer). Requires spectating to be enabled on the table. |
 | `POST` | `/api/tables/:tableId/sit` | Required | Sit at an empty seat. Starts the game once all 4 seats are filled. |
 | `POST` | `/api/tables/:tableId/add-bot` | Required (host) | Add a bot to an empty seat. |
@@ -464,6 +466,11 @@ All fields are optional:
 | `400` | Invalid name, visibility, joinPolicy, or spectating value |
 | `401` | Missing or invalid session |
 
+#### `POST /api/tables/:tableId/arrive`
+
+**Headers:** `x-session-id`, `x-player-id`
+
+Arrives at the table as an observer. The table must have spectating enabled unless the player holds a valid join link. If the player is already seated or already an observer, the call is idempotent and returns the current table state.
 #### `POST /api/tables/:tableId/join`
 
 **Headers:** `x-session-id`, `x-player-id`
@@ -474,11 +481,11 @@ Joins the table as a spectator (observer). The table must have spectating enable
 
 | Status | Meaning |
 |---|---|
-| `200` | Joined as observer. Body: `{ tableId }` |
+| `200` | Arrived as observer. Body: `{ tableId }` |
 | `401` | Missing or invalid session |
 | `403` | Spectating is disabled for this table |
 | `404` | Table not found |
-| `409` | Observer slots are full |
+| `409` | Observer slots are full, or concurrent modification — retry |
 
 #### `POST /api/tables/:tableId/sit`
 
@@ -491,6 +498,8 @@ Joins the table as a spectator (observer). The table must have spectating enable
 
 Valid seat values: `north`, `east`, `south`, `west`.
 
+The table's join policy is enforced: `open` allows anyone, `friends-only` requires friendship with the host, and `invite-only` requires a prior invitation (e.g. via join link). The host always passes policy checks.
+
 **Responses**
 
 | Status | Meaning |
@@ -498,9 +507,9 @@ Valid seat values: `north`, `east`, `south`, `west`.
 | `200` | Seated. Body: `{ tableId, seat }`. Game starts automatically if all 4 seats are now filled. |
 | `400` | Invalid seat value |
 | `401` | Missing or invalid session |
-| `403` | Player is a spectator-only observer and cannot sit |
+| `403` | Player is a spectator-only observer, or join policy forbids seating |
 | `404` | Table not found |
-| `409` | Game already in progress, seat is taken, or player is already seated at this table |
+| `409` | Game already in progress, seat is taken, player is already seated, or concurrent modification — retry |
 
 #### `POST /api/tables/:tableId/add-bot`
 
@@ -776,7 +785,7 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 
 | `OBSERVER_JOINED` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when a player joins as a spectator-only observer via a spectator link. |
 
-Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`. **Observers (spectators) are excluded from events that contain private hand data:** `HAND_DEALT`, `HAND_REVEALED`, and `BLIND_NIL_EXCHANGE_PROMPT` are never sent to observer connections.
 
 Lobby events are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
 

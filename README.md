@@ -291,6 +291,8 @@ All routes are under `/api/`. Responses always use `{ ... }` JSON. Auth routes u
 | `POST` | `/api/tables/:tableId/leave` | Required | Leave the table. If a game is in progress, the vacated seat is immediately filled by a bot. |
 | `GET` | `/api/tables/:tableId/join-link` | Required (host) | Generate a single-use shareable join link for the table. |
 | `POST` | `/api/tables/join-link/:token` | Required | Use a join link to sit at the table. Bypasses join policy. |
+| `POST` | `/api/tables/:tableId/spectator-link` | Required (host) | Generate a shareable spectator link for the table. |
+| `POST` | `/api/tables/spectator-link/:token` | Required | Use a spectator link to join a table as an observer. |
 | `POST` | `/api/tables/:tableId/terminate` | Required (host) | Terminate the game at any phase. |
 
 #### `GET /api/tables`
@@ -366,6 +368,7 @@ Valid seat values: `north`, `east`, `south`, `west`.
 | `200` | Seated. Body: `{ tableId, seat }`. Game starts automatically if all 4 seats are now filled. |
 | `400` | Invalid seat value |
 | `401` | Missing or invalid session |
+| `403` | Player is a spectator-only observer and cannot sit |
 | `404` | Table not found |
 | `409` | Game already in progress, seat is taken, or player is already seated at this table |
 
@@ -405,6 +408,37 @@ Removes the player from their seat. If a game is in progress when the player lea
 | `401` | Missing or invalid session |
 | `404` | Table not found |
 | `409` | Player is not seated at this table |
+
+#### `POST /api/tables/:tableId/spectator-link`
+
+Host-only. Generates a shareable spectator link that any authenticated player can use to join the table as an observer. Unlike join links, spectator links are **multi-use** — they are not consumed after a single use. The token is stored in Redis and expires with the same TTL as the table (1 hour of inactivity). Spectating must be enabled on the table.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Body: `{ token, spectatorUrl }`. `spectatorUrl` is a full URL using `APP_URL` (e.g. `https://spades.online/spectate/<token>`). |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the table host, or spectating is disabled for this table |
+| `404` | Table not found |
+
+#### `POST /api/tables/spectator-link/:token`
+
+Validates a spectator-link token and adds the authenticated player to the table as an observer. The player is marked as spectator-only and **cannot sit down** at the table even if the join policy would normally allow it. The token is not consumed — it can be reused by multiple players.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Joined as observer. Body: `{ tableId }` |
+| `401` | Missing or invalid session |
+| `403` | Invalid or expired spectator link, or spectating is disabled |
+| `404` | Table no longer exists |
+| `409` | Observer slots are full |
 
 #### `POST /api/tables/:tableId/terminate`
 
@@ -609,6 +643,8 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 | `JOIN_DENIED` | `{ "tableId": "<uuid>", "reason": "not_seated" \| "table_not_found" \| "error" }` | Sent when a `JOIN` request is rejected because the player is not seated at the table, the table does not exist, or an internal error occurred. |
 | `JOINED_LOBBY` | `{}` | Confirms the client has joined the lobby channel. |
 | `LEFT_LOBBY` | `{}` | Confirms the client has left the lobby channel. |
+
+| `OBSERVER_JOINED` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when a player joins as a spectator-only observer via a spectator link. |
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
 

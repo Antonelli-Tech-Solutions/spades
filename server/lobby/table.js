@@ -1006,8 +1006,8 @@ export async function canSeeTable(db, table, requesterId, { areFriends }) {
  * @param {{ areFriends: function }} deps
  * @returns {Promise<boolean>}
  */
-export async function canGoToTable(redis, db, table, requesterId, { areFriends }) {
-  const visible = await canSeeTable(db, table, requesterId, { areFriends })
+export async function canGoToTable(redis, db, table, requesterId, { areFriends, knownVisible } = {}) {
+  const visible = knownVisible !== undefined ? knownVisible : await canSeeTable(db, table, requesterId, { areFriends })
   if (!visible) return false
 
   if (table.spectating) return true

@@ -603,7 +603,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (!table) return sendJSON(res, 200, { table: null })
       const visible = await canSeeTable(db, table, session.playerId, { areFriends })
       if (!visible) return sendJSON(res, 200, { table: null })
-      const goToTable = await canGoToTable(redisClient, db, table, session.playerId, { areFriends })
+      const goToTable = await canGoToTable(redisClient, db, table, session.playerId, { areFriends, knownVisible: visible })
       sendJSON(res, 200, {
         table: {
           tableId: table.tableId,

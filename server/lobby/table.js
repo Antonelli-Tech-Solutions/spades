@@ -105,6 +105,7 @@ export async function getTable(redis, tableId) {
 export async function saveTable(redis, table) {
   const key = `table:${table.tableId}`
   await redis.set(key, JSON.stringify(table), { EX: TABLE_TTL_SECONDS })
+  await redis.expire(`spectators:${table.tableId}`, TABLE_TTL_SECONDS)
 }
 
 /**

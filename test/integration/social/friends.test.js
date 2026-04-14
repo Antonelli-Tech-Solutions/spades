@@ -49,6 +49,10 @@ async function resetTestSchema(db) {
       UNIQUE(requester_id, addressee_id)
     )
   `)
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS friendships_pair_unique
+    ON friendships (LEAST(requester_id, addressee_id), GREATEST(requester_id, addressee_id))
+  `)
   await db.query(`DELETE FROM friendships WHERE requester_id IN (
     SELECT id FROM players WHERE email LIKE '%@test.spades.invalid'
   ) OR addressee_id IN (

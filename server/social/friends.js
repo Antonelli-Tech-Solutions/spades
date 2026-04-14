@@ -38,30 +38,45 @@ export async function sendFriendRequest(db, fromPlayerId, toPlayerId) {
     throw Object.assign(new Error('player not found'), { code: 'NOT_FOUND' })
   }
 
-  const existing = await db.query(
-    `SELECT id, status FROM friendships
-     WHERE (requester_id = $1 AND addressee_id = $2)
-        OR (requester_id = $2 AND addressee_id = $1)`,
-    [fromPlayerId, toPlayerId],
-  )
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
 
-  if (existing.rows.length > 0) {
-    const row = existing.rows[0]
-    if (row.status === 'accepted') {
-      throw Object.assign(new Error('already friends'), { code: 'DUPLICATE' })
+    const existing = await client.query(
+      `SELECT id, status FROM friendships
+       WHERE (requester_id = $1 AND addressee_id = $2)
+          OR (requester_id = $2 AND addressee_id = $1)
+       FOR UPDATE`,
+      [fromPlayerId, toPlayerId],
+    )
+
+    if (existing.rows.length > 0) {
+      const row = existing.rows[0]
+      if (row.status === 'accepted') {
+        throw Object.assign(new Error('already friends'), { code: 'DUPLICATE' })
+      }
+      if (row.status === 'pending') {
+        throw Object.assign(new Error('friend request already pending'), { code: 'DUPLICATE' })
+      }
     }
-    if (row.status === 'pending') {
+
+    await client.query(
+      `INSERT INTO friendships (requester_id, addressee_id, status)
+       VALUES ($1, $2, 'pending')`,
+      [fromPlayerId, toPlayerId],
+    )
+
+    await client.query('COMMIT')
+    return { success: true }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    if (err.code === '23505') {
       throw Object.assign(new Error('friend request already pending'), { code: 'DUPLICATE' })
     }
+    throw err
+  } finally {
+    client.release()
   }
-
-  await db.query(
-    `INSERT INTO friendships (requester_id, addressee_id, status)
-     VALUES ($1, $2, 'pending')`,
-    [fromPlayerId, toPlayerId],
-  )
-
-  return { success: true }
 }
 
 /**

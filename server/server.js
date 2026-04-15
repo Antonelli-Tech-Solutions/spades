@@ -26,6 +26,7 @@ import { createRateLimiter } from './middleware/rateLimiter.js'
 import {
   createTable,
   getTable,
+  saveTable,
   sitAtTable,
   isTableFull,
   markTablePlaying,
@@ -55,6 +56,7 @@ import {
   markPlayerInvited,
   canSeeTable,
   canGoToTable,
+  resolveJoinPolicy,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -1543,6 +1545,87 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       if (err.code === 'OBSERVERS_FULL') return sendJSON(res, 409, { error: err.message })
       console.error('Use spectator link error:', { token, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/visibility — change a table's visibility (host only, Issue #594)
+  app.post('/api/tables/:tableId/visibility', async (req, res) => {
+    const { tableId } = req.params
+    const { visibility: newVisibility } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+
+      if (!newVisibility || !VALID_VISIBILITIES.includes(newVisibility)) {
+        return sendJSON(res, 400, { error: `Invalid visibility. Must be one of: ${VALID_VISIBILITIES.join(', ')}` })
+      }
+
+      const table = await getTable(redisClient, tableId)
+      if (!table) {
+        return sendJSON(res, 404, { error: 'Table not found' })
+      }
+      if (table.hostPlayerId !== session.playerId) {
+        return sendJSON(res, 403, { error: 'Only the host can change table visibility' })
+      }
+
+      const oldVisibility = table.visibility
+
+      if (oldVisibility === newVisibility) {
+        return sendJSON(res, 200, { tableId, visibility: newVisibility, joinPolicy: table.joinPolicy })
+      }
+
+      const newJoinPolicy = resolveJoinPolicy(newVisibility, table.joinPolicy)
+      const updated = { ...table, visibility: newVisibility, joinPolicy: newJoinPolicy }
+      await saveTable(redisClient, updated)
+
+      if (oldVisibility === 'public') {
+        await redisClient.hDel('lobby:tables', tableId)
+      }
+      if (newVisibility === 'public') {
+        await redisClient.hSet('lobby:tables', tableId, JSON.stringify({
+          tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status,
+        }))
+      }
+      if (oldVisibility !== 'public' && newVisibility !== 'public') {
+        await redisClient.hDel('lobby:tables', tableId)
+      }
+
+      if (wss) {
+        const removePayload = { tableId }
+        const createPayload = {
+          tableId: updated.tableId,
+          name: updated.name,
+          host: updated.hostPlayerId,
+          seats: updated.seats,
+          visibility: updated.visibility,
+        }
+
+        if (oldVisibility === 'public') {
+          wss.broadcastLobby('TABLE_REMOVED', removePayload)
+        } else if (oldVisibility === 'friends-only') {
+          await notifyHostFriends(wss, table, 'TABLE_REMOVED', removePayload)
+        }
+
+        if (newVisibility === 'public') {
+          wss.broadcastLobby('TABLE_CREATED', createPayload)
+        } else if (newVisibility === 'friends-only') {
+          await notifyHostFriends(wss, updated, 'TABLE_CREATED', createPayload)
+        }
+
+        wss.broadcast(tableId, 'TABLE_VISIBILITY_CHANGED', {
+          tableId,
+          visibility: newVisibility,
+          oldVisibility,
+          joinPolicy: newJoinPolicy,
+        })
+      }
+
+      console.log('Visibility changed:', { tableId, oldVisibility, newVisibility, joinPolicy: newJoinPolicy })
+      sendJSON(res, 200, { tableId, visibility: newVisibility, joinPolicy: newJoinPolicy })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Change visibility error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

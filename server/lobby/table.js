@@ -78,8 +78,11 @@ export async function createTable(redis, { hostPlayerId, name = null, visibility
   const key = `table:${tableId}`
   await redis.set(key, JSON.stringify(table), { EX: TABLE_TTL_SECONDS })
 
-  // Add to the lobby index
-  await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId, name, status: 'waiting' }))
+  // Add to the lobby index for public tables; all tables tracked in lobby:all for player lookup
+  if (visibility === 'public') {
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId, name, status: 'waiting' }))
+  }
+  await redis.hSet('lobby:all', tableId, JSON.stringify({ tableId, hostPlayerId, name, status: 'waiting' }))
 
   console.log('Table created:', { tableId, hostPlayerId, name })
   return table
@@ -353,8 +356,16 @@ export async function transferHost(redis, tableId, requestingPlayerId, targetPla
         return null
       }
 
-      // Update lobby index with new host
-      await isolatedClient.hSet('lobby:tables', tableId, JSON.stringify({
+      // Update lobby indices with new host
+      if (updated.visibility === 'public') {
+        await isolatedClient.hSet('lobby:tables', tableId, JSON.stringify({
+          tableId,
+          hostPlayerId: targetPlayerId,
+          name: updated.name,
+          status: updated.status,
+        }))
+      }
+      await isolatedClient.hSet('lobby:all', tableId, JSON.stringify({
         tableId,
         hostPlayerId: targetPlayerId,
         name: updated.name,
@@ -405,7 +416,14 @@ export async function markTablePlaying(redis, tableId, gameId) {
   await saveTable(redis, updated)
 
   // Update lobby index
-  await redis.hSet('lobby:tables', tableId, JSON.stringify({
+  if (table.visibility === 'public') {
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({
+      tableId,
+      hostPlayerId: table.hostPlayerId,
+      status: 'playing',
+    }))
+  }
+  await redis.hSet('lobby:all', tableId, JSON.stringify({
     tableId,
     hostPlayerId: table.hostPlayerId,
     status: 'playing',
@@ -446,7 +464,7 @@ export async function saveGameState(redis, tableId, gameState) {
  * @param {string} playerId
  */
 export async function removePlayerFromTables(redis, playerId) {
-  const raw = await redis.hGetAll('lobby:tables')
+  const raw = await redis.hGetAll('lobby:all')
   const updatedTables = []
   const terminatedTables = []
   for (const json of Object.values(raw)) {
@@ -691,6 +709,7 @@ export async function terminateTable(redis, tableId) {
   await redis.del(`spectators:${tableId}`)
   await redis.del(`invited:${tableId}`)
   await redis.hDel('lobby:tables', tableId)
+  await redis.hDel('lobby:all', tableId)
   console.log('Table terminated:', { tableId })
 }
 
@@ -704,7 +723,7 @@ export async function terminateTable(redis, tableId) {
  * @returns {Promise<string|null>}
  */
 export async function findTableForPlayer(redis, playerId) {
-  const raw = await redis.hGetAll('lobby:tables')
+  const raw = await redis.hGetAll('lobby:all')
   for (const json of Object.values(raw)) {
     const entry = JSON.parse(json)
     const table = await getTable(redis, entry.tableId)

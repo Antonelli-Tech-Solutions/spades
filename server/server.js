@@ -41,6 +41,7 @@ import {
   changeSeat,
   joinTable,
   standFromSeat,
+  transferHost,
   VALID_VISIBILITIES,
   VALID_JOIN_POLICIES,
   validateJoinPolicy,
@@ -990,6 +991,37 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
       console.error('Add bot error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/transfer-host — transfer host privileges to another seated human
+  app.post('/api/tables/:tableId/transfer-host', async (req, res) => {
+    const { tableId } = req.params
+    const { playerId: targetPlayerId } = req.body ?? {}
+    if (!targetPlayerId || typeof targetPlayerId !== 'string') {
+      return sendJSON(res, 400, { error: 'Missing or invalid targetPlayerId in request body' })
+    }
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const updated = await transferHost(redisClient, tableId, session.playerId, targetPlayerId)
+
+      const newHostSeat = Object.entries(updated.seats).find(([, pid]) => pid === updated.hostPlayerId)?.[0] ?? null
+      emitLobbyTableUpdated(wss, updated)
+      if (wss) {
+        wss.broadcast(tableId, 'HOST_CHANGED', { newHostPlayerId: updated.hostPlayerId, newHostSeat })
+      }
+
+      sendJSON(res, 200, { tableId, hostPlayerId: updated.hostPlayerId, newHostSeat })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'NOT_SEATED') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'INVALID_TARGET') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 409, { error: err.message })
+      console.error('Transfer host error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

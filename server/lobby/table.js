@@ -294,6 +294,88 @@ export function isTableFull(table) {
 }
 
 /**
+ * Transfer host privileges to another seated human player.
+ * Works in both waiting and playing states.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} requestingPlayerId
+ * @param {string} targetPlayerId
+ * @returns {Promise<TableState>}
+ */
+export async function transferHost(redis, tableId, requestingPlayerId, targetPlayerId) {
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+
+      if (table.hostPlayerId !== requestingPlayerId) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Only the host can transfer host privileges'), { code: 'FORBIDDEN' })
+      }
+
+      if (requestingPlayerId === targetPlayerId) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Cannot transfer host to yourself'), { code: 'INVALID_TARGET' })
+      }
+
+      const targetSeat = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
+      if (!targetSeat) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Target player is not seated at this table'), { code: 'NOT_SEATED' })
+      }
+
+      if (targetPlayerId.startsWith('bot:')) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Cannot transfer host to a bot'), { code: 'INVALID_TARGET' })
+      }
+
+      const updated = { ...table, hostPlayerId: targetPlayerId }
+
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      // Update lobby index with new host
+      await isolatedClient.hSet('lobby:tables', tableId, JSON.stringify({
+        tableId,
+        hostPlayerId: targetPlayerId,
+        name: updated.name,
+        status: updated.status,
+      }))
+
+      console.log('Host transferred:', { tableId, from: requestingPlayerId, to: targetPlayerId })
+      return updated
+    })
+
+    if (result !== null) {
+      return result
+    }
+  }
+
+  throw Object.assign(
+    new Error('Host transfer could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
+}
+
+/**
  * Add a bot player to an empty seat. The bot's player ID is "bot:<seat>".
  * Reuses sitAtTable's validation (seat must be empty, game must not have started).
  *

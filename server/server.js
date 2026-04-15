@@ -269,6 +269,74 @@ function emitLobbyTableUpdated(wss, table) {
   }
 }
 
+async function findFriendsOnlyTablesHostedBy(redis, playerId) {
+  const raw = await redis.hGetAll('lobby:all')
+  const tables = []
+  for (const json of Object.values(raw)) {
+    const entry = JSON.parse(json)
+    const table = await getTable(redis, entry.tableId)
+    if (!table) continue
+    if (table.hostPlayerId === playerId && table.visibility === 'friends-only') {
+      tables.push(table)
+    }
+  }
+  return tables
+}
+
+async function emitFriendRemovedTableSideEffects(redis, playerA, playerB) {
+  try {
+    const tablesA = await findFriendsOnlyTablesHostedBy(redis, playerA)
+    for (const table of tablesA) {
+      await redis.publish(`player:${playerB}:notify`, JSON.stringify({
+        type: 'TABLE_REMOVED',
+        payload: { tableId: table.tableId },
+      }))
+    }
+    const tablesB = await findFriendsOnlyTablesHostedBy(redis, playerB)
+    for (const table of tablesB) {
+      await redis.publish(`player:${playerA}:notify`, JSON.stringify({
+        type: 'TABLE_REMOVED',
+        payload: { tableId: table.tableId },
+      }))
+    }
+  } catch (err) {
+    console.error('Failed to emit friend removed table side effects:', { error: err.message })
+  }
+}
+
+async function emitFriendAcceptedTableSideEffects(redis, acceptorId, requesterId) {
+  try {
+    const acceptorTables = await findFriendsOnlyTablesHostedBy(redis, acceptorId)
+    for (const table of acceptorTables) {
+      await redis.publish(`player:${requesterId}:notify`, JSON.stringify({
+        type: 'TABLE_CREATED',
+        payload: {
+          tableId: table.tableId,
+          name: table.name,
+          host: table.hostPlayerId,
+          seats: table.seats,
+          visibility: table.visibility,
+        },
+      }))
+    }
+    const requesterTables = await findFriendsOnlyTablesHostedBy(redis, requesterId)
+    for (const table of requesterTables) {
+      await redis.publish(`player:${acceptorId}:notify`, JSON.stringify({
+        type: 'TABLE_CREATED',
+        payload: {
+          tableId: table.tableId,
+          name: table.name,
+          host: table.hostPlayerId,
+          seats: table.seats,
+          visibility: table.visibility,
+        },
+      }))
+    }
+  } catch (err) {
+    console.error('Failed to emit friend accepted table side effects:', { error: err.message })
+  }
+}
+
 function emitLobbyTableRemoved(wss, table) {
   if (!wss) return
   const payload = { tableId: table.tableId }
@@ -576,6 +644,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         } catch (pubErr) {
           console.error('Failed to publish friend accept notification:', { error: pubErr.message })
         }
+        await emitFriendAcceptedTableSideEffects(redisClient, session.playerId, requesterId)
       }
       sendJSON(res, 200, { message: 'Friend request accepted.' })
     } catch (err) {
@@ -629,6 +698,9 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const session = await validateAuthHeaders(redisClient, req)
       const db = getDb()
       await removeFriend(db, session.playerId, friendId)
+      if (redisClient) {
+        await emitFriendRemovedTableSideEffects(redisClient, session.playerId, friendId)
+      }
       sendJSON(res, 200, { message: 'Friend removed.' })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
@@ -722,8 +794,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const db = getDb()
+      const wereFriends = await areFriends(db, session.playerId, blockedId)
       await blockPlayer(db, session.playerId, blockedId)
-      sendJSON(res, 201, { message: 'Player blocked.' })
+      if (redisClient && wereFriends) {
+        await emitFriendRemovedTableSideEffects(redisClient, session.playerId, blockedId)
+      }
+      sendJSON(res, 200, { message: 'Player blocked.' })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })

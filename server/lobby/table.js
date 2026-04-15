@@ -562,6 +562,67 @@ export async function leaveTable(redis, tableId, playerId) {
  * @returns {Promise<{ terminated: true, seat: string } | { table: TableState, seat: string, botId: string, wasPlaying: true }>}
  * @throws {Error} If the table is not found, game is not in progress, or player is not seated
  */
+export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlayerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== requestingPlayerId) {
+    throw Object.assign(new Error('Only the host can kick players'), { code: 'FORBIDDEN' })
+  }
+  if (requestingPlayerId === targetPlayerId) {
+    throw Object.assign(new Error('Host cannot kick themselves'), { code: 'SELF_KICK' })
+  }
+
+  const seatEntry = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
+  const isObserver = (table.observers || []).includes(targetPlayerId)
+
+  if (!seatEntry && !isObserver) {
+    throw Object.assign(new Error('Target player is not at this table'), { code: 'NOT_AT_TABLE' })
+  }
+
+  if (table.status === 'playing' && seatEntry) {
+    const [seat] = seatEntry
+    const botId = `bot:${seat}`
+    const updatedSeats = { ...table.seats, [seat]: botId }
+    const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
+    if (!remainingHuman) {
+      await terminateTable(redis, tableId)
+      console.log('Kick: table terminated — no human players remain:', { tableId, targetPlayerId, seat })
+      return { terminated: true, seat, kickedPlayerId: targetPlayerId }
+    }
+    const updated = { ...table, seats: updatedSeats }
+    await saveTable(redis, updated)
+    if (table.visibility === 'public') {
+      await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
+    }
+    console.log('Kick: player replaced by bot in active game:', { tableId, targetPlayerId, seat, botId })
+    return { table: updated, seat, botId, kickedPlayerId: targetPlayerId }
+  }
+
+  if (seatEntry) {
+    const [seat] = seatEntry
+    const updatedSeats = { ...table.seats, [seat]: null }
+    const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+    const updated = { ...table, seats: updatedSeats, observers: updatedObservers }
+    await saveTable(redis, updated)
+    if (table.visibility === 'public') {
+      await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
+    }
+    console.log('Kick: player removed from seat:', { tableId, targetPlayerId, seat })
+    return { table: updated, seat, kickedPlayerId: targetPlayerId }
+  }
+
+  const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+  const updated = { ...table, observers: updatedObservers }
+  await saveTable(redis, updated)
+  if (table.visibility === 'public') {
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
+  }
+  console.log('Kick: observer removed:', { tableId, targetPlayerId })
+  return { table: updated, kickedPlayerId: targetPlayerId }
+}
+
 export async function leaveInProgressGame(redis, tableId, playerId) {
   const table = await getTable(redis, tableId)
   if (!table) {

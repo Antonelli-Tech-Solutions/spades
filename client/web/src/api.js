@@ -436,6 +436,31 @@ export async function terminateGame({ tableId, sessionId, playerId }, fetchFn = 
 }
 
 /**
+ * Kick a player from the table (host only).
+ * @param {{ tableId: string, targetPlayerId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>}
+ */
+export async function kickPlayer({ tableId, targetPlayerId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/kick`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ playerId: targetPlayerId }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to kick player.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Log out the current session.
  * @param {{ sessionId: string }} data
  * @param {typeof fetch} [fetchFn]

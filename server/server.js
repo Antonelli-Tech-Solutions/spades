@@ -999,6 +999,9 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   app.post('/api/tables/:tableId/transfer-host', async (req, res) => {
     const { tableId } = req.params
     const { playerId: targetPlayerId } = req.body ?? {}
+    if (!targetPlayerId || typeof targetPlayerId !== 'string') {
+      return sendJSON(res, 400, { error: 'Missing or invalid targetPlayerId in request body' })
+    }
     try {
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)

@@ -325,6 +325,11 @@ export async function transferHost(redis, tableId, requestingPlayerId, targetPla
         throw Object.assign(new Error('Only the host can transfer host privileges'), { code: 'FORBIDDEN' })
       }
 
+      if (requestingPlayerId === targetPlayerId) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Cannot transfer host to yourself'), { code: 'INVALID_TARGET' })
+      }
+
       const targetSeat = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
       if (!targetSeat) {
         await isolatedClient.unwatch()

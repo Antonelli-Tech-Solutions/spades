@@ -1587,9 +1587,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
           tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status,
         }))
       }
-      if (oldVisibility !== 'public' && newVisibility !== 'public') {
-        await redisClient.hDel('lobby:tables', tableId)
-      }
+
 
       if (wss) {
         const removePayload = { tableId }
@@ -1604,13 +1602,13 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         if (oldVisibility === 'public') {
           wss.broadcastLobby('TABLE_REMOVED', removePayload)
         } else if (oldVisibility === 'friends-only') {
-          await notifyHostFriends(wss, table, 'TABLE_REMOVED', removePayload)
+          notifyHostFriends(wss, table, 'TABLE_REMOVED', removePayload).catch(() => {})
         }
 
         if (newVisibility === 'public') {
           wss.broadcastLobby('TABLE_CREATED', createPayload)
         } else if (newVisibility === 'friends-only') {
-          await notifyHostFriends(wss, updated, 'TABLE_CREATED', createPayload)
+          notifyHostFriends(wss, updated, 'TABLE_CREATED', createPayload).catch(() => {})
         }
 
         wss.broadcast(tableId, 'TABLE_VISIBILITY_CHANGED', {

@@ -347,6 +347,14 @@ export async function transferHost(redis, tableId, requestingPlayerId, targetPla
         return null
       }
 
+      // Update lobby index with new host
+      await isolatedClient.hSet('lobby:tables', tableId, JSON.stringify({
+        tableId,
+        hostPlayerId: targetPlayerId,
+        name: updated.name,
+        status: updated.status,
+      }))
+
       console.log('Host transferred:', { tableId, from: requestingPlayerId, to: targetPlayerId })
       return updated
     })

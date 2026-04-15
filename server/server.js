@@ -244,7 +244,7 @@ function emitLobbyTableCreated(wss, table) {
   if (table.visibility === 'public') {
     wss.broadcastLobby('TABLE_CREATED', payload)
   } else if (table.visibility === 'friends-only') {
-    notifyHostFriends(wss, table, 'TABLE_CREATED', payload)
+    notifyHostFriends(wss, table, 'TABLE_CREATED', payload).catch(() => {})
   }
 }
 
@@ -263,7 +263,7 @@ function emitLobbyTableUpdated(wss, table) {
   if (table.visibility === 'public') {
     wss.broadcastLobby('TABLE_UPDATED', payload)
   } else if (table.visibility === 'friends-only') {
-    notifyHostFriends(wss, table, 'TABLE_UPDATED', payload)
+    notifyHostFriends(wss, table, 'TABLE_UPDATED', payload).catch(() => {})
   }
 }
 
@@ -273,7 +273,7 @@ function emitLobbyTableRemoved(wss, table) {
   if (table.visibility === 'public') {
     wss.broadcastLobby('TABLE_REMOVED', payload)
   } else if (table.visibility === 'friends-only') {
-    notifyHostFriends(wss, table, 'TABLE_REMOVED', payload)
+    notifyHostFriends(wss, table, 'TABLE_REMOVED', payload).catch(() => {})
   }
 }
 

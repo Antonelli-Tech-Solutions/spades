@@ -251,7 +251,7 @@ describe('Friend List Changes — Friends-Only Table Side Effects', { skip }, ()
         method: 'POST',
         headers: hostHeaders,
       })
-      assert.equal(res.status, 200)
+      assert.equal(res.status, 201)
 
       await new Promise((resolve) => setTimeout(resolve, 500))
       await cleanupSubscriber(subscriber, notifyChannel)
@@ -278,7 +278,7 @@ describe('Friend List Changes — Friends-Only Table Side Effects', { skip }, ()
         method: 'POST',
         headers: friendHeaders,
       })
-      assert.equal(res.status, 200)
+      assert.equal(res.status, 201)
 
       await new Promise((resolve) => setTimeout(resolve, 500))
       await cleanupSubscriber(subscriber, notifyChannel)

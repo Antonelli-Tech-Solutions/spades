@@ -412,6 +412,31 @@ export async function changeSeat({ tableId, seat, sessionId, playerId }, fetchFn
 }
 
 /**
+ * Host-only: move a seated player to a different seat (waiting tables only).
+ * @param {{ tableId: string, targetPlayerId: string, seat: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tableId: string, seat: string }>}
+ */
+export async function assignSeat({ tableId, targetPlayerId, seat, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/assign-seat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ playerId: targetPlayerId, seat }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to assign seat.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Terminate a game (host only). Works in both waiting and playing phases.
  * @param {{ tableId: string, sessionId: string, playerId: string }} data
  * @param {typeof fetch} [fetchFn]

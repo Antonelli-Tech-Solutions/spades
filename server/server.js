@@ -799,7 +799,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (redisClient && wereFriends) {
         await emitFriendRemovedTableSideEffects(redisClient, session.playerId, blockedId)
       }
-      sendJSON(res, 200, { message: 'Player blocked.' })
+      sendJSON(res, 201, { message: 'Player blocked.' })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       if (err.code === 'VALIDATION_ERROR') return sendJSON(res, 400, { error: err.message })

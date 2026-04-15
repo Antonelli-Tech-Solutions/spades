@@ -346,7 +346,7 @@ The `playerId` is the requester whose pending request you want to accept.
 
 | Status | Meaning |
 |---|---|
-| `200` | Friend request accepted. Publishes `FRIEND_REQUEST_ACCEPTED` to the original requester's personal notification channel. |
+| `200` | Friend request accepted. Publishes `FRIEND_REQUEST_ACCEPTED` to the original requester's personal notification channel. If either player hosts a friends-only table, `TABLE_CREATED` is sent to the new friend's personal notification channel for each such table. |
 | `400` | Invalid playerId |
 | `401` | Missing or invalid session |
 | `403` | Either player has blocked the other |
@@ -390,7 +390,7 @@ Returns two arrays: `friends` (accepted friendships) and `pending` (incoming req
 
 **Headers:** `x-session-id`, `x-player-id`
 
-Removes an accepted friendship. Both directions are deleted.
+Removes an accepted friendship. Both directions are deleted. If either player hosts a friends-only table, `TABLE_REMOVED` is sent to the other player's personal notification channel for each such table.
 
 **Responses**
 
@@ -435,7 +435,7 @@ Navigates to a friend's table as an observer. Requires that the table is visible
 
 **Headers:** `x-session-id`, `x-player-id`
 
-Blocks the target player. If a friendship or pending friend request exists between the two players (in either direction), it is removed. Blocking is idempotent — blocking an already-blocked player succeeds silently.
+Blocks the target player. If a friendship or pending friend request exists between the two players (in either direction), it is removed. If the players were friends and either hosts a friends-only table, `TABLE_REMOVED` is sent to the other player's personal notification channel for each such table. Blocking is idempotent — blocking an already-blocked player succeeds silently.
 
 **Responses**
 

@@ -491,6 +491,7 @@ Returns the list of players blocked by the authenticated player, ordered by most
 | `POST` | `/api/tables/join-link/:token` | Required | Use a join link to sit at the table. Bypasses join policy. |
 | `POST` | `/api/tables/:tableId/spectator-link` | Required (host) | Generate a shareable spectator link for the table. |
 | `POST` | `/api/tables/spectator-link/:token` | Required | Use a spectator link to join a table as an observer. |
+| `POST` | `/api/tables/:tableId/transfer-host` | Required (host) | Transfer host privileges to another seated human player. |
 | `POST` | `/api/tables/:tableId/terminate` | Required (host) | Terminate the game at any phase. |
 
 #### `GET /api/tables`
@@ -660,6 +661,28 @@ Validates a spectator-link token and adds the authenticated player to the table 
 | `403` | Invalid or expired spectator link, or spectating is disabled |
 | `404` | Table no longer exists |
 | `409` | Observer slots are full |
+
+#### `POST /api/tables/:tableId/transfer-host`
+
+Host-only. Transfers host privileges to another seated human player. Works in both waiting and playing states. The target must be seated at the table and must not be a bot.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<target-player-uuid>" }
+```
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Host transferred. Body: `{ tableId, hostPlayerId, newHostSeat }` |
+| `400` | Target player is not seated at the table, or target is a bot |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the current host |
+| `404` | Table not found |
+| `409` | Concurrent modification — retry the request |
 
 #### `POST /api/tables/:tableId/terminate`
 
@@ -867,6 +890,8 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 
 | `OBSERVER_JOINED` | `{ "playerId": "<uuid>", "username": "<string>" }` | Broadcast to the table room when a player joins as a spectator-only observer (via a spectator link or the friends list "Go to Table" action). |
 | `OBSERVER_LEFT` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when an observer leaves the table. |
+
+| `HOST_CHANGED` | `{ "newHostPlayerId": "<uuid>", "newHostSeat": "<north\|east\|south\|west>" }` | Broadcast when the host transfers host privileges to another player. |
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`. **Observers (spectators) are excluded from events that contain private hand data:** `HAND_DEALT`, `HAND_REVEALED`, and `BLIND_NIL_EXCHANGE_PROMPT` are never sent to observer connections.
 

@@ -490,6 +490,31 @@ export async function getBuildInfo(fetchFn = globalThis.fetch) {
   return body
 }
 
+/**
+ * Transfer host privileges to another seated human player.
+ * @param {{ tableId: string, targetPlayerId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tableId: string, hostPlayerId: string, newHostSeat: string }>}
+ */
+export async function transferHost({ tableId, targetPlayerId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/tables/${tableId}/transfer-host`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ playerId: targetPlayerId }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to transfer host.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
 export async function loginUser({ email, password }, fetchFn = globalThis.fetch) {
   const res = await fetchFn('/api/auth/login', {
     method: 'POST',

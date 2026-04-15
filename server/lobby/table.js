@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import { substitutePlayerWithBot } from '../game/state.js'
 
 const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
 const MAX_OBSERVERS = 20
@@ -593,6 +594,11 @@ export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlaye
     }
     const updated = { ...table, seats: updatedSeats }
     await saveTable(redis, updated)
+    const gameState = await getGameState(redis, tableId)
+    if (gameState) {
+      const newState = substitutePlayerWithBot(gameState, seat)
+      await saveGameState(redis, tableId, newState)
+    }
     if (table.visibility === 'public') {
       await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
     }

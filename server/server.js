@@ -1072,14 +1072,6 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         wss.notifyPlayer(targetPlayerId, 'KICKED_FROM_TABLE', { tableId })
       }
 
-      if (result.botId) {
-        const gameState = await getGameState(redisClient, tableId)
-        if (gameState) {
-          const newState = substitutePlayerWithBot(gameState, result.seat)
-          await saveGameState(redisClient, tableId, newState)
-        }
-      }
-
       sendJSON(res, 200, result.table)
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })

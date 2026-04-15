@@ -527,11 +527,11 @@ export function renderGameScreen(container) {
               .map((ms) => `<option value="${ms}">${ms.charAt(0).toUpperCase() + ms.slice(1)}</option>`)
               .join('')
             const moveDropdown = moveOptions
-              ? `<select class="host-move-seat-select" data-player-id="${seatInfo.playerId}"><option value="">Move to…</option>${moveOptions}</select>`
+              ? `<select class="host-move-seat-select" data-player-id="${esc(seatInfo.playerId)}"><option value="">Move to…</option>${moveOptions}</select>`
               : ''
             hostActions = `<span class="host-actions">
-              <button class="btn-secondary btn-sm host-kick-btn" data-player-id="${seatInfo.playerId}">Kick</button>
-              <button class="btn-secondary btn-sm host-transfer-btn" data-player-id="${seatInfo.playerId}">Transfer Host</button>
+              <button class="btn-secondary btn-sm host-kick-btn" data-player-id="${esc(seatInfo.playerId)}">Kick</button>
+              <button class="btn-secondary btn-sm host-transfer-btn" data-player-id="${esc(seatInfo.playerId)}">Transfer Host</button>
               ${moveDropdown}
             </span>`
           }
@@ -771,7 +771,7 @@ export function renderGameScreen(container) {
       if (!info || info.isBot) return ''
       const targetId = state.players[targetSeat]
       if (!targetId) return ''
-      return `<button class="btn-secondary btn-sm ingame-transfer-btn" data-player-id="${targetId}">Transfer Host</button>`
+      return `<button class="btn-secondary btn-sm ingame-transfer-btn" data-player-id="${esc(targetId)}">Transfer Host</button>`
     }
 
     const isMyBidTurn = state.phase === 'bidding' && state.currentBidderSeat === seat
@@ -986,6 +986,8 @@ export function renderGameScreen(container) {
         } catch (err) {
           btn.disabled = false
           console.log('Transfer host failed:', { error: err.message })
+          btn.insertAdjacentHTML('afterend', `<span class="form-error ingame-transfer-err">${esc(err.message || 'Transfer failed')}</span>`)
+          setTimeout(() => btn.parentElement?.querySelector('.ingame-transfer-err')?.remove(), 4000)
         }
       })
     })

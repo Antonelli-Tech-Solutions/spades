@@ -553,15 +553,15 @@ export async function leaveTable(redis, tableId, playerId) {
 }
 
 /**
- * Remove a human player from an in-progress game by replacing them with a bot.
- * If the departing player is the host, reassigns host to the next seated human.
- * If no human players remain after substitution, the table is terminated.
+ * Kick a player from the table. Only the host can kick players.
+ * In an active game, the kicked player's seat is filled by a bot.
  *
  * @param {import('redis').RedisClientType} redis
  * @param {string} tableId
- * @param {string} playerId
- * @returns {Promise<{ terminated: true, seat: string } | { table: TableState, seat: string, botId: string, wasPlaying: true }>}
- * @throws {Error} If the table is not found, game is not in progress, or player is not seated
+ * @param {string} requestingPlayerId
+ * @param {string} targetPlayerId
+ * @returns {Promise<Object>}
+ * @throws {Error} If the table is not found, requester is not host, or target is not at the table
  */
 export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlayerId) {
   const table = await getTable(redis, tableId)
@@ -629,6 +629,17 @@ export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlaye
   return { table: updated, kickedPlayerId: targetPlayerId }
 }
 
+/**
+ * Remove a human player from an in-progress game by replacing them with a bot.
+ * If the departing player is the host, reassigns host to the next seated human.
+ * If no human players remain after substitution, the table is terminated.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} playerId
+ * @returns {Promise<{ terminated: true, seat: string } | { table: TableState, seat: string, botId: string, wasPlaying: true }>}
+ * @throws {Error} If the table is not found, game is not in progress, or player is not seated
+ */
 export async function leaveInProgressGame(redis, tableId, playerId) {
   const table = await getTable(redis, tableId)
   if (!table) {

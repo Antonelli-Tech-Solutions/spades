@@ -274,9 +274,10 @@ async function findFriendsOnlyTablesHostedBy(redis, playerId) {
   const tables = []
   for (const json of Object.values(raw)) {
     const entry = JSON.parse(json)
+    if (entry.hostPlayerId !== playerId) continue
     const table = await getTable(redis, entry.tableId)
     if (!table) continue
-    if (table.hostPlayerId === playerId && table.visibility === 'friends-only') {
+    if (table.visibility === 'friends-only') {
       tables.push(table)
     }
   }

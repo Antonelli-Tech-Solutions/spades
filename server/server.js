@@ -1186,8 +1186,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (result.oldSeat !== result.newSeat) {
         emitLobbyTableUpdated(wss, result.table)
         if (wss) {
-          wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.oldSeat })
-          wss.broadcast(tableId, 'SEAT_TAKEN', { seat: result.newSeat })
+          wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.oldSeat, playerId: targetPlayerId })
+          wss.broadcast(tableId, 'SEAT_TAKEN', { seat: result.newSeat, playerId: targetPlayerId })
         }
       }
       sendJSON(res, 200, { tableId, seat: result.newSeat })

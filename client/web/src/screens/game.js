@@ -10,6 +10,9 @@ import {
   sitAtTable as apiSitAtTable,
   standFromSeat as apiStandFromSeat,
   joinTableAsObserver as apiJoinTable,
+  kickPlayer as apiKickPlayer,
+  transferHost as apiTransferHost,
+  assignSeat as apiAssignSeat,
 } from '../api.js'
 import { createGameSocket, buildWsUrl } from '../gameSocket.js'
 import { navigate } from '../router.js'
@@ -42,6 +45,7 @@ export const FULL_REFRESH_EVENTS = new Set([
   'OBSERVER_JOINED',
   'OBSERVER_LEFT',
   'HOST_CHANGED',
+  'PLAYER_KICKED',
 ])
 
 /**
@@ -391,7 +395,7 @@ function seatDisplayName(state, seat) {
   return seat.charAt(0).toUpperCase() + seat.slice(1)
 }
 
-function seatInfoHtml(state, seat, label, isWinner = false) {
+function seatInfoHtml(state, seat, label, isWinner = false, extraHtml = '') {
   const bid = getDisplayBid(state, seat)
   const tricks = state.tricksWon[seat]
   const isActive = state.currentBidderSeat === seat || state.currentPlayerSeat === seat
@@ -405,6 +409,7 @@ function seatInfoHtml(state, seat, label, isWinner = false) {
         <span>Bid: ${esc(bidLabel(bid))}</span>
         <span>Tricks: ${tricks}</span>
       </div>
+      ${extraHtml}
     </div>`
 }
 
@@ -509,6 +514,7 @@ export function renderGameScreen(container) {
       const cls = occupied ? 'waiting-seat waiting-seat--taken' : 'waiting-seat waiting-seat--empty'
       const label = s.charAt(0).toUpperCase() + s.slice(1)
       let status = ''
+      let hostActions = ''
       if (occupied) {
         if (seatInfo.isBot) {
           status = '<span class="seat-bot-badge">BOT</span>'
@@ -516,6 +522,19 @@ export function renderGameScreen(container) {
           status = `<button class="btn-secondary btn-sm stand-btn-inline" id="stand-btn">Stand Up</button>`
         } else {
           status = esc(seatInfo.username)
+          if (state.isHost) {
+            const moveOptions = SEAT_NAMES.filter((ms) => seats[ms] === null)
+              .map((ms) => `<option value="${ms}">${ms.charAt(0).toUpperCase() + ms.slice(1)}</option>`)
+              .join('')
+            const moveDropdown = moveOptions
+              ? `<select class="host-move-seat-select" data-player-id="${seatInfo.playerId}"><option value="">Move to…</option>${moveOptions}</select>`
+              : ''
+            hostActions = `<span class="host-actions">
+              <button class="btn-secondary btn-sm host-kick-btn" data-player-id="${seatInfo.playerId}">Kick</button>
+              <button class="btn-secondary btn-sm host-transfer-btn" data-player-id="${seatInfo.playerId}">Transfer Host</button>
+              ${moveDropdown}
+            </span>`
+          }
         }
       } else if (canSit) {
         status = `<button class="btn-secondary btn-sm sit-btn" data-seat="${s}">Sit Here</button>`
@@ -525,7 +544,7 @@ export function renderGameScreen(container) {
         status = 'Empty'
       }
       const crownHtml = state.hostSeat === s ? `<span class="seat-host-crown" title="Host">${CROWN_ICON}</span>` : ''
-      return `<div class="${cls}"><span>${crownHtml}${esc(label)}</span><span class="waiting-seat-status">${status}</span></div>`
+      return `<div class="${cls}"><span>${crownHtml}${esc(label)}</span><span class="waiting-seat-status">${status}${hostActions}</span></div>`
     }).join('')
 
     const fillBotsBtn = state.isHost && emptySeats.length > 0
@@ -636,6 +655,60 @@ export function renderGameScreen(container) {
         btn.textContent = 'Leave Table'
       }
     })
+
+    container.querySelectorAll('.host-kick-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const targetPlayerId = btn.dataset.playerId
+        const errEl = container.querySelector('.waiting-err')
+        btn.disabled = true
+        errEl.textContent = ''
+        try {
+          await apiKickPlayer({ tableId, targetPlayerId, sessionId, playerId })
+          state = await getGameState({ tableId, sessionId, playerId })
+          render()
+        } catch (err) {
+          errEl.textContent = err.message || 'Failed to kick player.'
+          btn.disabled = false
+        }
+      })
+    })
+
+    container.querySelectorAll('.host-transfer-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const targetPlayerId = btn.dataset.playerId
+        const errEl = container.querySelector('.waiting-err')
+        btn.disabled = true
+        errEl.textContent = ''
+        try {
+          await apiTransferHost({ tableId, targetPlayerId, sessionId, playerId })
+          state = await getGameState({ tableId, sessionId, playerId })
+          render()
+        } catch (err) {
+          errEl.textContent = err.message || 'Failed to transfer host.'
+          btn.disabled = false
+        }
+      })
+    })
+
+    container.querySelectorAll('.host-move-seat-select').forEach((sel) => {
+      sel.addEventListener('change', async () => {
+        const targetPlayerId = sel.dataset.playerId
+        const seat = sel.value
+        if (!seat) return
+        const errEl = container.querySelector('.waiting-err')
+        sel.disabled = true
+        errEl.textContent = ''
+        try {
+          await apiAssignSeat({ tableId, targetPlayerId, seat, sessionId, playerId })
+          state = await getGameState({ tableId, sessionId, playerId })
+          render()
+        } catch (err) {
+          errEl.textContent = err.message || 'Failed to assign seat.'
+          sel.disabled = false
+          sel.value = ''
+        }
+      })
+    })
   }
 
   function renderHandSummary(seat) {
@@ -691,6 +764,16 @@ export function renderGameScreen(container) {
     if (state.completedTricks.length === 0) showLastTrick = false
 
     const rel = relSeats(seat)
+
+    function hostTransferBtnHtml(targetSeat) {
+      if (!state.isHost || targetSeat === seat) return ''
+      const info = state.playerNames?.[targetSeat]
+      if (!info || info.isBot) return ''
+      const targetId = state.players[targetSeat]
+      if (!targetId) return ''
+      return `<button class="btn-secondary btn-sm ingame-transfer-btn" data-player-id="${targetId}">Transfer Host</button>`
+    }
+
     const isMyBidTurn = state.phase === 'bidding' && state.currentBidderSeat === seat
     const isMyPlayTurn = state.phase === 'playing' && state.currentPlayerSeat === seat
     const bne = state.blindNilExchange
@@ -804,11 +887,11 @@ export function renderGameScreen(container) {
 
         <div class="game-table">
           <div class="table-top">
-            ${seatInfoHtml(state, rel.across, seatDisplayName(state, rel.across), holdActive && holdTrick?.winner === rel.across)}
+            ${seatInfoHtml(state, rel.across, seatDisplayName(state, rel.across), holdActive && holdTrick?.winner === rel.across, hostTransferBtnHtml(rel.across))}
           </div>
           <div class="table-middle">
             <div class="table-side table-left">
-              ${seatInfoHtml(state, rel.left, seatDisplayName(state, rel.left), holdActive && holdTrick?.winner === rel.left)}
+              ${seatInfoHtml(state, rel.left, seatDisplayName(state, rel.left), holdActive && holdTrick?.winner === rel.left, hostTransferBtnHtml(rel.left))}
             </div>
             <div class="trick-wrap">
               ${holdActive ? trickHoldHtml(holdTrick, rel) : trickHtml(state, rel)}
@@ -817,7 +900,7 @@ export function renderGameScreen(container) {
                 : ''}
             </div>
             <div class="table-side table-right">
-              ${seatInfoHtml(state, rel.right, seatDisplayName(state, rel.right), holdActive && holdTrick?.winner === rel.right)}
+              ${seatInfoHtml(state, rel.right, seatDisplayName(state, rel.right), holdActive && holdTrick?.winner === rel.right, hostTransferBtnHtml(rel.right))}
             </div>
           </div>
           <div class="table-bottom">
@@ -889,6 +972,22 @@ export function renderGameScreen(container) {
         btn.textContent = 'Leave Game'
         console.log('Leave game failed:', { error: err.message })
       }
+    })
+
+    // In-game transfer host buttons
+    container.querySelectorAll('.ingame-transfer-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const targetPlayerId = btn.dataset.playerId
+        btn.disabled = true
+        try {
+          await apiTransferHost({ tableId, targetPlayerId, sessionId, playerId })
+          state = await getGameState({ tableId, sessionId, playerId })
+          render()
+        } catch (err) {
+          btn.disabled = false
+          console.log('Transfer host failed:', { error: err.message })
+        }
+      })
     })
 
     // Bid buttons
@@ -1081,6 +1180,13 @@ export function renderGameScreen(container) {
       onEvent: async (msg) => {
         console.log('GameSocket event:', { type: msg.type, tableId })
         if (!mounted || acting) return
+
+        // ── PLAYER_KICKED: if we were kicked, redirect to lobby ────────────────
+        if (msg.type === 'PLAYER_KICKED' && msg.payload?.playerId === playerId) {
+          cleanup()
+          navigate('#/lobby')
+          return
+        }
 
         // ── Delta events: apply payload directly to state ──────────────────────
         if (DELTA_EVENTS.has(msg.type)) {

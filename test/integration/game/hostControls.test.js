@@ -425,6 +425,24 @@ describe('POST /api/tables/:tableId/kick', { skip }, () => {
     assert.equal(table.seats.east, players[2].playerId)
   })
 
+  it('rejects kick when table is in playing status', { timeout: 10000 }, async () => {
+    const tableId = await createTable(server.baseUrl, players[0])
+    await sitPlayer(server.baseUrl, tableId, players[0], 'north')
+    await sitPlayer(server.baseUrl, tableId, players[1], 'east')
+    await sitPlayer(server.baseUrl, tableId, players[2], 'south')
+    await sitPlayer(server.baseUrl, tableId, players[3], 'west')
+
+    const table = JSON.parse(await redis.get(`table:${tableId}`))
+    assert.equal(table.status, 'playing', 'table should be in playing status')
+
+    const res = await fetch(`${server.baseUrl}/api/tables/${tableId}/kick`, {
+      method: 'POST',
+      headers: authHeaders(players[0]),
+      body: JSON.stringify({ playerId: players[1].playerId }),
+    })
+    assert.equal(res.status, 409, 'kick should be rejected during active game')
+  })
+
   it('kicking last non-host player keeps table alive with host', { timeout: 10000 }, async () => {
     const tableId = await createTable(server.baseUrl, players[0])
     await sitPlayer(server.baseUrl, tableId, players[0], 'north')

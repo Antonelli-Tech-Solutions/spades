@@ -1075,6 +1075,9 @@ export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
   if (table.hostPlayerId !== hostPlayerId) {
     throw Object.assign(new Error('Only the host can kick players'), { code: 'FORBIDDEN' })
   }
+  if (table.status === 'playing') {
+    throw Object.assign(new Error('Cannot kick players during an active game'), { code: 'GAME_IN_PROGRESS' })
+  }
   if (hostPlayerId === targetPlayerId) {
     throw Object.assign(new Error('Host cannot kick themselves'), { code: 'SELF_KICK' })
   }

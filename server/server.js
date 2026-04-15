@@ -1148,6 +1148,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
       if (err.code === 'BAD_REQUEST') return sendJSON(res, 400, { error: err.message })
       if (err.code === 'SELF_KICK') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'PLAYER_NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       console.error('Kick player error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })

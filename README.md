@@ -492,6 +492,7 @@ Returns the list of players blocked by the authenticated player, ordered by most
 | `POST` | `/api/tables/:tableId/spectator-link` | Required (host) | Generate a shareable spectator link for the table. |
 | `POST` | `/api/tables/spectator-link/:token` | Required | Use a spectator link to join a table as an observer. |
 | `POST` | `/api/tables/:tableId/transfer-host` | Required (host) | Transfer host privileges to another seated human player. |
+| `POST` | `/api/tables/:tableId/kick` | Required (host) | Kick a player (seated or observer) from the table. During an active game the seat is filled by a bot. |
 | `POST` | `/api/tables/:tableId/terminate` | Required (host) | Terminate the game at any phase. |
 
 #### `GET /api/tables`
@@ -683,6 +684,31 @@ Host-only. Transfers host privileges to another seated human player. Works in bo
 | `403` | Caller is not the current host |
 | `404` | Table not found |
 | `409` | Concurrent modification — retry the request |
+
+#### `POST /api/tables/:tableId/kick`
+
+Host-only. Kicks a player from the table. The target can be a seated player or an observer. During a waiting table, the seat is vacated (set to `null`). During an active game, the kicked player's seat is filled by a bot. If no human players remain after the kick, the table is terminated. The host cannot kick themselves.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<targetPlayerId>" }
+```
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Player kicked. Body: updated table state, or `{ message }` if the table was terminated. |
+| `400` | Missing `playerId` in body, host tried to kick themselves, or target player is not at the table. |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the table host |
+| `404` | Table not found |
+
+**WebSocket events:**
+- `PLAYER_KICKED` is broadcast to the table room with `{ playerId, seat }` (seat is `null` if the target was an observer).
+- `KICKED_FROM_TABLE` is sent to the kicked player's personal notification channel with `{ tableId }`.
 
 #### `POST /api/tables/:tableId/terminate`
 
@@ -892,6 +918,7 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 | `OBSERVER_LEFT` | `{ "playerId": "<uuid>" }` | Broadcast to the table room when an observer leaves the table. |
 
 | `HOST_CHANGED` | `{ "newHostPlayerId": "<uuid>", "newHostSeat": "<north\|east\|south\|west>" }` | Broadcast when the host transfers host privileges to another player. |
+| `PLAYER_KICKED` | `{ "playerId": "<uuid>", "seat": "<north\|east\|south\|west>" \| null }` | Broadcast when the host kicks a player. `seat` is `null` if the kicked player was an observer. |
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`. **Observers (spectators) are excluded from events that contain private hand data:** `HAND_DEALT`, `HAND_REVEALED`, and `BLIND_NIL_EXCHANGE_PROMPT` are never sent to observer connections.
 
@@ -915,6 +942,7 @@ Server-side code can send a notification to any online player via `wss.notifyPla
 |---|---|---|
 | `FRIEND_REQUEST_RECEIVED` | `{ "fromPlayerId": "<uuid>", "fromUsername": "<string>" }` | A friend request is sent to this player. |
 | `FRIEND_REQUEST_ACCEPTED` | `{ "fromPlayerId": "<uuid>", "fromUsername": "<string>" }` | A player accepts this player's friend request. |
+| `KICKED_FROM_TABLE` | `{ "tableId": "<uuid>" }` | The player was kicked from a table by the host. |
 
 ### Heartbeat
 

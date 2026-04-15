@@ -38,6 +38,7 @@ import {
   findTableForPlayer,
   leaveTable,
   leaveInProgressGame,
+  kickPlayer,
   changeSeat,
   joinTable,
   standFromSeat,
@@ -1044,6 +1045,41 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Terminate game error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/kick — host kicks a player from the table
+  app.post('/api/tables/:tableId/kick', async (req, res) => {
+    const { tableId } = req.params
+    const { playerId: targetPlayerId } = req.body ?? {}
+    try {
+      if (!targetPlayerId) return sendJSON(res, 400, { error: 'Missing playerId in request body' })
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const result = await kickPlayer(redisClient, tableId, session.playerId, targetPlayerId)
+
+      if (result.terminated) {
+        if (wss) wss.broadcast(tableId, 'PLAYER_KICKED', { playerId: targetPlayerId, seat: result.seat })
+        if (wss) wss.notifyPlayer(targetPlayerId, 'KICKED_FROM_TABLE', { tableId })
+        console.log('Player kicked, table terminated:', { tableId, targetPlayerId })
+        return sendJSON(res, 200, { message: 'Player kicked. Table terminated.' })
+      }
+
+      emitLobbyTableUpdated(wss, result.table)
+      if (wss) {
+        wss.broadcast(tableId, 'PLAYER_KICKED', { playerId: targetPlayerId, seat: result.seat ?? null })
+        wss.notifyPlayer(targetPlayerId, 'KICKED_FROM_TABLE', { tableId })
+      }
+
+      sendJSON(res, 200, result.table)
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'SELF_KICK') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_AT_TABLE') return sendJSON(res, 400, { error: err.message })
+      console.error('Kick player error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

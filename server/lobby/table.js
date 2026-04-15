@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import { substitutePlayerWithBot } from '../game/state.js'
 
 const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
 const MAX_OBSERVERS = 20
@@ -549,6 +550,83 @@ export async function leaveTable(redis, tableId, playerId) {
   await saveTable(redis, updated)
   console.log('Player left waiting table:', { tableId, playerId, seat })
   return { table: updated, seat, wasPlaying: false }
+}
+
+/**
+ * Kick a player from the table. Only the host can kick players.
+ * In an active game, the kicked player's seat is filled by a bot.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} requestingPlayerId
+ * @param {string} targetPlayerId
+ * @returns {Promise<Object>}
+ * @throws {Error} If the table is not found, requester is not host, or target is not at the table
+ */
+export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlayerId) {
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== requestingPlayerId) {
+    throw Object.assign(new Error('Only the host can kick players'), { code: 'FORBIDDEN' })
+  }
+  if (requestingPlayerId === targetPlayerId) {
+    throw Object.assign(new Error('Host cannot kick themselves'), { code: 'SELF_KICK' })
+  }
+
+  const seatEntry = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
+  const isObserver = (table.observers || []).includes(targetPlayerId)
+
+  if (!seatEntry && !isObserver) {
+    throw Object.assign(new Error('Target player is not at this table'), { code: 'NOT_AT_TABLE' })
+  }
+
+  if (table.status === 'playing' && seatEntry) {
+    const [seat] = seatEntry
+    const botId = `bot:${seat}`
+    const updatedSeats = { ...table.seats, [seat]: botId }
+    const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
+    if (!remainingHuman) {
+      await terminateTable(redis, tableId)
+      console.log('Kick: table terminated — no human players remain:', { tableId, targetPlayerId, seat })
+      return { terminated: true, seat, kickedPlayerId: targetPlayerId }
+    }
+    const updated = { ...table, seats: updatedSeats }
+    await saveTable(redis, updated)
+    const gameState = await getGameState(redis, tableId)
+    if (gameState) {
+      const newState = substitutePlayerWithBot(gameState, seat)
+      await saveGameState(redis, tableId, newState)
+    }
+    if (table.visibility === 'public') {
+      await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
+    }
+    console.log('Kick: player replaced by bot in active game:', { tableId, targetPlayerId, seat, botId })
+    return { table: updated, seat, botId, kickedPlayerId: targetPlayerId }
+  }
+
+  if (seatEntry) {
+    const [seat] = seatEntry
+    const updatedSeats = { ...table.seats, [seat]: null }
+    const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+    const updated = { ...table, seats: updatedSeats, observers: updatedObservers }
+    await saveTable(redis, updated)
+    if (table.visibility === 'public') {
+      await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
+    }
+    console.log('Kick: player removed from seat:', { tableId, targetPlayerId, seat })
+    return { table: updated, seat, kickedPlayerId: targetPlayerId }
+  }
+
+  const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+  const updated = { ...table, observers: updatedObservers }
+  await saveTable(redis, updated)
+  if (table.visibility === 'public') {
+    await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
+  }
+  console.log('Kick: observer removed:', { tableId, targetPlayerId })
+  return { table: updated, kickedPlayerId: targetPlayerId }
 }
 
 /**

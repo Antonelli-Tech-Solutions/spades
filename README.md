@@ -950,13 +950,17 @@ All messages are JSON: `{ "type": "<TYPE>", "payload": { ... } }`.
 
 Game events (bid placed, card played, trick complete, etc.) are broadcast to all clients in the table room using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`. **Observers (spectators) are excluded from events that contain private hand data:** `HAND_DEALT`, `HAND_REVEALED`, and `BLIND_NIL_EXCHANGE_PROMPT` are never sent to observer connections.
 
-Lobby events are broadcast to all lobby subscribers across all server instances via Redis pub/sub using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+Lobby events are routed based on table visibility using the same envelope: `{ "type": "<EVENT_NAME>", "payload": { ... } }`.
+
+- **Public** tables broadcast on the `lobby` Redis pub/sub channel, reaching all lobby subscribers across all server instances.
+- **Friends-Only** tables send the same events to each of the host's friends via their personal `player:{friendId}:notify` notification channels (using `wss.notifyPlayer`). The events never appear on the public lobby channel.
+- **Private** tables produce no broadcast at all.
 
 | Type | Payload | Description |
 |---|---|---|
-| `TABLE_CREATED` | `{ tableId, name, host, seats, visibility }` | A new public table was created. |
-| `TABLE_UPDATED` | `{ tableId, name, host, seats, status, visibility, observerCount, spectating }` | A public table's state changed (seat taken/vacated, game started, observer joined, etc.). |
-| `TABLE_REMOVED` | `{ tableId }` | A public table was removed (terminated, all players left, or expired). |
+| `TABLE_CREATED` | `{ tableId, name, host, seats, visibility }` | A table was created. Routed by visibility. |
+| `TABLE_UPDATED` | `{ tableId, name, host, seats, status, visibility, observerCount, spectating }` | A table's state changed (seat taken/vacated, game started, observer joined, etc.). Routed by visibility. |
+| `TABLE_REMOVED` | `{ tableId }` | A table was removed (terminated, all players left, or expired). Routed by visibility. |
 
 ### Personal Notification Channel
 

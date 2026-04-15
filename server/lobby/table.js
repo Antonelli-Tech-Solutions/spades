@@ -812,6 +812,92 @@ export async function changeSeat(redis, tableId, playerId, newSeat) {
 }
 
 /**
+ * Host-only: move a seated player to a different empty seat.
+ * Only allowed while the table is in 'waiting' status.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} tableId
+ * @param {string} requestingPlayerId - must be the table host
+ * @param {string} targetPlayerId - player to move (must be seated)
+ * @param {'north'|'east'|'south'|'west'} targetSeat
+ * @returns {Promise<{ table: TableState, oldSeat: string, newSeat: string }>}
+ */
+export async function assignSeat(redis, tableId, requestingPlayerId, targetPlayerId, targetSeat) {
+  const validSeats = ['north', 'east', 'south', 'west']
+  if (!validSeats.includes(targetSeat)) {
+    throw Object.assign(new Error(`Invalid seat: ${targetSeat}`), { code: 'INVALID_SEAT' })
+  }
+
+  const key = `table:${tableId}`
+  const MAX_RETRIES = 3
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await redis.executeIsolated(async (isolatedClient) => {
+      await isolatedClient.watch(key)
+
+      const raw = await isolatedClient.get(key)
+      if (!raw) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+      }
+
+      const table = JSON.parse(raw)
+
+      if (table.hostPlayerId !== requestingPlayerId) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Only the host can assign seats'), { code: 'FORBIDDEN' })
+      }
+
+      if (table.status === 'playing') {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Cannot assign seats once the game has started'), { code: 'GAME_IN_PROGRESS' })
+      }
+
+      const currentSeat = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)?.[0]
+      if (!currentSeat) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Target player is not seated at this table'), { code: 'NOT_SEATED' })
+      }
+
+      if (currentSeat === targetSeat) {
+        await isolatedClient.unwatch()
+        return { table, oldSeat: currentSeat, newSeat: targetSeat }
+      }
+
+      if (table.seats[targetSeat] !== null) {
+        await isolatedClient.unwatch()
+        throw Object.assign(new Error('Target seat is already occupied'), { code: 'SEAT_TAKEN' })
+      }
+
+      const updatedSeats = { ...table.seats, [currentSeat]: null, [targetSeat]: targetPlayerId }
+      const updated = { ...table, seats: updatedSeats }
+
+      const txResult = await isolatedClient
+        .multi()
+        .set(key, JSON.stringify(updated), { EX: TABLE_TTL_SECONDS })
+        .exec()
+
+      if (txResult === null) {
+        return null
+      }
+
+      console.log('Host assigned seat:', { tableId, requestingPlayerId, targetPlayerId, oldSeat: currentSeat, newSeat: targetSeat })
+      return { table: updated, oldSeat: currentSeat, newSeat: targetSeat }
+    })
+
+    if (result !== null) {
+      return result
+    }
+  }
+
+  throw Object.assign(
+    new Error('Seat assignment could not be completed due to concurrent table updates — please try again'),
+    { code: 'CONCURRENT_MODIFICATION' },
+  )
+}
+
+/**
  * List all open (waiting) tables from the lobby index.
  * Fetches full table state for each waiting entry to include seat info.
  *

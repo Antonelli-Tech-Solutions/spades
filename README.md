@@ -493,6 +493,7 @@ Returns the list of players blocked by the authenticated player, ordered by most
 | `POST` | `/api/tables/spectator-link/:token` | Required | Use a spectator link to join a table as an observer. |
 | `POST` | `/api/tables/:tableId/transfer-host` | Required (host) | Transfer host privileges to another seated human player. |
 | `POST` | `/api/tables/:tableId/kick` | Required (host) | Kick a player (seated or observer) from the table. During an active game the seat is filled by a bot. |
+| `POST` | `/api/tables/:tableId/assign-seat` | Required (host) | Move a seated player to a different empty seat (waiting tables only). |
 | `POST` | `/api/tables/:tableId/terminate` | Required (host) | Terminate the game at any phase. |
 
 #### `GET /api/tables`
@@ -724,6 +725,33 @@ Host-only. Ends the game and removes the table regardless of phase.
 | `401` | Missing or invalid session |
 | `403` | Caller is not the table host |
 | `404` | Table not found |
+
+#### `POST /api/tables/:tableId/assign-seat`
+
+Host-only. Moves a seated player to a different empty seat. Only allowed while the table is in `waiting` status.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<target-player-id>", "seat": "south" }
+```
+
+Valid seat values: `north`, `east`, `south`, `west`.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Seat assigned. Body: `{ tableId, seat }` |
+| `400` | Missing required fields or invalid seat value |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the table host |
+| `404` | Table not found |
+| `409` | Game in progress, target player not seated, or target seat is occupied |
+| `503` | Concurrent modification — retry the request |
+
+If the player is already in the requested seat, the call succeeds as a no-op (200) without broadcasting any WebSocket events.
 
 #### `GET /api/tables/:tableId/join-link`
 

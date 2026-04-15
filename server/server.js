@@ -40,6 +40,7 @@ import {
   leaveInProgressGame,
   kickPlayer,
   changeSeat,
+  assignSeat,
   joinTable,
   standFromSeat,
   transferHost,
@@ -1167,6 +1168,39 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
       if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 503, { error: err.message })
       console.error('Change seat error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/assign-seat — host moves a seated player to a different seat
+  app.post('/api/tables/:tableId/assign-seat', async (req, res) => {
+    const { tableId } = req.params
+    const { playerId: targetPlayerId, seat } = req.body ?? {}
+    if (!targetPlayerId || !seat) {
+      return sendJSON(res, 400, { error: 'playerId and seat are required' })
+    }
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const result = await assignSeat(redisClient, tableId, session.playerId, targetPlayerId, seat)
+      if (result.oldSeat !== result.newSeat) {
+        emitLobbyTableUpdated(wss, result.table)
+        if (wss) {
+          wss.broadcast(tableId, 'SEAT_VACATED', { seat: result.oldSeat, playerId: targetPlayerId })
+          wss.broadcast(tableId, 'SEAT_TAKEN', { seat: result.newSeat, playerId: targetPlayerId })
+        }
+      }
+      sendJSON(res, 200, { tableId, seat: result.newSeat })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'NOT_SEATED') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 503, { error: err.message })
+      console.error('Assign seat error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

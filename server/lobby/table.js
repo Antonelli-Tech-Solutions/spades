@@ -1019,3 +1019,110 @@ export async function canGoToTable(redis, db, table, requesterId, { areFriends, 
     return false
   }
 }
+
+export async function assignSeat(redis, tableId, hostPlayerId, targetPlayerId, seat) {
+  const validSeats = ['north', 'east', 'south', 'west']
+  if (!targetPlayerId || !seat) {
+    throw Object.assign(new Error('playerId and seat are required'), { code: 'BAD_REQUEST' })
+  }
+  if (!validSeats.includes(seat)) {
+    throw Object.assign(new Error(`Invalid seat: ${seat}`), { code: 'INVALID_SEAT' })
+  }
+
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== hostPlayerId) {
+    throw Object.assign(new Error('Only the host can assign seats'), { code: 'FORBIDDEN' })
+  }
+  if (table.status === 'playing') {
+    throw Object.assign(new Error('Cannot assign seats during an active game'), { code: 'GAME_IN_PROGRESS' })
+  }
+
+  const targetSeatEntry = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
+  const isObserver = (table.observers || []).includes(targetPlayerId)
+  if (!targetSeatEntry && !isObserver) {
+    throw Object.assign(new Error('Target player is not at this table'), { code: 'PLAYER_NOT_FOUND' })
+  }
+
+  if (table.seats[seat] !== null) {
+    throw Object.assign(new Error('Target seat is already occupied'), { code: 'SEAT_TAKEN' })
+  }
+
+  const updatedSeats = { ...table.seats }
+  if (targetSeatEntry) {
+    updatedSeats[targetSeatEntry[0]] = null
+  }
+  updatedSeats[seat] = targetPlayerId
+
+  const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+  const updated = { ...table, seats: updatedSeats, observers: updatedObservers }
+  await saveTable(redis, updated)
+  console.log('Host assigned seat:', { tableId, hostPlayerId, targetPlayerId, seat })
+  return updated
+}
+
+export async function kickPlayer(redis, tableId, hostPlayerId, targetPlayerId) {
+  if (!targetPlayerId) {
+    throw Object.assign(new Error('playerId is required'), { code: 'BAD_REQUEST' })
+  }
+
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== hostPlayerId) {
+    throw Object.assign(new Error('Only the host can kick players'), { code: 'FORBIDDEN' })
+  }
+  if (hostPlayerId === targetPlayerId) {
+    throw Object.assign(new Error('Host cannot kick themselves'), { code: 'SELF_KICK' })
+  }
+
+  const targetSeatEntry = Object.entries(table.seats).find(([, id]) => id === targetPlayerId)
+  const isObserver = (table.observers || []).includes(targetPlayerId)
+  if (!targetSeatEntry && !isObserver) {
+    throw Object.assign(new Error('Target player is not at this table'), { code: 'PLAYER_NOT_FOUND' })
+  }
+
+  const updatedSeats = { ...table.seats }
+  if (targetSeatEntry) {
+    updatedSeats[targetSeatEntry[0]] = null
+  }
+  const updatedObservers = (table.observers || []).filter((id) => id !== targetPlayerId)
+  const updated = { ...table, seats: updatedSeats, observers: updatedObservers }
+  await saveTable(redis, updated)
+  console.log('Host kicked player:', { tableId, hostPlayerId, targetPlayerId })
+  return { table: updated, seat: targetSeatEntry?.[0] ?? null }
+}
+
+export async function transferHost(redis, tableId, currentHostId, newHostId) {
+  if (!newHostId) {
+    throw Object.assign(new Error('playerId is required'), { code: 'BAD_REQUEST' })
+  }
+
+  const table = await getTable(redis, tableId)
+  if (!table) {
+    throw Object.assign(new Error('Table not found'), { code: 'NOT_FOUND' })
+  }
+  if (table.hostPlayerId !== currentHostId) {
+    throw Object.assign(new Error('Only the host can transfer host privileges'), { code: 'FORBIDDEN' })
+  }
+  if (currentHostId === newHostId) {
+    throw Object.assign(new Error('Cannot transfer host to yourself'), { code: 'SELF_TRANSFER' })
+  }
+
+  const isSeated = Object.values(table.seats).includes(newHostId)
+  if (!isSeated) {
+    const isObserver = (table.observers || []).includes(newHostId)
+    if (isObserver) {
+      throw Object.assign(new Error('Cannot transfer host to an observer — target must be seated'), { code: 'NOT_SEATED' })
+    }
+    throw Object.assign(new Error('Target player is not at this table'), { code: 'PLAYER_NOT_FOUND' })
+  }
+
+  const updated = { ...table, hostPlayerId: newHostId }
+  await saveTable(redis, updated)
+  console.log('Host transferred:', { tableId, oldHost: currentHostId, newHost: newHostId })
+  return updated
+}

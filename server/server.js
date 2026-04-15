@@ -52,6 +52,9 @@ import {
   markPlayerInvited,
   canSeeTable,
   canGoToTable,
+  assignSeat,
+  kickPlayer,
+  transferHost,
 } from './lobby/table.js'
 import { createGame, placeBid, playCard, submitBlindNilExchange, revealHand, getPlayerView, getSpectatorView, substitutePlayerWithBot } from './game/state.js'
 import { getSeatForPlayer, validateCardPlay, validateBidTurn } from './anticheat/validate.js'
@@ -1099,6 +1102,81 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
       if (err.code === 'CONCURRENT_MODIFICATION') return sendJSON(res, 503, { error: err.message })
       console.error('Change seat error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/assign-seat — host assigns a player to a specific seat (pre-game only)
+  app.post('/api/tables/:tableId/assign-seat', async (req, res) => {
+    const { tableId } = req.params
+    const { playerId, seat } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await assignSeat(redisClient, tableId, session.playerId, playerId, seat)
+      emitLobbyTableUpdated(wss, table)
+      if (wss) wss.broadcast(tableId, 'SEAT_ASSIGNED', { playerId, seat })
+      sendJSON(res, 200, { tableId, playerId, seat })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'BAD_REQUEST') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'INVALID_SEAT') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
+      if (err.code === 'PLAYER_NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Assign seat error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/kick — host removes a player from the table
+  app.post('/api/tables/:tableId/kick', async (req, res) => {
+    const { tableId } = req.params
+    const { playerId } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const result = await kickPlayer(redisClient, tableId, session.playerId, playerId)
+      emitLobbyTableUpdated(wss, result.table)
+      if (wss) wss.broadcast(tableId, 'PLAYER_KICKED', { playerId })
+      sendJSON(res, 200, { tableId, kickedPlayerId: playerId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'BAD_REQUEST') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'SELF_KICK') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'PLAYER_NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Kick player error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/transfer-host — host transfers host privileges to another seated player
+  app.post('/api/tables/:tableId/transfer-host', async (req, res) => {
+    const { tableId } = req.params
+    const { playerId } = req.body ?? {}
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await transferHost(redisClient, tableId, session.playerId, playerId)
+      emitLobbyTableUpdated(wss, table)
+      if (wss) {
+        const newHostSeat = Object.entries(table.seats).find(([, pid]) => pid === playerId)?.[0] ?? null
+        wss.broadcast(tableId, 'HOST_CHANGED', { newHostPlayerId: playerId, newHostSeat })
+      }
+      sendJSON(res, 200, { tableId, newHostPlayerId: playerId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'BAD_REQUEST') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'SELF_TRANSFER') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'NOT_SEATED') return sendJSON(res, 400, { error: err.message })
+      if (err.code === 'PLAYER_NOT_FOUND') return sendJSON(res, 404, { error: err.message })
+      console.error('Transfer host error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

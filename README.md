@@ -494,6 +494,7 @@ Returns the list of players blocked by the authenticated player, ordered by most
 | `POST` | `/api/tables/:tableId/transfer-host` | Required (host) | Transfer host privileges to another seated human player. |
 | `POST` | `/api/tables/:tableId/kick` | Required (host) | Kick a player (seated or observer) from the table. During an active game the seat is filled by a bot. |
 | `POST` | `/api/tables/:tableId/assign-seat` | Required (host) | Move a seated player to a different empty seat (waiting tables only). |
+| `POST` | `/api/tables/:tableId/visibility` | Required (host) | Change the table's visibility (public, friends-only, private). |
 | `POST` | `/api/tables/:tableId/terminate` | Required (host) | Terminate the game at any phase. |
 
 #### `GET /api/tables`
@@ -710,6 +711,41 @@ Host-only. Kicks a player from the table. The target can be a seated player or a
 **WebSocket events:**
 - `PLAYER_KICKED` is broadcast to the table room with `{ playerId, seat }` (seat is `null` if the target was an observer).
 - `KICKED_FROM_TABLE` is sent to the kicked player's personal notification channel with `{ tableId }`.
+
+#### `POST /api/tables/:tableId/visibility`
+
+Host-only. Changes the table's visibility setting. When the visibility changes, the server updates the lobby index and fires the appropriate transition events:
+
+- Leaving `public`: `TABLE_REMOVED` is broadcast to the lobby channel.
+- Entering `public`: `TABLE_CREATED` is broadcast to the lobby channel.
+- Leaving `friends-only`: `TABLE_REMOVED` is sent to each of the host's friends via their personal notification channels.
+- Entering `friends-only`: `TABLE_CREATED` is sent to each of the host's friends via their personal notification channels.
+- `private` produces no lobby or friend notifications in either direction.
+
+A `TABLE_VISIBILITY_CHANGED` event is always broadcast to the table room so seated players and observers are informed.
+
+The table's `joinPolicy` is automatically adjusted to remain compatible with the new visibility (e.g. changing to `private` forces `invite-only`).
+
+If the new visibility matches the current visibility, the request succeeds as a no-op — no events are fired.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "visibility": "friends-only" }
+```
+
+Valid values: `public`, `friends-only`, `private`.
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Visibility changed. Body: `{ tableId, visibility, joinPolicy }` |
+| `400` | Invalid visibility value |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the table host |
+| `404` | Table not found |
 
 #### `POST /api/tables/:tableId/terminate`
 
@@ -961,6 +997,7 @@ Lobby events are routed based on table visibility using the same envelope: `{ "t
 | `TABLE_CREATED` | `{ tableId, name, host, seats, visibility }` | A table was created. Routed by visibility. |
 | `TABLE_UPDATED` | `{ tableId, name, host, seats, status, visibility, observerCount, spectating }` | A table's state changed (seat taken/vacated, game started, observer joined, etc.). Routed by visibility. |
 | `TABLE_REMOVED` | `{ tableId }` | A table was removed (terminated, all players left, or expired). Routed by visibility. |
+| `TABLE_VISIBILITY_CHANGED` | `{ tableId, visibility, oldVisibility, joinPolicy }` | Broadcast to the table room when the host changes the table's visibility. Not routed via lobby — only sent to clients subscribed to the table. |
 
 ### Personal Notification Channel
 

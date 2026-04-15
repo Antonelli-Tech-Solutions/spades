@@ -220,28 +220,37 @@ function advanceBotsWithEvents(state, wss, tableId) {
 
 // ── Lobby event helpers ───────────────────────────────────────────────────────
 
-/**
- * Emit TABLE_CREATED to the lobby channel for a Public table.
- * No-ops when wss is not configured or the table is not public.
- */
+async function notifyHostFriends(wss, table, type, payload) {
+  try {
+    const db = getDb()
+    const friends = await getFriends(db, table.hostPlayerId)
+    for (const friend of friends) {
+      wss.notifyPlayer(friend.playerId, type, payload)
+    }
+  } catch (err) {
+    console.error('Failed to notify host friends:', { tableId: table.tableId, error: err.message })
+  }
+}
+
 function emitLobbyTableCreated(wss, table) {
-  if (!wss || table.visibility !== 'public') return
-  wss.broadcastLobby('TABLE_CREATED', {
+  if (!wss) return
+  const payload = {
     tableId: table.tableId,
     name: table.name,
     host: table.hostPlayerId,
     seats: table.seats,
     visibility: table.visibility,
-  })
+  }
+  if (table.visibility === 'public') {
+    wss.broadcastLobby('TABLE_CREATED', payload)
+  } else if (table.visibility === 'friends-only') {
+    notifyHostFriends(wss, table, 'TABLE_CREATED', payload).catch(() => {})
+  }
 }
 
-/**
- * Emit TABLE_UPDATED to the lobby channel for a Public table.
- * No-ops when wss is not configured or the table is not public.
- */
 function emitLobbyTableUpdated(wss, table) {
-  if (!wss || table.visibility !== 'public') return
-  wss.broadcastLobby('TABLE_UPDATED', {
+  if (!wss) return
+  const payload = {
     tableId: table.tableId,
     name: table.name,
     host: table.hostPlayerId,
@@ -250,17 +259,22 @@ function emitLobbyTableUpdated(wss, table) {
     visibility: table.visibility,
     observerCount: (table.observers || []).length,
     spectating: table.spectating,
-  })
+  }
+  if (table.visibility === 'public') {
+    wss.broadcastLobby('TABLE_UPDATED', payload)
+  } else if (table.visibility === 'friends-only') {
+    notifyHostFriends(wss, table, 'TABLE_UPDATED', payload).catch(() => {})
+  }
 }
 
-/**
- * Emit TABLE_REMOVED to the lobby channel. Called before the table is deleted,
- * using the stored visibility to decide whether to broadcast.
- * No-ops when wss is not configured or the table was not public.
- */
 function emitLobbyTableRemoved(wss, table) {
-  if (!wss || table.visibility !== 'public') return
-  wss.broadcastLobby('TABLE_REMOVED', { tableId: table.tableId })
+  if (!wss) return
+  const payload = { tableId: table.tableId }
+  if (table.visibility === 'public') {
+    wss.broadcastLobby('TABLE_REMOVED', payload)
+  } else if (table.visibility === 'friends-only') {
+    notifyHostFriends(wss, table, 'TABLE_REMOVED', payload).catch(() => {})
+  }
 }
 
 /**

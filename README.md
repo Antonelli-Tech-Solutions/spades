@@ -498,6 +498,7 @@ Returns the list of players blocked by the authenticated player, ordered by most
 | `POST` | `/api/tables/join-link/:token` | Required | Use a join link to sit at the table. Bypasses join policy. |
 | `POST` | `/api/tables/:tableId/spectator-link` | Required (host) | Generate a shareable spectator link for the table. |
 | `POST` | `/api/tables/spectator-link/:token` | Required | Use a spectator link to join a table as an observer. |
+| `POST` | `/api/tables/:tableId/invite` | Required (host) | Send an in-app invite to a target player. Delivers `INVITE_RECEIVED` to the target's notification channel. |
 | `POST` | `/api/tables/:tableId/transfer-host` | Required (host) | Transfer host privileges to another seated human player. |
 | `POST` | `/api/tables/:tableId/kick` | Required (host) | Kick a player (seated or observer) from the table. During an active game the seat is filled by a bot. |
 | `POST` | `/api/tables/:tableId/assign-seat` | Required (host) | Move a seated player to a different empty seat (waiting tables only). |
@@ -673,6 +674,30 @@ Validates a spectator-link token and adds the authenticated player to the table 
 | `403` | Invalid or expired spectator link, or spectating is disabled |
 | `404` | Table no longer exists |
 | `409` | Observer slots are full |
+
+#### `POST /api/tables/:tableId/invite`
+
+Host-only. Sends an in-app invite to a target player. The invite issues a single-use join-link token (stored under `joinlink:{token}`) that the invited player can use to sit at the table, and delivers an `INVITE_RECEIVED` event to the target's personal notification channel. Invites expire after **10 minutes** (600 seconds). The target is also recorded on the table's invited list so they can sit at an `invite-only` table.
+
+While an invite for a given `(tableId, playerId)` is still active, a second invite to the same player returns `409 DUPLICATE_INVITE`. Once the invite expires (or is consumed), a new invite can be sent.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Body**
+```json
+{ "playerId": "<target-player-uuid>" }
+```
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Invite sent. Body: `{ token, expiresAt }`. `INVITE_RECEIVED` is published to `player:{targetPlayerId}:notify`. |
+| `400` | Missing or invalid `playerId` in body |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the table host |
+| `404` | Table not found, or target player does not exist |
+| `409` | `DUPLICATE_INVITE` — an active invite already exists for this `(tableId, playerId)` pair |
 
 #### `POST /api/tables/:tableId/transfer-host`
 
@@ -1020,6 +1045,7 @@ Server-side code can send a notification to any online player via `wss.notifyPla
 |---|---|---|
 | `FRIEND_REQUEST_RECEIVED` | `{ "fromPlayerId": "<uuid>", "fromUsername": "<string>" }` | A friend request is sent to this player. |
 | `FRIEND_REQUEST_ACCEPTED` | `{ "fromPlayerId": "<uuid>", "fromUsername": "<string>" }` | A player accepts this player's friend request. |
+| `INVITE_RECEIVED` | `{ "tableId": "<uuid>", "tableName": "<string>", "token": "<uuid>", "invitedBy": { "playerId": "<uuid>", "username": "<string>" }, "expiresAt": "<ISO-8601>" }` | A table host sent this player an in-app invite. The `token` is a single-use join link that bypasses the table's join policy; it expires at `expiresAt` (10 minutes after issue). |
 | `KICKED_FROM_TABLE` | `{ "tableId": "<uuid>" }` | The player was kicked from a table by the host. |
 
 ### Heartbeat

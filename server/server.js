@@ -398,6 +398,35 @@ async function enrichObservers(db, observerIds) {
 }
 
 /**
+ * Shape a list of public waiting tables for the lobby browser response.
+ * Batches host username lookups, enriches seats, and guarantees the fields
+ * required by the lobby browser contract: hostUsername, joinPolicy,
+ * visibility, ruleset, spectating, seatsAvailable.
+ *
+ * @param {object} db - pg Pool
+ * @param {Array} tables - raw entries from listTables()
+ */
+async function enrichLobbyTables(db, tables) {
+  const hostIds = [...new Set(tables.map((t) => t.hostPlayerId).filter(Boolean))]
+  const hostUsernames = hostIds.length > 0 ? await getPlayerUsernames(db, hostIds) : {}
+  return Promise.all(
+    tables.map(async (t) => ({
+      tableId: t.tableId,
+      name: t.name,
+      hostPlayerId: t.hostPlayerId,
+      hostUsername: hostUsernames[t.hostPlayerId] ?? null,
+      seats: await enrichSeats(db, t.seats),
+      seatsAvailable: t.seatsAvailable,
+      observerCount: t.observerCount,
+      joinPolicy: t.joinPolicy ?? 'open',
+      visibility: t.visibility ?? 'public',
+      ruleset: t.ruleset ?? 'Standard',
+      spectating: t.spectating,
+    })),
+  )
+}
+
+/**
  * Register all API route handlers on the given Express app.
  *
  * @param {import('express').Application} app
@@ -851,16 +880,14 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   // Table & Game Routes (all require authentication)
   // ──────────────────────────────────────────────────────────────────────────
 
-  // GET /api/tables — list open (waiting) tables
+  // GET /api/tables — list open (waiting) public tables
   app.get('/api/tables', async (req, res) => {
     try {
       const redisClient = await getRedis()
       await validateAuthHeaders(redisClient, req)
       const tables = await listTables(redisClient)
       const db = getDb()
-      const enrichedTables = await Promise.all(
-        tables.map(async (t) => ({ ...t, seats: await enrichSeats(db, t.seats) })),
-      )
+      const enrichedTables = await enrichLobbyTables(db, tables)
       sendJSON(res, 200, { tables: enrichedTables })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
@@ -880,9 +907,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const search = typeof req.query.search === 'string' ? req.query.search : ''
       const tables = await listTables(redisClient, { hasSeats, search })
       const db = getDb()
-      const enrichedTables = await Promise.all(
-        tables.map(async (t) => ({ ...t, seats: await enrichSeats(db, t.seats) })),
-      )
+      const enrichedTables = await enrichLobbyTables(db, tables)
       sendJSON(res, 200, { tables: enrichedTables })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })

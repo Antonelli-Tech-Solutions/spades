@@ -1229,6 +1229,11 @@ export async function enforceJoinPolicyForSit(redis, db, table, playerId, { areF
 /**
  * List public, waiting tables from the lobby index.
  *
+ * The `lobby:tables` index only ever stores tables whose visibility is
+ * 'public' — friends-only and private tables are deliberately kept out of
+ * that index when they are created or when visibility changes. We still
+ * defensively skip any non-public table here in case the index ever drifts.
+ *
  * Optional filters:
  *   - hasSeats: when true, only include tables with at least one open (null) seat.
  *   - search:   case-insensitive substring match against table.name. When a
@@ -1262,6 +1267,9 @@ export async function listTables(redis, options = {}) {
       seatsAvailable,
       observerCount: (table.observers || []).length,
       spectating: table.spectating,
+      visibility: table.visibility ?? 'public',
+      joinPolicy: table.joinPolicy ?? 'open',
+      ruleset: table.ruleset ?? 'Standard',
     })
   }
   return result

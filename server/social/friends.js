@@ -150,8 +150,19 @@ export async function declineFriendRequest(db, playerId, requesterId) {
 
 /**
  * Get the full friends list for a player (accepted friendships).
+ *
+ * When `redis` is supplied, each friend is enriched with:
+ *   - `presenceStatus`: 'online' | 'in-game' | 'offline'
+ *   - `tableInfo`: null when the friend is not in-game; otherwise an object
+ *     `{ tableName }` where `tableName` is disclosed only when the requester
+ *     is permitted to see the table name (public table, or friends-only table
+ *     whose host is a friend of `requestingPlayerId`).
+ *
+ * @param {object} db - pg Pool
+ * @param {string} playerId - the player whose friends list we're fetching
+ * @param {{ redis?: import('redis').RedisClientType, requestingPlayerId?: string }} [options]
  */
-export async function getFriends(db, playerId) {
+export async function getFriends(db, playerId, { redis, requestingPlayerId } = {}) {
   const result = await db.query(
     `SELECT
        CASE WHEN f.requester_id = $1 THEN f.addressee_id ELSE f.requester_id END AS friend_id,
@@ -164,11 +175,87 @@ export async function getFriends(db, playerId) {
      ORDER BY p.username`,
     [playerId],
   )
-  return result.rows.map((row) => ({
+  const friends = result.rows.map((row) => ({
     playerId: row.friend_id,
     username: row.username,
     since: row.created_at,
   }))
+
+  if (!redis || friends.length === 0) return friends
+
+  const requester = requestingPlayerId || playerId
+
+  const presenceRaws = await Promise.all(
+    friends.map((f) => redis.get(`presence:${f.playerId}`).catch(() => null)),
+  )
+  const presences = presenceRaws.map((raw) => {
+    if (!raw) return null
+    try { return JSON.parse(raw) } catch { return null }
+  })
+
+  const tableIds = new Set()
+  for (const p of presences) {
+    if (p && p.status === 'playing' && p.tableId) tableIds.add(p.tableId)
+  }
+
+  const tableMap = new Map()
+  await Promise.all(
+    Array.from(tableIds).map(async (tableId) => {
+      try {
+        const raw = await redis.get(`table:${tableId}`)
+        if (raw) tableMap.set(tableId, JSON.parse(raw))
+      } catch (err) {
+        console.error('Error loading table for friends enrichment:', { tableId, error: err.message })
+      }
+    }),
+  )
+
+  const hostFriendshipCache = new Map()
+  async function isRequesterFriendOfHost(hostId) {
+    if (!hostId) return false
+    if (hostId === requester) return true
+    if (hostFriendshipCache.has(hostId)) return hostFriendshipCache.get(hostId)
+    const ok = await areFriends(db, requester, hostId)
+    hostFriendshipCache.set(hostId, ok)
+    return ok
+  }
+
+  const enriched = []
+  for (let i = 0; i < friends.length; i++) {
+    const friend = friends[i]
+    const presence = presences[i]
+
+    if (!presence) {
+      enriched.push({ ...friend, presenceStatus: 'offline', tableInfo: null })
+      continue
+    }
+
+    if (presence.status === 'online') {
+      enriched.push({ ...friend, presenceStatus: 'online', tableInfo: null })
+      continue
+    }
+
+    if (presence.status === 'playing') {
+      const table = presence.tableId ? tableMap.get(presence.tableId) : null
+      let tableName = null
+      if (table) {
+        if (table.visibility === 'public') {
+          tableName = table.name ?? null
+        } else if (table.visibility === 'friends-only') {
+          // eslint-disable-next-line no-await-in-loop
+          if (await isRequesterFriendOfHost(table.hostPlayerId)) {
+            tableName = table.name ?? null
+          }
+        }
+      }
+      enriched.push({ ...friend, presenceStatus: 'in-game', tableInfo: { tableName } })
+      continue
+    }
+
+    enriched.push({ ...friend, presenceStatus: 'offline', tableInfo: null })
+  }
+
+  return enriched
 }
 
 /**

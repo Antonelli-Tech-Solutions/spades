@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { registerPlayer, verifyEmailToken, resendVerificationEmail } from './auth/registration.js'
 import { forgotPassword, resetPassword } from './auth/passwordReset.js'
 import { sendVerificationEmail as defaultMailer, sendPasswordResetEmail as defaultPasswordResetMailer } from './auth/email.js'
@@ -1193,6 +1194,88 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Terminate game error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/tables/:tableId/invite — host sends an in-app invite to a target player
+  app.post('/api/tables/:tableId/invite', async (req, res) => {
+    const { tableId } = req.params
+    const { playerId: targetPlayerId } = req.body ?? {}
+    if (!targetPlayerId || typeof targetPlayerId !== 'string') {
+      return sendJSON(res, 400, { error: 'Missing or invalid playerId in request body' })
+    }
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+      const table = await getTable(redisClient, tableId)
+      if (!table) return sendJSON(res, 404, { error: 'Table not found' })
+      if (table.hostPlayerId !== session.playerId) {
+        return sendJSON(res, 403, { error: 'Only the host can send invites' })
+      }
+
+      if (!isValidUuid(targetPlayerId)) {
+        return sendJSON(res, 404, { error: 'Target player not found' })
+      }
+      const db = getDb()
+      const playerResult = await db.query(
+        `SELECT id FROM players WHERE id = $1`,
+        [targetPlayerId],
+      )
+      if (playerResult.rows.length === 0) {
+        return sendJSON(res, 404, { error: 'Target player not found' })
+      }
+
+      const INVITE_TTL_SECONDS = 600
+      const inviteKey = `invite:${tableId}:${targetPlayerId}`
+      const existing = await redisClient.get(inviteKey)
+      if (existing) {
+        return sendJSON(res, 409, { error: 'DUPLICATE_INVITE', code: 'DUPLICATE_INVITE' })
+      }
+
+      const token = randomUUID()
+      const joinLinkKey = `joinlink:${token}`
+      const createdAt = new Date().toISOString()
+      const expiresAt = new Date(Date.now() + INVITE_TTL_SECONDS * 1000).toISOString()
+
+      await redisClient.set(
+        joinLinkKey,
+        JSON.stringify({ tableId, createdAt }),
+        { EX: INVITE_TTL_SECONDS },
+      )
+
+      const inviteData = {
+        tableId,
+        tableName: table.name,
+        token,
+        invitedBy: session.playerId,
+        createdAt,
+      }
+      await redisClient.set(inviteKey, JSON.stringify(inviteData), { EX: INVITE_TTL_SECONDS })
+
+      await markPlayerInvited(redisClient, tableId, targetPlayerId)
+
+      const eventPayload = {
+        tableId,
+        tableName: table.name,
+        token,
+        invitedBy: { playerId: session.playerId, username: session.username },
+        expiresAt,
+      }
+      try {
+        await redisClient.publish(
+          `player:${targetPlayerId}:notify`,
+          JSON.stringify({ type: 'INVITE_RECEIVED', payload: eventPayload }),
+        )
+      } catch (pubErr) {
+        console.error('Failed to publish invite notification:', { error: pubErr.message })
+      }
+
+      console.log('Invite sent:', { tableId, targetPlayerId, invitedBy: session.playerId })
+      sendJSON(res, 200, { token, expiresAt })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Invite player error:', { tableId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })

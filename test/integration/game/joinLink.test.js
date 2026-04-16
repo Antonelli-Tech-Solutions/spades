@@ -175,7 +175,7 @@ describe('Join Link', { skip }, () => {
     assert.equal(body.seat, 'east')
   })
 
-  it('expired or invalid token returns 403', { timeout: 10000 }, async () => {
+  it('expired or unknown token returns 410 Gone', { timeout: 10000 }, async () => {
     const guest = players[1]
     const fakeToken = '00000000-0000-0000-0000-000000000000'
 
@@ -188,9 +188,10 @@ describe('Join Link', { skip }, () => {
       },
       body: JSON.stringify({ seat: 'east' }),
     })
-    assert.equal(sitRes.status, 403)
+    assert.equal(sitRes.status, 410)
     const body = await sitRes.json()
     assert.ok(body.error)
+    assert.equal(body.code, 'JOIN_LINK_GONE')
   })
 
   it('join link for deleted table returns 404', { timeout: 10000 }, async () => {

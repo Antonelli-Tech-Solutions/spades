@@ -1228,21 +1228,11 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
 
       const INVITE_TTL_SECONDS = 600
       const inviteKey = `invite:${tableId}:${targetPlayerId}`
-      const existing = await redisClient.get(inviteKey)
-      if (existing) {
-        return sendJSON(res, 409, { error: 'DUPLICATE_INVITE', code: 'DUPLICATE_INVITE' })
-      }
 
       const token = randomUUID()
       const joinLinkKey = `joinlink:${token}`
       const createdAt = new Date().toISOString()
       const expiresAt = new Date(Date.now() + INVITE_TTL_SECONDS * 1000).toISOString()
-
-      await redisClient.set(
-        joinLinkKey,
-        JSON.stringify({ tableId, createdAt }),
-        { EX: INVITE_TTL_SECONDS },
-      )
 
       const inviteData = {
         tableId,
@@ -1251,7 +1241,19 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         invitedBy: session.playerId,
         createdAt,
       }
-      await redisClient.set(inviteKey, JSON.stringify(inviteData), { EX: INVITE_TTL_SECONDS })
+      const ok = await redisClient.set(inviteKey, JSON.stringify(inviteData), {
+        NX: true,
+        EX: INVITE_TTL_SECONDS,
+      })
+      if (!ok) {
+        return sendJSON(res, 409, { error: 'DUPLICATE_INVITE', code: 'DUPLICATE_INVITE' })
+      }
+
+      await redisClient.set(
+        joinLinkKey,
+        JSON.stringify({ tableId, createdAt }),
+        { EX: INVITE_TTL_SECONDS },
+      )
 
       await markPlayerInvited(redisClient, tableId, targetPlayerId)
 

@@ -565,6 +565,30 @@ export async function transferHost({ tableId, targetPlayerId, sessionId, playerI
   return body
 }
 
+/**
+ * Get the authenticated player's friends list, enriched with presence status.
+ * Each friend includes: playerId, username, since, presenceStatus
+ * ('online' | 'in-game' | 'offline'), and tableInfo ({ tableName } | null).
+ * @param {{ sessionId: string, playerId: string }} auth
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ friends: Array<object>, pending: Array<object> }>}
+ */
+export async function getFriends({ sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/friends', {
+    headers: {
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to get friends.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
 export async function loginUser({ email, password }, fetchFn = globalThis.fetch) {
   const res = await fetchFn('/api/auth/login', {
     method: 'POST',

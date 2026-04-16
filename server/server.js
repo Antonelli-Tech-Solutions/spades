@@ -682,7 +682,10 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const redisClient = await getRedis()
       const session = await validateAuthHeaders(redisClient, req)
       const db = getDb()
-      const friends = await getFriends(db, session.playerId)
+      const friends = await getFriends(db, session.playerId, {
+        redis: redisClient,
+        requestingPlayerId: session.playerId,
+      })
       const pending = await getPendingRequests(db, session.playerId)
       sendJSON(res, 200, { friends, pending })
     } catch (err) {

@@ -1,5 +1,5 @@
 import { navigate } from '../router.js'
-import { logoutUser, listTables } from '../api.js'
+import { logoutUser, listLobbyTables } from '../api.js'
 import { redirectIfSeated } from '../redirectIfSeated.js'
 import { createLobbySocket, buildWsUrl } from '../gameSocket.js'
 import { renderFriendsPanel } from '../friendsPanel.js'
@@ -50,6 +50,19 @@ export async function renderLobbyScreen(container) {
       <p class="auth-message">Welcome back, <strong>${escapeHtml(username)}</strong>!</p>
       <div class="lobby-tables">
         <h2 class="lobby-tables-title">Open Tables</h2>
+        <div class="lobby-filters">
+          <input
+            type="text"
+            id="lobby-search"
+            class="lobby-search-input"
+            placeholder="Search tables by name\u2026"
+            autocomplete="off"
+          />
+          <label class="lobby-has-seats">
+            <input type="checkbox" id="lobby-has-seats" />
+            Open seats only
+          </label>
+        </div>
         <div id="table-list" class="table-list table-list-scroll">
           <p class="table-list-empty">Loading tables\u2026</p>
         </div>
@@ -82,11 +95,28 @@ export async function renderLobbyScreen(container) {
 
   // Table state: tableId -> table data
   let tables = {}
+  // Filter state — applied client-side for live WS updates, sent to server on (re)sync
+  const filters = { hasSeats: false, search: '' }
+
+  function tableMatchesFilters(table) {
+    if (filters.hasSeats) {
+      const seatsAvailable = typeof table.seatsAvailable === 'number'
+        ? table.seatsAvailable
+        : Object.values(table.seats || {}).filter((v) => v === null).length
+      if (seatsAvailable === 0) return false
+    }
+    const term = filters.search.trim().toLowerCase()
+    if (term) {
+      if (typeof table.name !== 'string') return false
+      if (!table.name.toLowerCase().includes(term)) return false
+    }
+    return true
+  }
 
   function renderTableList() {
     const listEl = container.querySelector('#table-list')
     if (!listEl) return
-    const tableArr = Object.values(tables)
+    const tableArr = Object.values(tables).filter(tableMatchesFilters)
     if (tableArr.length === 0) {
       listEl.innerHTML = '<p class="table-list-empty">No open tables. Create one to get started!</p>'
       return
@@ -100,13 +130,22 @@ export async function renderLobbyScreen(container) {
     })
   }
 
-  // Fetch initial table list
-  try {
-    const { tables: initialTables } = await listTables({ sessionId, playerId })
+  async function loadTables() {
+    const { tables: fresh } = await listLobbyTables({
+      sessionId,
+      playerId,
+      hasSeats: filters.hasSeats,
+      search: filters.search,
+    })
     tables = {}
-    for (const t of initialTables) {
+    for (const t of fresh) {
       tables[t.tableId] = t
     }
+  }
+
+  // Fetch initial table list
+  try {
+    await loadTables()
   } catch (err) {
     if (err.status === 401) { navigate('#/login'); return }
     console.log('Failed to load tables:', { error: err.message })
@@ -119,15 +158,33 @@ export async function renderLobbyScreen(container) {
   async function syncTableList(label) {
     console.log(`Lobby WebSocket ${label}`)
     try {
-      const { tables: freshTables } = await listTables({ sessionId, playerId })
-      tables = {}
-      for (const t of freshTables) {
-        tables[t.tableId] = t
-      }
+      await loadTables()
       renderTableList()
     } catch (err) {
       console.log(`Failed to sync tables on WebSocket ${label}:`, { error: err.message })
     }
+  }
+
+  // Wire filter controls
+  const searchEl = container.querySelector('#lobby-search')
+  const hasSeatsEl = container.querySelector('#lobby-has-seats')
+  let searchDebounce = null
+  if (searchEl) {
+    searchEl.addEventListener('input', () => {
+      filters.search = searchEl.value
+      if (searchDebounce) clearTimeout(searchDebounce)
+      searchDebounce = setTimeout(async () => {
+        try { await loadTables() } catch (err) { console.log('Filter sync failed:', { error: err.message }) }
+        renderTableList()
+      }, 200)
+    })
+  }
+  if (hasSeatsEl) {
+    hasSeatsEl.addEventListener('change', async () => {
+      filters.hasSeats = hasSeatsEl.checked
+      try { await loadTables() } catch (err) { console.log('Filter sync failed:', { error: err.message }) }
+      renderTableList()
+    })
   }
 
   // Subscribe to the lobby WebSocket channel for real-time updates

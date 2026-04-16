@@ -123,7 +123,7 @@
 - [ ] `P0` Implement full table creation config: visibility (Public / Friends-Only / Private), join policy (filtered by visibility), spectating toggle
 - [ ] `P0` Enforce join policy constraint: join policy cannot be less restrictive than visibility; hide join policy control for Private tables
 - [ ] `P0` Build public lobby browser showing table name, host, seat count, ruleset, and join policy
-- [ ] `P0` Add lobby filtering by seats available and table name search
+- [x] `P0` Add lobby filtering by seats available and table name search (issue #599): `GET /api/lobby/tables` accepts optional `hasSeats=true` and `search=<string>` query params; both filters compose; web lobby screen has wired filter controls
 - [ ] `P0` Implement arrive-then-sit flow: arriving at a table puts player in observer state; sitting is a separate action governed by join policy
 - [ ] `P0` Implement host controls: seat assignment, kick player, transfer host
 - [ ] `P0` Build shareable join link: bypasses both visibility and join policy; grants seating rights

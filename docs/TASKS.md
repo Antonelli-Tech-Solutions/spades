@@ -114,31 +114,31 @@
 
 > Goal: the complete table discovery and access model from the PRD is in place — public/friends-only/private visibility, join policies, shareable links, spectating, and the arrive-then-sit flow. The friends list, presence, invites, and block system are also delivered in this slice, since much of the lobby access control model depends on friend relationships.
 
-- [ ] `P0` Subscribe each connected client to their personal notification channel `player:{playerId}:notify` on WebSocket connect; this channel delivers Friends-Only table events and social notifications (friend requests, in-app invites)
+- [x] `P0` Subscribe each connected client to their personal notification channel `player:{playerId}:notify` on WebSocket connect; this channel delivers Friends-Only table events and social notifications (friend requests, in-app invites)
 - [x] `P0` Implement visibility-aware lobby event routing: Public tables → `lobby` channel; Friends-Only tables → `player:{friendId}:notify` per friend of host; Private tables → no broadcast (see PRD Section 6.4.4)
-- [ ] `P0` Implement visibility transition events: when a host changes table visibility, send `TABLE_REMOVED` on the old audience's channel and `TABLE_CREATED` on the new audience's channel (all six transition combinations in PRD Section 6.4.4)
-- [ ] `P0` Implement friend-list side effects for Friends-Only tables: on host-removes-friend emit `TABLE_REMOVED` to that player's notify channel; on host-accepts-friend-request emit `TABLE_CREATED` (current state) to new friend's notify channel
+- [x] `P0` Implement visibility transition events: when a host changes table visibility, send `TABLE_REMOVED` on the old audience's channel and `TABLE_CREATED` on the new audience's channel (all six transition combinations in PRD Section 6.4.4)
+- [x] `P0` Implement friend-list side effects for Friends-Only tables: on host-removes-friend emit `TABLE_REMOVED` to that player's notify channel; on host-accepts-friend-request emit `TABLE_CREATED` (current state) to new friend's notify channel
 - [x] `P0` Add `visibility` field to `TABLE_CREATED` and `TABLE_UPDATED` payloads
 - [x] `P1` Integration tests: Friends-Only table events reach only host's friends; visibility transition correctly removes from old audience and adds to new; friend-list change side effects fire correctly
-- [ ] `P0` Implement full table creation config: visibility (Public / Friends-Only / Private), join policy (filtered by visibility), spectating toggle
-- [ ] `P0` Enforce join policy constraint: join policy cannot be less restrictive than visibility; hide join policy control for Private tables
-- [ ] `P0` Build public lobby browser showing table name, host, seat count, ruleset, and join policy
+- [x] `P0` Implement full table creation config: visibility (Public / Friends-Only / Private), join policy (filtered by visibility), spectating toggle
+- [x] `P0` Enforce join policy constraint: join policy cannot be less restrictive than visibility; hide join policy control for Private tables
+- [x] `P0` Build public lobby browser showing table name, host, seat count, ruleset, and join policy
 - [x] `P0` Add lobby filtering by seats available and table name search (issue #599): `GET /api/lobby/tables` accepts optional `hasSeats=true` and `search=<string>` query params; both filters compose; web lobby screen has wired filter controls
-- [ ] `P0` Implement arrive-then-sit flow: arriving at a table puts player in observer state; sitting is a separate action governed by join policy
-- [ ] `P0` Implement host controls: seat assignment, kick player, transfer host
-- [ ] `P0` Build shareable join link: bypasses both visibility and join policy; grants seating rights
-- [ ] `P0` Build shareable spectator link: bypasses visibility only; grants observe access but not seating rights
-- [ ] `P0` Implement observe-only spectator state: spectators can see the game but cannot interact or influence play
+- [x] `P0` Implement arrive-then-sit flow: arriving at a table puts player in observer state; sitting is a separate action governed by join policy
+- [x] `P0` Implement host controls: seat assignment, kick player, transfer host
+- [x] `P0` Build shareable join link: bypasses both visibility and join policy; grants seating rights
+- [x] `P0` Build shareable spectator link: bypasses visibility only; grants observe access but not seating rights
+- [x] `P0` Implement observe-only spectator state: spectators can see the game but cannot interact or influence play
 - [x] `P0` Allow any player who can see a table to spectate, subject to the host's spectating setting
 - [x] `P1` Display spectators in a separate observer rail, distinct from seated players
 
 ### Social
 
 - [x] `P1` Build friends list: send, accept, decline requests by username search
-- [ ] `P1` Show online / offline / in-game status; display table name if player has visibility permission, "Playing at a private table" if not, "In lobby" if between games
+- [x] `P1` Show online / offline / in-game status; display table name if player has visibility permission, "Playing at a private table" if not, "In lobby" if between games
 - [x] `P1` Allow going to a friend's table from the friends list, subject to visibility and join policy
-- [ ] `P1` Implement direct in-app invite via friends list and username search: bypasses visibility and join policy
-- [ ] `P1` Deliver in-app invite notifications with one-click join; notify host on decline
+- [x] `P1` Implement direct in-app invite via friends list and username search: bypasses visibility and join policy
+- [x] `P1` Deliver in-app invite notifications with one-click join; notify host on decline
 - [x] `P1` Implement block: prevent friend requests and game invitations from blocked players
 - [ ] `P1` Deliver friend request notifications in-app and via push (if enabled)
 

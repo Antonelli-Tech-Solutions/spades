@@ -7,6 +7,7 @@
  */
 
 import { getFriends } from './api.js'
+import { navigate } from './router.js'
 
 const STATUS_ORDER = { online: 0, 'in-game': 1, offline: 2 }
 
@@ -59,7 +60,8 @@ export function friendsPanelHtml(friends) {
 
 function friendRowHtml(friend) {
   const status = friend.presenceStatus || 'offline'
-  const statusClass = `friend-dot friend-dot--${status === 'in-game' ? 'in-game' : status}`
+  const safeStatus = (status === 'online' || status === 'in-game' || status === 'offline') ? status : 'offline'
+  const statusClass = `friend-dot friend-dot--${safeStatus}`
   return `
     <div class="friend-row" data-player-id="${escapeHtml(friend.playerId)}">
       <span class="${statusClass}" aria-label="${escapeHtml(status)}"></span>
@@ -86,6 +88,11 @@ export function renderFriendsPanel({ mountEl, sessionId, playerId, intervalMs = 
   let stopped = false
   let timer = null
 
+  function stop() {
+    stopped = true
+    if (timer) clearTimeout(timer)
+  }
+
   async function refresh() {
     if (stopped) return
     try {
@@ -95,6 +102,11 @@ export function renderFriendsPanel({ mountEl, sessionId, playerId, intervalMs = 
     } catch (err) {
       console.log('Failed to load friends:', { error: err.message })
       if (stopped) return
+      if (err.status === 401) {
+        stop()
+        navigate('#/login')
+        return
+      }
       if (!mountEl.querySelector('.friends-panel')) {
         mountEl.innerHTML = `
           <div class="friends-panel">
@@ -116,12 +128,7 @@ export function renderFriendsPanel({ mountEl, sessionId, playerId, intervalMs = 
 
   refresh().then(scheduleNext)
 
-  return {
-    stop() {
-      stopped = true
-      if (timer) clearTimeout(timer)
-    },
-  }
+  return { stop }
 }
 
 function escapeHtml(str) {

@@ -1032,7 +1032,7 @@ Current screens:
 - **Create Account** (`#/register`) — registration with email, username, and password; shows a verification prompt on success with a "Resend verification email" button
 - **Forgot Password** (`#/forgot-password`) — email input form; shows a "check your email" confirmation on submit (always, to prevent enumeration)
 - **Reset Password** (`#/reset-password?token=<uuid>`) — new password form; shows success screen on completion or an error screen for invalid/expired links
-- **Lobby** (`#/lobby`) — main menu after login; shows options to create or join a table; redirects back to the game screen if the player is already seated
+- **Lobby** (`#/lobby`) — main menu after login; shows options to create or join a table and a friends panel with presence badges (online / in-game / offline) that polls `GET /api/friends` every 30 seconds; redirects back to the game screen if the player is already seated
 - **Create Table** (`#/create`) — form to create a new table with an optional name, visibility, join policy, and spectator toggle; redirects to the join screen for the new table on success
 - **Join Table** (`#/join?tableId=<id>`) — browsable list of open tables; if `?tableId=` is provided, shows the seat picker for that specific table directly
 - **Game** (`#/table?tableId=<id>`) — in-game screen; handles bidding, Blind Nil reveal/exchange, card play, end-of-hand summaries, and an observer rail showing current spectators
@@ -1052,6 +1052,7 @@ client/
       api.js          — Fetch wrappers for all API endpoints
       buildIndicator.js — Build commit indicator UI module
       redirectIfSeated.js — Redirects seated players back to their table
+      friendsPanel.js — Friends list panel with presence badges (mounted on the lobby screen)
       seatUtils.js    — Seat orientation helpers
       hand.js         — Card hand rendering helpers
       trickHold.js    — Trick animation / hold logic

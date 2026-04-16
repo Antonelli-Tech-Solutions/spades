@@ -1066,6 +1066,7 @@ server/
   server.js       — All API route handlers
   db.js           — Shared PostgreSQL pool
   redis.js        — Shared Redis client
+  presence.js     — Redis presence state machine (online / playing / disconnect cleanup)
   auth/
     registration.js  — Registration and email-verification logic
     login.js         — Login and credential validation

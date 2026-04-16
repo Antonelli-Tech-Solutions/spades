@@ -143,12 +143,18 @@ export async function renderLobbyScreen(container) {
     }
   }
 
+  // Redirect to login on 401, otherwise log. Returns true if redirected.
+  function handleLoadError(err, label) {
+    if (err.status === 401) { navigate('#/login'); return true }
+    console.log(`${label}:`, { error: err.message })
+    return false
+  }
+
   // Fetch initial table list
   try {
     await loadTables()
   } catch (err) {
-    if (err.status === 401) { navigate('#/login'); return }
-    console.log('Failed to load tables:', { error: err.message })
+    if (handleLoadError(err, 'Failed to load tables')) return
   }
   renderTableList()
 
@@ -174,7 +180,9 @@ export async function renderLobbyScreen(container) {
       filters.search = searchEl.value
       if (searchDebounce) clearTimeout(searchDebounce)
       searchDebounce = setTimeout(async () => {
-        try { await loadTables() } catch (err) { console.log('Filter sync failed:', { error: err.message }) }
+        try { await loadTables() } catch (err) {
+          if (handleLoadError(err, 'Filter sync failed')) return
+        }
         renderTableList()
       }, 200)
     })
@@ -182,7 +190,9 @@ export async function renderLobbyScreen(container) {
   if (hasSeatsEl) {
     hasSeatsEl.addEventListener('change', async () => {
       filters.hasSeats = hasSeatsEl.checked
-      try { await loadTables() } catch (err) { console.log('Filter sync failed:', { error: err.message }) }
+      try { await loadTables() } catch (err) {
+        if (handleLoadError(err, 'Filter sync failed')) return
+      }
       renderTableList()
     })
   }

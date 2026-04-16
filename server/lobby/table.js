@@ -612,6 +612,7 @@ export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlaye
     const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
     if (!remainingHuman) {
       await terminateTable(redis, tableId)
+      await setPresenceOnline(redis, targetPlayerId)
       console.log('Kick: table terminated — no human players remain:', { tableId, targetPlayerId, seat })
       return { terminated: true, seat, kickedPlayerId: targetPlayerId }
     }
@@ -625,6 +626,7 @@ export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlaye
     if (table.visibility === 'public') {
       await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
     }
+    await setPresenceOnline(redis, targetPlayerId)
     console.log('Kick: player replaced by bot in active game:', { tableId, targetPlayerId, seat, botId })
     return { table: updated, seat, botId, kickedPlayerId: targetPlayerId }
   }
@@ -638,6 +640,7 @@ export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlaye
     if (table.visibility === 'public') {
       await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
     }
+    await setPresenceOnline(redis, targetPlayerId)
     console.log('Kick: player removed from seat:', { tableId, targetPlayerId, seat })
     return { table: updated, seat, kickedPlayerId: targetPlayerId }
   }

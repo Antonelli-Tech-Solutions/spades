@@ -377,13 +377,19 @@ The `playerId` is the requester whose pending request you want to decline. The f
 
 **Headers:** `x-session-id`, `x-player-id`
 
-Returns two arrays: `friends` (accepted friendships) and `pending` (incoming requests awaiting your response).
+Returns two arrays: `friends` (accepted friendships, enriched with presence and table info) and `pending` (incoming requests awaiting your response).
+
+Each entry in `friends` includes:
+- `presenceStatus` — `"online"`, `"in-game"`, or `"offline"` (absent presence key is treated as offline).
+- `tableInfo` — `null` when the friend is not in a game; otherwise `{ tableName }`. The `tableName` is disclosed only when the requester is permitted to see it: public tables always disclose, friends-only tables disclose only when the requester is also a friend of the table host, private tables (and missing/expired tables) return `tableName: null`.
+
+`pending` entries are not enriched with presence or table info.
 
 **Responses**
 
 | Status | Meaning |
 |---|---|
-| `200` | Body: `{ friends: [{ playerId, username, since }], pending: [{ playerId, username, sentAt }] }` |
+| `200` | Body: `{ friends: [{ playerId, username, since, presenceStatus, tableInfo }], pending: [{ playerId, username, sentAt }] }` |
 | `401` | Missing or invalid session |
 
 #### `DELETE /api/friends/:playerId`

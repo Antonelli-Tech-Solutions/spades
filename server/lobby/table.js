@@ -1226,7 +1226,20 @@ export async function enforceJoinPolicyForSit(redis, db, table, playerId, { areF
   throw Object.assign(new Error('Unknown join policy'), { code: 'FORBIDDEN' })
 }
 
-export async function listTables(redis) {
+/**
+ * List public, waiting tables from the lobby index.
+ *
+ * Optional filters:
+ *   - hasSeats: when true, only include tables with at least one open (null) seat.
+ *   - search:   case-insensitive substring match against table.name. When a
+ *               non-empty term is supplied, unnamed tables (name=null) are excluded.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {{ hasSeats?: boolean, search?: string }} [options]
+ */
+export async function listTables(redis, options = {}) {
+  const { hasSeats = false, search = '' } = options
+  const term = typeof search === 'string' ? search.trim().toLowerCase() : ''
   const raw = await redis.hGetAll('lobby:tables')
   const result = []
   for (const json of Object.values(raw)) {
@@ -1234,7 +1247,13 @@ export async function listTables(redis) {
     if (entry.status !== 'waiting') continue
     const table = await getTable(redis, entry.tableId)
     if (!table || table.status !== 'waiting') continue
+    if (table.visibility && table.visibility !== 'public') continue
     const seatsAvailable = Object.values(table.seats).filter((p) => p === null).length
+    if (hasSeats && seatsAvailable === 0) continue
+    if (term) {
+      if (typeof table.name !== 'string') continue
+      if (!table.name.toLowerCase().includes(term)) continue
+    }
     result.push({
       tableId: table.tableId,
       name: table.name,

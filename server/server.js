@@ -869,6 +869,28 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     }
   })
 
+  // GET /api/lobby/tables — public lobby browser with optional filters (#599)
+  //   ?hasSeats=true     → only tables with at least one open seat
+  //   ?search=<string>   → case-insensitive substring match on table name
+  app.get('/api/lobby/tables', async (req, res) => {
+    try {
+      const redisClient = await getRedis()
+      await validateAuthHeaders(redisClient, req)
+      const hasSeats = req.query.hasSeats === 'true'
+      const search = typeof req.query.search === 'string' ? req.query.search : ''
+      const tables = await listTables(redisClient, { hasSeats, search })
+      const db = getDb()
+      const enrichedTables = await Promise.all(
+        tables.map(async (t) => ({ ...t, seats: await enrichSeats(db, t.seats) })),
+      )
+      sendJSON(res, 200, { tables: enrichedTables })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('List lobby tables error:', { error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
   // GET /api/player/table — returns the tableId if the authenticated player is seated at an active table
   app.get('/api/player/table', async (req, res) => {
     try {

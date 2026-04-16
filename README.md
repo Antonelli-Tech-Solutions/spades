@@ -485,6 +485,7 @@ Returns the list of players blocked by the authenticated player, ordered by most
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/tables` | Required | List all open (waiting) tables. |
+| `GET` | `/api/lobby/tables` | Required | Public lobby browser. Optional query params: `hasSeats=true` (only tables with an open seat), `search=<string>` (case-insensitive substring match on table name). Filters compose. |
 | `GET` | `/api/player/table` | Required | Returns the `tableId` the authenticated player is currently seated at, or `null`. |
 | `POST` | `/api/tables` | Required | Create a new table. |
 | `POST` | `/api/tables/:tableId/arrive` | Required | Arrive at a table as an observer. Requires spectating to be enabled (unless player has a join link). |

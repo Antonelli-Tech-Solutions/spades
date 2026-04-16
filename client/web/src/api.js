@@ -144,6 +144,33 @@ export async function listTables({ sessionId, playerId }, fetchFn = globalThis.f
 }
 
 /**
+ * List public lobby tables with optional filters (#599).
+ * @param {{ sessionId: string, playerId: string, hasSeats?: boolean, search?: string }} args
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ tables: Array<{ tableId: string, name: string|null, seats: object, seatsAvailable: number }> }>}
+ */
+export async function listLobbyTables({ sessionId, playerId, hasSeats, search }, fetchFn = globalThis.fetch) {
+  const params = new URLSearchParams()
+  if (hasSeats) params.set('hasSeats', 'true')
+  if (typeof search === 'string' && search.length > 0) params.set('search', search)
+  const qs = params.toString()
+  const url = qs ? `/api/lobby/tables?${qs}` : '/api/lobby/tables'
+  const res = await fetchFn(url, {
+    headers: {
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to list lobby tables.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
  * Sit at a seat at a table. Requires a valid session.
  * @param {{ tableId: string, seat: string, sessionId: string, playerId: string }} data
  * @param {typeof fetch} [fetchFn]

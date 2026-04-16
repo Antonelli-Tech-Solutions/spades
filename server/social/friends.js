@@ -210,14 +210,39 @@ export async function getFriends(db, playerId, { redis, requestingPlayerId } = {
     }),
   )
 
-  const hostFriendshipCache = new Map()
-  async function isRequesterFriendOfHost(hostId) {
+  const hostsToCheck = new Set()
+  for (const p of presences) {
+    if (!p || p.status !== 'playing' || !p.tableId) continue
+    const table = tableMap.get(p.tableId)
+    if (!table || table.visibility !== 'friends-only') continue
+    if (!table.hostPlayerId || table.hostPlayerId === requester) continue
+    hostsToCheck.add(table.hostPlayerId)
+  }
+
+  const hostFriendSet = new Set()
+  if (hostsToCheck.size > 0) {
+    const hostIds = Array.from(hostsToCheck)
+    try {
+      const hostResult = await db.query(
+        `SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END AS host_id
+         FROM friendships
+         WHERE status = 'accepted'
+           AND ((requester_id = $1 AND addressee_id = ANY($2))
+             OR (addressee_id = $1 AND requester_id = ANY($2)))`,
+        [requester, hostIds],
+      )
+      for (const row of hostResult.rows) {
+        if (row.host_id) hostFriendSet.add(row.host_id)
+      }
+    } catch (err) {
+      console.error('Error batch-resolving host friendships:', { requester, error: err.message })
+    }
+  }
+
+  function isRequesterFriendOfHost(hostId) {
     if (!hostId) return false
     if (hostId === requester) return true
-    if (hostFriendshipCache.has(hostId)) return hostFriendshipCache.get(hostId)
-    const ok = await areFriends(db, requester, hostId)
-    hostFriendshipCache.set(hostId, ok)
-    return ok
+    return hostFriendSet.has(hostId)
   }
 
   const enriched = []
@@ -242,8 +267,7 @@ export async function getFriends(db, playerId, { redis, requestingPlayerId } = {
         if (table.visibility === 'public') {
           tableName = table.name ?? null
         } else if (table.visibility === 'friends-only') {
-          // eslint-disable-next-line no-await-in-loop
-          if (await isRequesterFriendOfHost(table.hostPlayerId)) {
+          if (isRequesterFriendOfHost(table.hostPlayerId)) {
             tableName = table.name ?? null
           }
         }

@@ -484,8 +484,8 @@ Returns the list of players blocked by the authenticated player, ordered by most
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/tables` | Required | List all open (waiting) tables. |
-| `GET` | `/api/lobby/tables` | Required | Public lobby browser. Optional query params: `hasSeats=true` (only tables with an open seat), `search=<string>` (case-insensitive substring match on table name). Filters compose. |
+| `GET` | `/api/tables` | Required | List all open (waiting) public tables. |
+| `GET` | `/api/lobby/tables` | Required | Public lobby browser. Only returns tables whose `visibility` is `public`. Optional query params: `hasSeats=true` (only tables with an open seat), `search=<string>` (case-insensitive substring match on table name). Filters compose. |
 | `GET` | `/api/player/table` | Required | Returns the `tableId` the authenticated player is currently seated at, or `null`. |
 | `POST` | `/api/tables` | Required | Create a new table. |
 | `POST` | `/api/tables/:tableId/arrive` | Required | Arrive at a table as an observer. Requires spectating to be enabled (unless player has a join link). |
@@ -512,10 +512,12 @@ Returns the list of players blocked by the authenticated player, ordered by most
 
 | Status | Meaning |
 |---|---|
-| `200` | Body: `{ tables: [{ tableId, name, seats, hostPlayerId, observerCount, spectating }] }` — only waiting (not yet started) tables |
+| `200` | Body: `{ tables: [{ tableId, name, hostPlayerId, hostUsername, seats, seatsAvailable, observerCount, joinPolicy, visibility, ruleset, spectating }] }` — only waiting (not yet started) public tables |
 | `401` | Missing or invalid session |
 
-`seats` is an object keyed by seat name (`north`, `east`, `south`, `west`). Each value is either `null` (empty) or `{ playerId, username, isBot }`. `observerCount` is the number of spectators currently watching the table. `spectating` indicates whether the host has enabled spectating.
+`seats` is an object keyed by seat name (`north`, `east`, `south`, `west`). Each value is either `null` (empty) or `{ playerId, username, isBot }`. `hostUsername` is the host's display name (or `null` if unavailable). `seatsAvailable` is the count of empty seats. `observerCount` is the number of spectators currently watching the table. `joinPolicy`, `visibility`, and `ruleset` mirror the table's configuration (defaults: `"open"`, `"public"`, `"Standard"`). `spectating` indicates whether the host has enabled spectating.
+
+The response from `GET /api/lobby/tables` has the same shape.
 
 #### `GET /api/player/table`
 

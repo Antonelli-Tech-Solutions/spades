@@ -984,7 +984,7 @@ export async function validateJoinLink(redis, token) {
   const key = `joinlink:${token}`
   const raw = await redis.get(key)
   if (!raw) {
-    throw Object.assign(new Error('Invalid or expired join link'), { code: 'FORBIDDEN' })
+    throw Object.assign(new Error('Join link expired or already used'), { code: 'GONE' })
   }
   const { tableId } = JSON.parse(raw)
   const table = await getTable(redis, tableId)

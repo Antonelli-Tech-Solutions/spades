@@ -1266,16 +1266,20 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       const INVITE_TTL_SECONDS = 600
       const inviteKey = `invite:${tableId}:${targetPlayerId}`
 
+      const inviteId = randomUUID()
       const token = randomUUID()
       const joinLinkKey = `joinlink:${token}`
+      const inviteIdKey = `invite:id:${inviteId}`
       const createdAt = new Date().toISOString()
       const expiresAt = new Date(Date.now() + INVITE_TTL_SECONDS * 1000).toISOString()
 
       const inviteData = {
+        inviteId,
         tableId,
         tableName: table.name,
         token,
         invitedBy: session.playerId,
+        invitedPlayerId: targetPlayerId,
         createdAt,
       }
       const ok = await redisClient.set(inviteKey, JSON.stringify(inviteData), {
@@ -1286,6 +1290,8 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         return sendJSON(res, 409, { error: 'DUPLICATE_INVITE', code: 'DUPLICATE_INVITE' })
       }
 
+      await redisClient.set(inviteIdKey, JSON.stringify(inviteData), { EX: INVITE_TTL_SECONDS })
+
       await redisClient.set(
         joinLinkKey,
         JSON.stringify({ tableId, createdAt }),
@@ -1295,6 +1301,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
       await markPlayerInvited(redisClient, tableId, targetPlayerId)
 
       const eventPayload = {
+        inviteId,
         tableId,
         tableName: table.name,
         token,
@@ -1310,11 +1317,66 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         console.error('Failed to publish invite notification:', { error: pubErr.message })
       }
 
-      console.log('Invite sent:', { tableId, targetPlayerId, invitedBy: session.playerId })
-      sendJSON(res, 200, { token, expiresAt })
+      console.log('Invite sent:', { tableId, targetPlayerId, inviteId, invitedBy: session.playerId })
+      sendJSON(res, 200, { inviteId, token, expiresAt })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       console.error('Invite player error:', { tableId, error: err.message })
+      sendJSON(res, 500, { error: 'Internal server error' })
+    }
+  })
+
+  // POST /api/invites/:inviteId/decline — invitee declines a pending invite
+  app.post('/api/invites/:inviteId/decline', async (req, res) => {
+    const { inviteId } = req.params
+    try {
+      const redisClient = await getRedis()
+      const session = await validateAuthHeaders(redisClient, req)
+
+      const inviteIdKey = `invite:id:${inviteId}`
+      const raw = await redisClient.get(inviteIdKey)
+      if (!raw) {
+        return sendJSON(res, 410, { error: 'Invite expired or already used', code: 'INVITE_GONE' })
+      }
+
+      let invite
+      try {
+        invite = JSON.parse(raw)
+      } catch {
+        return sendJSON(res, 410, { error: 'Invite expired or already used', code: 'INVITE_GONE' })
+      }
+
+      const inviteePlayerId = invite.invitedPlayerId
+      if (inviteePlayerId !== session.playerId) {
+        return sendJSON(res, 403, { error: 'Only the invited player can decline this invite' })
+      }
+
+      const { tableId, token, invitedBy: hostPlayerId } = invite
+
+      await redisClient.del(inviteIdKey)
+      await redisClient.del(`invite:${tableId}:${inviteePlayerId}`)
+      if (token) await redisClient.del(`joinlink:${token}`)
+      await redisClient.sRem(`invited:${tableId}`, inviteePlayerId)
+
+      const declinedPayload = {
+        inviteId,
+        tableId,
+        declinedBy: { playerId: session.playerId, username: session.username },
+      }
+      try {
+        await redisClient.publish(
+          `player:${hostPlayerId}:notify`,
+          JSON.stringify({ type: 'INVITE_DECLINED', payload: declinedPayload }),
+        )
+      } catch (pubErr) {
+        console.error('Failed to publish invite decline notification:', { error: pubErr.message })
+      }
+
+      console.log('Invite declined:', { inviteId, tableId, declinedBy: session.playerId })
+      sendJSON(res, 200, { inviteId })
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
+      console.error('Decline invite error:', { inviteId, error: err.message })
       sendJSON(res, 500, { error: 'Internal server error' })
     }
   })
@@ -1752,6 +1814,7 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })
       if (err.code === 'FORBIDDEN') return sendJSON(res, 403, { error: err.message })
+      if (err.code === 'GONE') return sendJSON(res, 410, { error: err.message, code: 'JOIN_LINK_GONE' })
       if (err.code === 'NOT_FOUND') return sendJSON(res, 404, { error: err.message })
       if (err.code === 'GAME_IN_PROGRESS') return sendJSON(res, 409, { error: err.message })
       if (err.code === 'SEAT_TAKEN') return sendJSON(res, 409, { error: err.message })

@@ -499,6 +499,7 @@ Returns the list of players blocked by the authenticated player, ordered by most
 | `POST` | `/api/tables/:tableId/spectator-link` | Required (host) | Generate a shareable spectator link for the table. |
 | `POST` | `/api/tables/spectator-link/:token` | Required | Use a spectator link to join a table as an observer. |
 | `POST` | `/api/tables/:tableId/invite` | Required (host) | Send an in-app invite to a target player. Delivers `INVITE_RECEIVED` to the target's notification channel. |
+| `POST` | `/api/invites/:inviteId/decline` | Required (invitee) | Decline a pending invite. Delivers `INVITE_DECLINED` to the host's notification channel. |
 | `POST` | `/api/tables/:tableId/transfer-host` | Required (host) | Transfer host privileges to another seated human player. |
 | `POST` | `/api/tables/:tableId/kick` | Required (host) | Kick a player (seated or observer) from the table. During an active game the seat is filled by a bot. |
 | `POST` | `/api/tables/:tableId/assign-seat` | Required (host) | Move a seated player to a different empty seat (waiting tables only). |
@@ -677,9 +678,9 @@ Validates a spectator-link token and adds the authenticated player to the table 
 
 #### `POST /api/tables/:tableId/invite`
 
-Host-only. Sends an in-app invite to a target player. The invite issues a single-use join-link token (stored under `joinlink:{token}`) that the invited player can use to sit at the table, and delivers an `INVITE_RECEIVED` event to the target's personal notification channel. Invites expire after **10 minutes** (600 seconds). The target is also recorded on the table's invited list so they can sit at an `invite-only` table.
+Host-only. Sends an in-app invite to a target player. The invite issues a stable `inviteId` (UUID, stored under `invite:id:{inviteId}`) and a single-use join-link token (stored under `joinlink:{token}`) that the invited player can use to sit at the table. Delivers an `INVITE_RECEIVED` event to the target's personal notification channel. Invites expire after **10 minutes** (600 seconds). The target is also recorded on the table's invited list so they can sit at an `invite-only` table.
 
-While an invite for a given `(tableId, playerId)` is still active, a second invite to the same player returns `409 DUPLICATE_INVITE`. Once the invite expires (or is consumed), a new invite can be sent.
+The duplicate-check key `invite:{tableId}:{playerId}` holds the invite record (including the `inviteId`). While an invite for a given `(tableId, playerId)` is still active, a second invite to the same player returns `409 DUPLICATE_INVITE`. Once the invite expires (or is declined/consumed), a new invite can be sent.
 
 **Headers:** `x-session-id`, `x-player-id`
 
@@ -692,12 +693,27 @@ While an invite for a given `(tableId, playerId)` is still active, a second invi
 
 | Status | Meaning |
 |---|---|
-| `200` | Invite sent. Body: `{ token, expiresAt }`. `INVITE_RECEIVED` is published to `player:{targetPlayerId}:notify`. |
+| `200` | Invite sent. Body: `{ inviteId, token, expiresAt }`. `INVITE_RECEIVED` is published to `player:{targetPlayerId}:notify`. |
 | `400` | Missing or invalid `playerId` in body |
 | `401` | Missing or invalid session |
 | `403` | Caller is not the table host |
 | `404` | Table not found, or target player does not exist |
 | `409` | `DUPLICATE_INVITE` — an active invite already exists for this `(tableId, playerId)` pair |
+
+#### `POST /api/invites/:inviteId/decline`
+
+Invitee-only. Declines a pending invite. Looks up the invite record at `invite:id:{inviteId}` and deletes every related Redis key — `invite:id:{inviteId}`, `invite:{tableId}:{playerId}`, `joinlink:{token}`, and removes the invitee from `invited:{tableId}`. Delivers an `INVITE_DECLINED` event to the host's personal notification channel so the host's UI can reflect the decline.
+
+**Headers:** `x-session-id`, `x-player-id`
+
+**Responses**
+
+| Status | Meaning |
+|---|---|
+| `200` | Invite declined. Body: `{ inviteId }`. `INVITE_DECLINED` is published to `player:{hostPlayerId}:notify`. |
+| `401` | Missing or invalid session |
+| `403` | Caller is not the invitee on this invite |
+| `410` | `INVITE_GONE` — invite has expired or was already consumed / declined |
 
 #### `POST /api/tables/:tableId/transfer-host`
 
@@ -858,9 +874,10 @@ Valid seat values: `north`, `east`, `south`, `west`.
 | `200` | Seated. Body: `{ tableId, seat }`. Game starts automatically if all 4 seats are now filled. |
 | `400` | Invalid seat value |
 | `401` | Missing or invalid session |
-| `403` | Invalid or expired join link |
+| `403` | Malformed join link |
 | `404` | Table no longer exists |
 | `409` | Game already in progress, seat is taken, or player is already seated |
+| `410` | `JOIN_LINK_GONE` — join link has expired or was already used |
 
 ### Game
 
@@ -1045,7 +1062,8 @@ Server-side code can send a notification to any online player via `wss.notifyPla
 |---|---|---|
 | `FRIEND_REQUEST_RECEIVED` | `{ "fromPlayerId": "<uuid>", "fromUsername": "<string>" }` | A friend request is sent to this player. |
 | `FRIEND_REQUEST_ACCEPTED` | `{ "fromPlayerId": "<uuid>", "fromUsername": "<string>" }` | A player accepts this player's friend request. |
-| `INVITE_RECEIVED` | `{ "tableId": "<uuid>", "tableName": "<string>", "token": "<uuid>", "invitedBy": { "playerId": "<uuid>", "username": "<string>" }, "expiresAt": "<ISO-8601>" }` | A table host sent this player an in-app invite. The `token` is a single-use join link that bypasses the table's join policy; it expires at `expiresAt` (10 minutes after issue). |
+| `INVITE_RECEIVED` | `{ "inviteId": "<uuid>", "tableId": "<uuid>", "tableName": "<string>", "token": "<uuid>", "invitedBy": { "playerId": "<uuid>", "username": "<string>" }, "expiresAt": "<ISO-8601>" }` | A table host sent this player an in-app invite. The `inviteId` identifies this invite (used by the decline endpoint); the `token` is a single-use join link that bypasses the table's join policy; it expires at `expiresAt` (10 minutes after issue). |
+| `INVITE_DECLINED` | `{ "inviteId": "<uuid>", "tableId": "<uuid>", "declinedBy": { "playerId": "<uuid>", "username": "<string>" } }` | An invitee declined a pending invite this player sent. Delivered to the host's notification channel so the UI can reflect the decline. |
 | `KICKED_FROM_TABLE` | `{ "tableId": "<uuid>" }` | The player was kicked from a table by the host. |
 
 ### Heartbeat

@@ -197,16 +197,16 @@ describe('Presence state machine', { skip }, () => {
         await sitAtTable(redis, table.tableId, playerId, 'south')
 
         // Sanity: player is currently "playing"
-        const before = await readPresence(redis, playerId)
-        assert.equal(before.status, 'playing', 'precondition: player should be "playing" after sit')
-        assert.equal(before.tableId, table.tableId)
+        const beforeState = await readPresence(redis, playerId)
+        assert.equal(beforeState.status, 'playing', 'precondition: player should be "playing" after sit')
+        assert.equal(beforeState.tableId, table.tableId)
 
         await standFromSeat(redis, table.tableId, playerId)
 
-        const after = await readPresence(redis, playerId)
-        assert.ok(after, 'presence key should still exist after standing (player is still online)')
-        assert.equal(after.status, 'online', 'status should be "online" after standing from seat')
-        assert.equal(after.tableId, null, 'tableId should be cleared after standing from seat')
+        const afterState = await readPresence(redis, playerId)
+        assert.ok(afterState, 'presence key should still exist after standing (player is still online)')
+        assert.equal(afterState.status, 'online', 'status should be "online" after standing from seat')
+        assert.equal(afterState.tableId, null, 'tableId should be cleared after standing from seat')
       } finally {
         await redis.del(`table:${table.tableId}`)
         await redis.hDel('lobby:tables', table.tableId)
@@ -239,16 +239,16 @@ describe('Presence state machine', { skip }, () => {
         await sitAtTable(redis, table.tableId, playerId, 'south')
 
         // Sanity: player is currently "playing"
-        const before = await readPresence(redis, playerId)
-        assert.equal(before.status, 'playing', 'precondition: player should be "playing" after sit')
-        assert.equal(before.tableId, table.tableId)
+        const beforeState = await readPresence(redis, playerId)
+        assert.equal(beforeState.status, 'playing', 'precondition: player should be "playing" after sit')
+        assert.equal(beforeState.tableId, table.tableId)
 
         await leaveTable(redis, table.tableId, playerId)
 
-        const after = await readPresence(redis, playerId)
-        assert.ok(after, 'presence key should still exist after leaving (player is still online)')
-        assert.equal(after.status, 'online', 'status should be "online" after leaving the table')
-        assert.equal(after.tableId, null, 'tableId should be cleared after leaving')
+        const afterState = await readPresence(redis, playerId)
+        assert.ok(afterState, 'presence key should still exist after leaving (player is still online)')
+        assert.equal(afterState.status, 'online', 'status should be "online" after leaving the table')
+        assert.equal(afterState.tableId, null, 'tableId should be cleared after leaving')
       } finally {
         await redis.del(`table:${table.tableId}`)
         await redis.del(`game:${table.tableId}`)
@@ -373,14 +373,14 @@ describe('Presence state machine', { skip }, () => {
         const wsA = await wsConnect(httpServer, { 'x-session-id': sessionId })
         await sitAtTable(redis, table.tableId, playerId, 'south')
 
-        const before = await readPresence(redis, playerId)
-        assert.equal(before.status, 'playing', 'precondition: "playing" before second tab opens')
+        const beforeState = await readPresence(redis, playerId)
+        assert.equal(beforeState.status, 'playing', 'precondition: "playing" before second tab opens')
 
         // Second tab — connect handler must not blow away the 'playing' state
         const wsB = await wsConnect(httpServer, { 'x-session-id': sessionId })
-        const after = await readPresence(redis, playerId)
-        assert.equal(after.status, 'playing', 'multi-tab connect must not overwrite "playing" with "online"')
-        assert.equal(after.tableId, table.tableId, 'tableId must not be cleared on multi-tab connect')
+        const afterState = await readPresence(redis, playerId)
+        assert.equal(afterState.status, 'playing', 'multi-tab connect must not overwrite "playing" with "online"')
+        assert.equal(afterState.tableId, table.tableId, 'tableId must not be cleared on multi-tab connect')
 
         wsA.close()
         await waitClose(wsA)

@@ -402,28 +402,65 @@ async function enrichObservers(db, observerIds) {
  * Shape a list of public waiting tables for the lobby browser response.
  * Batches host username lookups, enriches seats, and guarantees the fields
  * required by the lobby browser contract: hostUsername, joinPolicy,
- * visibility, ruleset, spectating, seatsAvailable.
+ * visibility, ruleset, spectating, seatsAvailable, canJoin.
+ *
+ * The `canJoin` field reflects the table's joinPolicy, seat availability, and
+ * — for friends-only tables — whether the requester is a friend of the host.
+ *   joinPolicy 'open'         → true iff seats available
+ *   joinPolicy 'friends-only' → true iff requester is friend of host AND seats available
+ *   joinPolicy 'invite-only'  → always false
+ * When requesterId is absent, only open tables with seats available get canJoin: true.
  *
  * @param {object} db - pg Pool
  * @param {Array} tables - raw entries from listTables()
+ * @param {string | null} [requesterId] - player ID of the viewer, when known
  */
-async function enrichLobbyTables(db, tables) {
+async function enrichLobbyTables(db, tables, requesterId = null) {
   const hostIds = [...new Set(tables.map((t) => t.hostPlayerId).filter(Boolean))]
   const hostUsernames = hostIds.length > 0 ? await getPlayerUsernames(db, hostIds) : {}
+
+  const friendsOnlyHostIds = requesterId
+    ? [...new Set(
+        tables
+          .filter((t) => (t.joinPolicy ?? 'open') === 'friends-only')
+          .map((t) => t.hostPlayerId)
+          .filter((id) => id && id !== requesterId),
+      )]
+    : []
+  const friendshipByHost = {}
+  await Promise.all(
+    friendsOnlyHostIds.map(async (hostId) => {
+      friendshipByHost[hostId] = await areFriends(db, requesterId, hostId)
+    }),
+  )
+
   return Promise.all(
-    tables.map(async (t) => ({
-      tableId: t.tableId,
-      name: t.name,
-      hostPlayerId: t.hostPlayerId,
-      hostUsername: hostUsernames[t.hostPlayerId] ?? null,
-      seats: await enrichSeats(db, t.seats),
-      seatsAvailable: t.seatsAvailable,
-      observerCount: t.observerCount,
-      joinPolicy: t.joinPolicy ?? 'open',
-      visibility: t.visibility ?? 'public',
-      ruleset: t.ruleset ?? 'Standard',
-      spectating: t.spectating,
-    })),
+    tables.map(async (t) => {
+      const joinPolicy = t.joinPolicy ?? 'open'
+      const seatsAvailable = t.seatsAvailable ?? 0
+      let canJoin = false
+      if (joinPolicy === 'open') {
+        canJoin = seatsAvailable > 0
+      } else if (joinPolicy === 'friends-only') {
+        if (requesterId && seatsAvailable > 0) {
+          canJoin = requesterId === t.hostPlayerId || friendshipByHost[t.hostPlayerId] === true
+        }
+      }
+      return {
+        tableId: t.tableId,
+        name: t.name,
+        hostPlayerId: t.hostPlayerId,
+        hostUsername: hostUsernames[t.hostPlayerId] ?? null,
+        seats: await enrichSeats(db, t.seats),
+        seatsAvailable,
+        observerCount: t.observerCount,
+        joinPolicy,
+        visibility: t.visibility ?? 'public',
+        ruleset: t.ruleset ?? 'Standard',
+        spectating: t.spectating,
+        canJoin,
+      }
+    }),
   )
 }
 
@@ -903,12 +940,12 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
   app.get('/api/lobby/tables', async (req, res) => {
     try {
       const redisClient = await getRedis()
-      await validateAuthHeaders(redisClient, req)
+      const session = await validateAuthHeaders(redisClient, req)
       const hasSeats = req.query.hasSeats === 'true'
       const search = typeof req.query.search === 'string' ? req.query.search : ''
       const tables = await listTables(redisClient, { hasSeats, search })
       const db = getDb()
-      const enrichedTables = await enrichLobbyTables(db, tables)
+      const enrichedTables = await enrichLobbyTables(db, tables, session.playerId)
       sendJSON(res, 200, { tables: enrichedTables })
     } catch (err) {
       if (err.code === 'UNAUTHORIZED') return sendJSON(res, 401, { error: err.message })

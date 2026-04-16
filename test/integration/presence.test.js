@@ -18,7 +18,7 @@ import http from 'node:http'
 import WebSocket from 'ws'
 import { createWsServer } from '../../server/ws/index.js'
 import { getRedis, closeRedis } from '../../server/redis.js'
-import { createTable, sitAtTable, leaveTable } from '../../server/lobby/table.js'
+import { createTable, sitAtTable, leaveTable, standFromSeat } from '../../server/lobby/table.js'
 
 const skip = !process.env.REDIS_URL ? 'REDIS_URL must be set' : false
 
@@ -161,6 +161,49 @@ describe('Presence state machine', { skip }, () => {
 
         const ttl = await redis.ttl(`presence:${playerId}`)
         assert.ok(ttl > 0, `presence key should have a TTL after sit, got ${ttl}`)
+      } finally {
+        await redis.del(`table:${table.tableId}`)
+        await redis.hDel('lobby:tables', table.tableId)
+        await redis.hDel('lobby:all', table.tableId)
+      }
+    })
+  })
+
+  // ── standFromSeat → online ──────────────────────────────────────────────────
+
+  describe('on standing from a seat', () => {
+    const playerId = 'presence-player-stand'
+    const partnerId = 'presence-player-stand-partner'
+
+    beforeEach(async () => {
+      await redis.del(`presence:${playerId}`)
+      await redis.del(`presence:${partnerId}`)
+    })
+
+    afterEach(async () => {
+      await redis.del(`presence:${playerId}`)
+      await redis.del(`presence:${partnerId}`)
+    })
+
+    it('updates presence back to { status: "online", tableId: null } when the player stands from a seat', { timeout: 15000 }, async () => {
+      // Need a second seated human so the player who stands is not the host
+      // (host cannot stand if no other human remains seated).
+      const table = await createTable(redis, { hostPlayerId: partnerId })
+      try {
+        await sitAtTable(redis, table.tableId, partnerId, 'north')
+        await sitAtTable(redis, table.tableId, playerId, 'south')
+
+        // Sanity: player is currently "playing"
+        const before = await readPresence(redis, playerId)
+        assert.equal(before.status, 'playing', 'precondition: player should be "playing" after sit')
+        assert.equal(before.tableId, table.tableId)
+
+        await standFromSeat(redis, table.tableId, playerId)
+
+        const after = await readPresence(redis, playerId)
+        assert.ok(after, 'presence key should still exist after standing (player is still online)')
+        assert.equal(after.status, 'online', 'status should be "online" after standing from seat')
+        assert.equal(after.tableId, null, 'tableId should be cleared after standing from seat')
       } finally {
         await redis.del(`table:${table.tableId}`)
         await redis.hDel('lobby:tables', table.tableId)

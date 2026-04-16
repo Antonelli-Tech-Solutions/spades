@@ -286,6 +286,7 @@ export async function standFromSeat(redis, tableId, playerId) {
 
   const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId, observers }
   await saveTable(redis, updated)
+  await setPresenceOnline(redis, playerId)
   console.log('Player stood from seat:', { tableId, playerId, seat })
   return { table: updated, seat, hostChanged }
 }

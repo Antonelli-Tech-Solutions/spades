@@ -1,5 +1,6 @@
 import { WebSocketServer } from 'ws'
 import { getSession } from '../auth/session.js'
+import { setPresenceOnline, clearPresence } from '../presence.js'
 
 /**
  * Create and attach a WebSocket server to an existing HTTP server.
@@ -124,6 +125,12 @@ export function createWsServer(httpServer, opts = {}) {
       playerConnections.set(playerId, new Set())
     }
     playerConnections.get(playerId).add(ws)
+
+    // Mark the player as online in the presence state machine.
+    // Await so readers observing presence immediately after connect see the write.
+    if (redis) {
+      await setPresenceOnline(redis, playerId)
+    }
 
     // Subscribe to personal notification channel for social events
     // (friend requests, in-app invites, friends-only table notifications).
@@ -389,10 +396,16 @@ export function createWsServer(httpServer, opts = {}) {
       }
 
       playerConnections.get(playerId)?.delete(ws)
-      if (playerConnections.get(playerId)?.size === 0) {
+      const isLastConnection = (playerConnections.get(playerId)?.size ?? 0) === 0
+      if (isLastConnection) {
         playerConnections.delete(playerId)
       }
       console.log('WebSocket disconnected:', { playerId })
+
+      // Clear presence when the player has no more active connections.
+      if (redis && isLastConnection) {
+        await clearPresence(redis, playerId)
+      }
 
       // ── Disconnect detection: emit PLAYER_DISCONNECTED for in-progress games ──
       // Only emit if this was the player's last connection in the table room

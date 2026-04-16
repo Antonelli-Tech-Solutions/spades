@@ -241,16 +241,33 @@ function normalizeSeat(v) {
   return { playerId: v, username: null, isBot }
 }
 
-function tableRowHtml(table) {
+const JOIN_POLICY_LABELS = {
+  open: 'Open',
+  friends: 'Friends-Only',
+  'friends-only': 'Friends-Only',
+  invite: 'Invite-Only',
+  'invite-only': 'Invite-Only',
+}
+
+/**
+ * Render a single lobby table row as HTML. Pure function — no DOM deps.
+ * Shows host name, seat count (X/4), ruleset label, and a join-policy badge.
+ * The Join button is rendered only when `canJoin` is truthy; a missing or
+ * falsy `canJoin` hides the button so the client never shows an action that
+ * the server would reject.
+ *
+ * @param {object} table
+ * @returns {string} HTML string for a single table row
+ */
+export function tableRowHtml(table) {
   const name = escapeHtml(table.name) || '<em>Unnamed Table</em>'
   const seats = table.seats || {}
   const normalized = Object.values(seats).map(normalizeSeat)
   const occupied = normalized.filter((v) => v !== null).length
   const botCount = normalized.filter((v) => v?.isBot).length
-  const available = 4 - occupied
-  const disabled = available === 0 ? ' disabled' : ''
 
-  let seatsLabel = `${occupied}/4 seats filled`
+  const seatCount = `${occupied}/4`
+  let seatsLabel = `${seatCount} seats filled`
   if (botCount > 0) {
     seatsLabel += ` (${botCount} bot${botCount !== 1 ? 's' : ''})`
   }
@@ -268,15 +285,35 @@ function tableRowHtml(table) {
     ? `<span class="table-row-players">${occupantNames.join(', ')}</span>`
     : ''
 
+  const hostLabel = table.hostUsername
+    ? `<span class="table-row-host">Host: ${escapeHtml(table.hostUsername)}</span>`
+    : ''
+
+  const rulesetLabel = table.rulesetLabel
+    ? `<span class="table-row-ruleset">${escapeHtml(table.rulesetLabel)}</span>`
+    : ''
+
+  const policyLabel = JOIN_POLICY_LABELS[table.joinPolicy]
+  const policyBadge = policyLabel
+    ? `<span class="table-row-policy table-row-policy-${escapeHtml(table.joinPolicy)}">${policyLabel}</span>`
+    : ''
+
+  const joinButton = table.canJoin
+    ? `<button class="btn-secondary join-seat-btn" data-table-id="${escapeHtml(table.tableId)}">Join</button>`
+    : ''
+
   return `
     <div class="table-row" data-table-id="${escapeHtml(table.tableId)}">
       <div class="table-row-info">
         <span class="table-row-name">${name}</span>
+        ${hostLabel}
         <span class="table-row-seats">${seatsLabel}</span>
+        ${rulesetLabel}
+        ${policyBadge}
         ${spectatorLabel}
         ${occupantSummary}
       </div>
-      <button class="btn-secondary join-seat-btn" data-table-id="${escapeHtml(table.tableId)}"${disabled}>Join</button>
+      ${joinButton}
     </div>
   `
 }

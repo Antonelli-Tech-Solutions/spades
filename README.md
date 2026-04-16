@@ -1101,6 +1101,7 @@ client/
       redirectIfSeated.js — Redirects seated players back to their table
       friendsPanel.js — Friends list panel with presence badges (mounted on the lobby screen)
       invitePanel.js  — Waiting-room Invite panel helpers (host invites via friends list or username search)
+      inviteNotification.js — In-app invite notification helpers (banner renderer, decline API wrapper, accept URL builder for INVITE_RECEIVED)
       seatUtils.js    — Seat orientation helpers
       hand.js         — Card hand rendering helpers
       trickHold.js    — Trick animation / hold logic

@@ -483,6 +483,7 @@ export async function removePlayerFromTables(redis, playerId) {
       const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
       const updated = { ...table, observers: updatedObservers }
       await saveTable(redis, updated)
+      await setPresenceOnline(redis, playerId)
       updatedTables.push(updated)
       console.log('Observer removed from table on logout:', { tableId: table.tableId, playerId })
       continue
@@ -496,6 +497,7 @@ export async function removePlayerFromTables(redis, playerId) {
     if (!remainingHuman) {
       terminatedTables.push(table)
       await terminateTable(redis, table.tableId)
+      await setPresenceOnline(redis, playerId)
       console.log('Table terminated on logout — no human players remain:', { tableId: table.tableId, playerId, seat })
       continue
     }
@@ -504,6 +506,7 @@ export async function removePlayerFromTables(redis, playerId) {
     const newHostId = table.hostPlayerId === playerId ? remainingHuman : table.hostPlayerId
     const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId }
     await saveTable(redis, updated)
+    await setPresenceOnline(redis, playerId)
     updatedTables.push(updated)
     console.log('Player removed from table on logout:', { tableId: table.tableId, playerId, seat })
   }

@@ -265,6 +265,90 @@ describe('Presence state machine', { skip }, () => {
     })
   })
 
+  // ── Reconnect while seated must not clobber 'playing' ───────────────────────
+
+  describe('WS connect reconciles with seat state', () => {
+    const playerId = 'presence-player-reconnect'
+    const sessionId = 'presence-session-reconnect'
+    const partnerId = 'presence-player-reconnect-partner'
+
+    beforeEach(async () => {
+      await redis.set(`session:${sessionId}`, JSON.stringify({ playerId, username: 'ReconnectPlayer' }))
+      await redis.del(`presence:${playerId}`)
+      await redis.del(`presence:${partnerId}`)
+    })
+
+    afterEach(async () => {
+      await redis.del(`session:${sessionId}`)
+      await redis.del(`presence:${playerId}`)
+      await redis.del(`presence:${partnerId}`)
+    })
+
+    it('reconnect while seated restores presence to "playing" (does not overwrite with "online")', { timeout: 15000 }, async () => {
+      const table = await createTable(redis, { hostPlayerId: partnerId })
+      try {
+        await sitAtTable(redis, table.tableId, partnerId, 'north')
+
+        // First connection + sit — presence is 'playing'
+        const ws1 = await wsConnect(httpServer, { 'x-session-id': sessionId })
+        await sitAtTable(redis, table.tableId, playerId, 'south')
+
+        const duringPlay = await readPresence(redis, playerId)
+        assert.equal(duringPlay.status, 'playing', 'precondition: seated player is "playing"')
+        assert.equal(duringPlay.tableId, table.tableId)
+
+        // Disconnect — clearPresence removes the key
+        ws1.close()
+        await waitClose(ws1)
+        await delay(200)
+
+        // Reconnect — must recognise the player is still seated and restore 'playing'
+        const ws2 = await wsConnect(httpServer, { 'x-session-id': sessionId })
+        const reconnected = await readPresence(redis, playerId)
+        assert.ok(reconnected, 'presence should exist after reconnect')
+        assert.equal(reconnected.status, 'playing', 'reconnect while seated must restore "playing"')
+        assert.equal(reconnected.tableId, table.tableId, 'reconnect must carry the same tableId')
+
+        ws2.close()
+        await waitClose(ws2)
+      } finally {
+        await redis.del(`table:${table.tableId}`)
+        await redis.del(`game:${table.tableId}`)
+        await redis.hDel('lobby:tables', table.tableId)
+        await redis.hDel('lobby:all', table.tableId)
+      }
+    })
+
+    it('opening a second WS connection while seated does not overwrite "playing"', { timeout: 15000 }, async () => {
+      const table = await createTable(redis, { hostPlayerId: partnerId })
+      try {
+        await sitAtTable(redis, table.tableId, partnerId, 'north')
+
+        const wsA = await wsConnect(httpServer, { 'x-session-id': sessionId })
+        await sitAtTable(redis, table.tableId, playerId, 'south')
+
+        const before = await readPresence(redis, playerId)
+        assert.equal(before.status, 'playing', 'precondition: "playing" before second tab opens')
+
+        // Second tab — connect handler must not blow away the 'playing' state
+        const wsB = await wsConnect(httpServer, { 'x-session-id': sessionId })
+        const after = await readPresence(redis, playerId)
+        assert.equal(after.status, 'playing', 'multi-tab connect must not overwrite "playing" with "online"')
+        assert.equal(after.tableId, table.tableId, 'tableId must not be cleared on multi-tab connect')
+
+        wsA.close()
+        await waitClose(wsA)
+        wsB.close()
+        await waitClose(wsB)
+      } finally {
+        await redis.del(`table:${table.tableId}`)
+        await redis.del(`game:${table.tableId}`)
+        await redis.hDel('lobby:tables', table.tableId)
+        await redis.hDel('lobby:all', table.tableId)
+      }
+    })
+  })
+
   // ── Full lifecycle: connect → sit → leave → disconnect ──────────────────────
 
   describe('full lifecycle transitions', () => {

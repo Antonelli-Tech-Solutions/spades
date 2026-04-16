@@ -1,6 +1,6 @@
 import { WebSocketServer } from 'ws'
 import { getSession } from '../auth/session.js'
-import { setPresenceOnline, clearPresence } from '../presence.js'
+import { setPresenceOnConnect, clearPresence } from '../presence.js'
 
 /**
  * Create and attach a WebSocket server to an existing HTTP server.
@@ -128,8 +128,17 @@ export function createWsServer(httpServer, opts = {}) {
 
     // Mark the player as online in the presence state machine.
     // Await so readers observing presence immediately after connect see the write.
+    //
+    // Only reconcile presence when this is the player's first active connection.
+    // If another tab is already open, its existing presence ('playing' or 'online')
+    // is authoritative — writing 'online' here would corrupt a 'playing' state.
+    // On a true first connection we scan seats so that a reconnect-while-seated
+    // (where clearPresence deleted the key on disconnect) restores 'playing'.
     if (redis) {
-      await setPresenceOnline(redis, playerId)
+      const isFirstConnection = (playerConnections.get(playerId)?.size ?? 0) <= 1
+      if (isFirstConnection) {
+        await setPresenceOnConnect(redis, playerId)
+      }
     }
 
     // Subscribe to personal notification channel for social events

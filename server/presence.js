@@ -68,3 +68,40 @@ export async function clearPresence(redis, playerId) {
     console.error('Error clearing presence:', { playerId, error: err.message })
   }
 }
+
+/**
+ * Reconcile presence on WebSocket connect. If the player is currently seated at
+ * a table (reconnect-while-seated scenario), restore `{ status: 'playing', tableId }`;
+ * otherwise set `{ status: 'online', tableId: null }`.
+ *
+ * The connect handler must NOT blindly call setPresenceOnline, because that would
+ * overwrite a legitimate 'playing' state in two cases:
+ *   1. Reconnect while seated (clearPresence on disconnect removed the key).
+ *   2. Multi-tab (a second tab opens while the first is still playing).
+ *
+ * Multi-tab is guarded at the call site via a connection count; this helper
+ * handles the seat-reconciliation case by scanning `lobby:all`.
+ *
+ * @param {import('redis').RedisClientType} redis
+ * @param {string} playerId
+ */
+export async function setPresenceOnConnect(redis, playerId) {
+  if (!redis || !playerId || isBot(playerId)) return
+  try {
+    const index = await redis.hGetAll('lobby:all')
+    for (const json of Object.values(index)) {
+      let entry
+      try { entry = JSON.parse(json) } catch { continue }
+      const raw = await redis.get(`table:${entry.tableId}`)
+      if (!raw) continue
+      const table = JSON.parse(raw)
+      if (Object.values(table.seats ?? {}).includes(playerId)) {
+        await setPresencePlaying(redis, playerId, entry.tableId)
+        return
+      }
+    }
+    await setPresenceOnline(redis, playerId)
+  } catch (err) {
+    console.error('Error reconciling presence on connect:', { playerId, error: err.message })
+  }
+}

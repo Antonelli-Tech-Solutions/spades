@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { substitutePlayerWithBot } from '../game/state.js'
+import { setPresenceOnline, setPresencePlaying } from '../presence.js'
 
 const TABLE_TTL_SECONDS = 3600 // 1 hour of inactivity
 const MAX_OBSERVERS = 20
@@ -198,6 +199,7 @@ export async function sitAtTable(redis, tableId, playerId, seat, { policyDeps } 
     })
 
     if (result !== null) {
+      await setPresencePlaying(redis, playerId, tableId)
       return result
     }
   }
@@ -284,6 +286,7 @@ export async function standFromSeat(redis, tableId, playerId) {
 
   const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId, observers }
   await saveTable(redis, updated)
+  await setPresenceOnline(redis, playerId)
   console.log('Player stood from seat:', { tableId, playerId, seat })
   return { table: updated, seat, hostChanged }
 }
@@ -480,6 +483,7 @@ export async function removePlayerFromTables(redis, playerId) {
       const updatedObservers = (table.observers || []).filter((id) => id !== playerId)
       const updated = { ...table, observers: updatedObservers }
       await saveTable(redis, updated)
+      await setPresenceOnline(redis, playerId)
       updatedTables.push(updated)
       console.log('Observer removed from table on logout:', { tableId: table.tableId, playerId })
       continue
@@ -493,6 +497,7 @@ export async function removePlayerFromTables(redis, playerId) {
     if (!remainingHuman) {
       terminatedTables.push(table)
       await terminateTable(redis, table.tableId)
+      await setPresenceOnline(redis, playerId)
       console.log('Table terminated on logout — no human players remain:', { tableId: table.tableId, playerId, seat })
       continue
     }
@@ -501,6 +506,7 @@ export async function removePlayerFromTables(redis, playerId) {
     const newHostId = table.hostPlayerId === playerId ? remainingHuman : table.hostPlayerId
     const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId }
     await saveTable(redis, updated)
+    await setPresenceOnline(redis, playerId)
     updatedTables.push(updated)
     console.log('Player removed from table on logout:', { tableId: table.tableId, playerId, seat })
   }
@@ -543,6 +549,7 @@ export async function leaveTable(redis, tableId, playerId) {
     const botId = `bot:${seat}`
     const updated = { ...table, seats: { ...table.seats, [seat]: botId } }
     await saveTable(redis, updated)
+    await setPresenceOnline(redis, playerId)
     console.log('Player left in-progress game, replaced by bot:', { tableId, playerId, seat, botId })
     return { table: updated, seat, wasPlaying: true }
   }
@@ -553,6 +560,7 @@ export async function leaveTable(redis, tableId, playerId) {
   const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
   if (!remainingHuman) {
     await terminateTable(redis, tableId)
+    await setPresenceOnline(redis, playerId)
     console.log('Table terminated — no human players remain:', { tableId, playerId, seat })
     return { terminated: true, seat }
   }
@@ -566,6 +574,7 @@ export async function leaveTable(redis, tableId, playerId) {
 
   const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId }
   await saveTable(redis, updated)
+  await setPresenceOnline(redis, playerId)
   console.log('Player left waiting table:', { tableId, playerId, seat })
   return { table: updated, seat, wasPlaying: false }
 }
@@ -607,6 +616,7 @@ export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlaye
     const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
     if (!remainingHuman) {
       await terminateTable(redis, tableId)
+      await setPresenceOnline(redis, targetPlayerId)
       console.log('Kick: table terminated — no human players remain:', { tableId, targetPlayerId, seat })
       return { terminated: true, seat, kickedPlayerId: targetPlayerId }
     }
@@ -620,6 +630,7 @@ export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlaye
     if (table.visibility === 'public') {
       await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
     }
+    await setPresenceOnline(redis, targetPlayerId)
     console.log('Kick: player replaced by bot in active game:', { tableId, targetPlayerId, seat, botId })
     return { table: updated, seat, botId, kickedPlayerId: targetPlayerId }
   }
@@ -633,6 +644,7 @@ export async function kickPlayer(redis, tableId, requestingPlayerId, targetPlaye
     if (table.visibility === 'public') {
       await redis.hSet('lobby:tables', tableId, JSON.stringify({ tableId, hostPlayerId: updated.hostPlayerId, name: updated.name, status: updated.status }))
     }
+    await setPresenceOnline(redis, targetPlayerId)
     console.log('Kick: player removed from seat:', { tableId, targetPlayerId, seat })
     return { table: updated, seat, kickedPlayerId: targetPlayerId }
   }
@@ -678,6 +690,7 @@ export async function leaveInProgressGame(redis, tableId, playerId) {
   const remainingHuman = Object.values(updatedSeats).find((id) => id && !id.startsWith('bot:'))
   if (!remainingHuman) {
     await terminateTable(redis, tableId)
+    await setPresenceOnline(redis, playerId)
     console.log('Table terminated — no human players remain:', { tableId, playerId, seat })
     return { terminated: true, seat }
   }
@@ -686,6 +699,7 @@ export async function leaveInProgressGame(redis, tableId, playerId) {
   const newHostId = table.hostPlayerId === playerId ? remainingHuman : table.hostPlayerId
   const updated = { ...table, seats: updatedSeats, hostPlayerId: newHostId }
   await saveTable(redis, updated)
+  await setPresenceOnline(redis, playerId)
   console.log('Player left in-progress game, replaced by bot:', { tableId, playerId, seat, botId })
   return { table: updated, seat, botId, wasPlaying: true }
 }

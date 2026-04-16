@@ -1082,6 +1082,7 @@ client/
       buildIndicator.js — Build commit indicator UI module
       redirectIfSeated.js — Redirects seated players back to their table
       friendsPanel.js — Friends list panel with presence badges (mounted on the lobby screen)
+      invitePanel.js  — Waiting-room Invite panel helpers (host invites via friends list or username search)
       seatUtils.js    — Seat orientation helpers
       hand.js         — Card hand rendering helpers
       trickHold.js    — Trick animation / hold logic

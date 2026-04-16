@@ -15,10 +15,13 @@
 import { describe, it, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
+import express from 'express'
 import WebSocket from 'ws'
 import { createWsServer } from '../../server/ws/index.js'
 import { getRedis, closeRedis } from '../../server/redis.js'
 import { createTable, sitAtTable, leaveTable, standFromSeat } from '../../server/lobby/table.js'
+import { handler } from '../../server/server.js'
+import { createSession } from '../../server/auth/session.js'
 
 const skip = !process.env.REDIS_URL ? 'REDIS_URL must be set' : false
 
@@ -383,6 +386,89 @@ describe('Presence state machine', { skip }, () => {
         await waitClose(wsA)
         wsB.close()
         await waitClose(wsB)
+      } finally {
+        await redis.del(`table:${table.tableId}`)
+        await redis.del(`game:${table.tableId}`)
+        await redis.hDel('lobby:tables', table.tableId)
+        await redis.hDel('lobby:all', table.tableId)
+      }
+    })
+  })
+
+  // ── Host terminate clears presence for all seated humans ───────────────────
+
+  describe('on host terminating the table', () => {
+    const hostId = 'presence-player-term-host'
+    const partnerId = 'presence-player-term-partner'
+    const hostSessionId = 'presence-session-term-host'
+
+    let apiServer, apiBaseUrl
+
+    before(async () => {
+      const app = express()
+      app.use(express.json())
+      handler(app, { redis })
+      await new Promise((resolve) => {
+        apiServer = app.listen(0, '127.0.0.1', resolve)
+      })
+      const { port } = apiServer.address()
+      apiBaseUrl = `http://127.0.0.1:${port}`
+    })
+
+    after(async () => {
+      await new Promise((resolve) => apiServer.close(resolve))
+    })
+
+    beforeEach(async () => {
+      await redis.del(`presence:${hostId}`)
+      await redis.del(`presence:${partnerId}`)
+      await redis.del(`session:${hostSessionId}`)
+    })
+
+    afterEach(async () => {
+      await redis.del(`presence:${hostId}`)
+      await redis.del(`presence:${partnerId}`)
+      await redis.del(`session:${hostSessionId}`)
+    })
+
+    it('clears presence back to { status: "online", tableId: null } for every seated human when host terminates', { timeout: 15000 }, async () => {
+      const table = await createTable(redis, { hostPlayerId: hostId })
+      try {
+        await sitAtTable(redis, table.tableId, hostId, 'north')
+        await sitAtTable(redis, table.tableId, partnerId, 'south')
+
+        // Sanity: both players are "playing"
+        const hostBefore = JSON.parse(await redis.get(`presence:${hostId}`))
+        const partnerBefore = JSON.parse(await redis.get(`presence:${partnerId}`))
+        assert.equal(hostBefore.status, 'playing')
+        assert.equal(hostBefore.tableId, table.tableId)
+        assert.equal(partnerBefore.status, 'playing')
+        assert.equal(partnerBefore.tableId, table.tableId)
+
+        // Install a known session id for the host so we can authenticate the request.
+        await redis.set(
+          `session:${hostSessionId}`,
+          JSON.stringify({ playerId: hostId, email: 'host@term.spades.invalid', username: 'HostPlayer' }),
+        )
+
+        const res = await fetch(`${apiBaseUrl}/api/tables/${table.tableId}/terminate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-session-id': hostSessionId,
+            'x-player-id': hostId,
+          },
+        })
+        assert.equal(res.status, 200, 'terminate request should succeed')
+
+        const hostAfter = await readPresence(redis, hostId)
+        const partnerAfter = await readPresence(redis, partnerId)
+        assert.ok(hostAfter, 'host presence key should still exist (host is still online)')
+        assert.equal(hostAfter.status, 'online', 'host status should be "online" after terminate')
+        assert.equal(hostAfter.tableId, null, 'host tableId should be cleared after terminate')
+        assert.ok(partnerAfter, 'partner presence key should still exist (partner is still online)')
+        assert.equal(partnerAfter.status, 'online', 'partner status should be "online" after terminate')
+        assert.equal(partnerAfter.tableId, null, 'partner tableId should be cleared after terminate')
       } finally {
         await redis.del(`table:${table.tableId}`)
         await redis.del(`game:${table.tableId}`)

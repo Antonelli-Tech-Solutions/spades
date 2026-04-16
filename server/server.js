@@ -23,6 +23,7 @@ import { createSession, deleteSession, getSession, validateAuthHeaders } from '.
 import { getDb } from './db.js'
 import { getRedis } from './redis.js'
 import { createRateLimiter } from './middleware/rateLimiter.js'
+import { setPresenceOnline } from './presence.js'
 import {
   createTable,
   getTable,
@@ -1133,6 +1134,9 @@ export function handler(app, { mailer, passwordResetMailer, redis, rateLimitConf
         return sendJSON(res, 403, { error: 'Only the host can terminate the game' })
       }
       await terminateTable(redisClient, tableId)
+      for (const seatedId of Object.values(table.seats ?? {})) {
+        await setPresenceOnline(redisClient, seatedId)
+      }
       emitLobbyTableRemoved(wss, table)
       console.log('Game terminated by host:', { tableId, playerId: session.playerId })
       sendJSON(res, 200, { message: 'Game terminated.' })

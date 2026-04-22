@@ -616,6 +616,129 @@ export async function getFriends({ sessionId, playerId }, fetchFn = globalThis.f
   return body
 }
 
+/**
+ * Search for players by username.
+ * @param {{ username: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<{ players: Array<object> }>}
+ */
+export async function searchPlayers({ username, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/players/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ username }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to search players.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Send a friend request to another player.
+ * @param {{ targetPlayerId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>}
+ */
+export async function sendFriendRequest({ targetPlayerId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/friends/request', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ playerId: targetPlayerId }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to send friend request.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Accept a pending friend request.
+ * @param {{ targetPlayerId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>}
+ */
+export async function acceptFriendRequest({ targetPlayerId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/friends/accept', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ playerId: targetPlayerId }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to accept friend request.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Decline a pending friend request.
+ * @param {{ targetPlayerId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>}
+ */
+export async function declineFriendRequest({ targetPlayerId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn('/api/friends/decline', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+    body: JSON.stringify({ playerId: targetPlayerId }),
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to decline friend request.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
+/**
+ * Remove an existing friend.
+ * @param {{ targetPlayerId: string, sessionId: string, playerId: string }} data
+ * @param {typeof fetch} [fetchFn]
+ * @returns {Promise<object>}
+ */
+export async function removeFriend({ targetPlayerId, sessionId, playerId }, fetchFn = globalThis.fetch) {
+  const res = await fetchFn(`/api/friends/${targetPlayerId}`, {
+    method: 'DELETE',
+    headers: {
+      'x-session-id': sessionId,
+      'x-player-id': playerId,
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) {
+    const err = new Error(body.error || 'Failed to remove friend.')
+    err.status = res.status
+    throw err
+  }
+  return body
+}
+
 export async function loginUser({ email, password }, fetchFn = globalThis.fetch) {
   const res = await fetchFn('/api/auth/login', {
     method: 'POST',

@@ -9,7 +9,7 @@
  * that are unit-testable without a DOM.
  */
 
-import { sortFriends, friendStatusText } from './friendsPanel.js'
+import { sortFriends, friendStatusText, friendRowHtml, escapeHtml } from './friendsPanel.js'
 
 export const DEFAULT_TABS = [
   { id: 'friends', label: 'Friends' },
@@ -70,25 +70,3 @@ export function infoPanelHtml({ activeTab, friends = [], collapsed = false }) {
   return `<div class="info-panel${collapseClass}"><button class="info-panel-toggle" aria-label="Toggle panel"></button>${bar}${content}</div>`
 }
 
-/* ------------------------------------------------------------------ */
-/*  Internal helpers                                                  */
-/* ------------------------------------------------------------------ */
-
-function friendRowHtml(friend) {
-  const status = friend.presenceStatus || 'offline'
-  const safeStatus = (status === 'online' || status === 'in-game' || status === 'offline') ? status : 'offline'
-  const statusClass = `friend-dot friend-dot--${safeStatus}`
-  const statusText = friendStatusText(friend)
-  return `<div class="friend-row" data-player-id="${escapeHtml(friend.playerId)}"><span class="${statusClass}" aria-label="${escapeHtml(status)}"></span><div class="friend-info"><span class="friend-username">${escapeHtml(friend.username || '')}</span><span class="friend-status">${escapeHtml(statusText)}</span></div></div>`
-}
-
-function escapeHtml(str) {
-  return str
-    ? String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-    : ''
-}

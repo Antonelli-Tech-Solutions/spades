@@ -1493,6 +1493,117 @@
         color: #e06b6b;
         border: 1px solid #7a3a3a;
       }
+
+      /* ── Info Panel — right-side collapsible drawer ──────────────────── */
+      #info-panel-root {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 50;
+        pointer-events: none;
+        overflow: visible;
+      }
+
+      .info-panel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 260px;
+        background: #1e1e1e;
+        border-left: 1px solid #2e2e2e;
+        display: flex;
+        flex-direction: column;
+        transform: translateX(0);
+        transition: transform 0.2s ease;
+        pointer-events: all;
+        box-shadow: -2px 0 8px rgba(0, 0, 0, 0.4);
+      }
+
+      .info-panel.collapsed {
+        transform: translateX(260px);
+      }
+
+      .info-panel-toggle {
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 28px;
+        height: 56px;
+        background: #1e1e1e;
+        border: 1px solid #2e2e2e;
+        border-right: none;
+        border-radius: 6px 0 0 6px;
+        cursor: pointer;
+        color: #888;
+        font-size: 0.8rem;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: all;
+        box-shadow: -2px 0 6px rgba(0, 0, 0, 0.3);
+      }
+
+      .info-panel-toggle:hover {
+        background: #252525;
+        color: #e8e8e8;
+      }
+
+      .info-panel-toggle::before {
+        content: '\25B6';
+      }
+
+      .info-panel.collapsed .info-panel-toggle::before {
+        content: '\25C0';
+      }
+
+      .info-tab-bar {
+        display: flex;
+        border-bottom: 1px solid #2e2e2e;
+        flex-shrink: 0;
+      }
+
+      .info-tab-btn {
+        flex: 1;
+        padding: 0.5rem 0.25rem;
+        background: transparent;
+        color: #888;
+        border: none;
+        border-bottom: 2px solid transparent;
+        font-size: 0.78rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+        margin-bottom: -1px;
+      }
+
+      .info-tab-btn:hover {
+        color: #e8e8e8;
+      }
+
+      .info-tab-btn.active {
+        color: #66bb6a;
+        border-bottom-color: #66bb6a;
+      }
+
+      .info-tab-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.75rem;
+      }
+
+      .info-tab-content .friends-list {
+        max-height: none;
+      }
+
+      .history-content p {
+        color: #888;
+        font-size: 0.85rem;
+        padding: 0.5rem 0;
+      }
     </style>
   </head>
   <body>

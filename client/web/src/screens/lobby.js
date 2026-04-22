@@ -2,7 +2,6 @@ import { navigate } from '../router.js'
 import { logoutUser, listLobbyTables } from '../api.js'
 import { redirectIfSeated } from '../redirectIfSeated.js'
 import { createLobbySocket, buildWsUrl } from '../gameSocket.js'
-import { renderInfoPanel } from '../infoPanel.js'
 
 /**
  * Apply a single lobby WebSocket event to a table map.
@@ -67,7 +66,6 @@ export async function renderLobbyScreen(container) {
           <p class="table-list-empty">Loading tables\u2026</p>
         </div>
       </div>
-      <div id="info-panel-mount"></div>
       <div class="lobby-actions">
         <button id="create-table-btn" class="btn-primary">Create Table</button>
         <button id="logout-btn" class="btn-link">Log out</button>
@@ -215,16 +213,9 @@ export async function renderLobbyScreen(container) {
     },
   })
 
-  // Mount the tabbed info panel (friends + history) with periodic polling
-  const infoPanelMount = container.querySelector('#info-panel-mount')
-  const infoPanel = infoPanelMount
-    ? renderInfoPanel({ mountEl: infoPanelMount, sessionId, playerId })
-    : null
-
   // Unsubscribe when the lobby screen is navigated away from
   window.addEventListener('hashchange', () => {
     lobbySocket.close()
-    if (infoPanel) infoPanel.stop()
   }, { once: true })
 }
 

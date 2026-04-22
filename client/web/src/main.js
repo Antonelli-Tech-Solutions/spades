@@ -9,6 +9,7 @@ import { renderLobbyScreen } from './screens/lobby.js'
 import { renderCreateTableScreen } from './screens/createTable.js'
 import { renderJoinTableScreen } from './screens/joinTable.js'
 import { renderGameScreen } from './screens/game.js'
+import { renderInfoPanel } from './infoPanel.js'
 
 const app = document.getElementById('app')
 
@@ -54,3 +55,33 @@ init(app)
 renderBuildIndicator().then(html => {
   if (html) document.body.insertAdjacentHTML('beforeend', html)
 })
+
+// Global info panel — persists across screen navigation, visible on all authenticated screens.
+let globalInfoPanel = null
+
+function syncInfoPanel() {
+  const sessionId = sessionStorage.getItem('sessionId')
+  const playerId = sessionStorage.getItem('playerId')
+  const route = window.location.hash.split('?')[0]
+
+  if (!sessionId || !playerId || authOnlyScreens.has(route)) {
+    if (globalInfoPanel) { globalInfoPanel.stop(); globalInfoPanel = null }
+    const root = document.getElementById('info-panel-root')
+    if (root) root.innerHTML = ''
+    return
+  }
+
+  if (globalInfoPanel) return
+
+  let root = document.getElementById('info-panel-root')
+  if (!root) {
+    root = document.createElement('div')
+    root.id = 'info-panel-root'
+    document.body.appendChild(root)
+  }
+
+  globalInfoPanel = renderInfoPanel({ mountEl: root, sessionId, playerId })
+}
+
+syncInfoPanel()
+window.addEventListener('hashchange', syncInfoPanel)

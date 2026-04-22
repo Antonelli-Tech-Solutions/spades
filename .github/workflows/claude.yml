@@ -11,11 +11,27 @@ on:
 
 jobs:
   claude:
+    # Gate the entire workflow on the sender being in an allowlist of
+    # trusted actors. Without this, any GitHub user could open an issue
+    # or post a comment containing '@claude' on this public repo and
+    # trigger a run that consumes the OAuth token's usage quota.
+    #
+    # The allowlist includes:
+    #   - 'dantonel': the human operator.
+    #   - 'claude-bot-dom[bot]': the GitHub App. Kept in the allowlist
+    #     so that if/when pr-merged-notifier or similar automations are
+    #     re-enabled, their bot-authored '@claude' comments can still
+    #     trigger this workflow. Currently those workflows are
+    #     .disabled and this entry is harmless.
+    #
+    # To add or remove trusted actors, edit the fromJSON array below.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      contains(fromJSON('["dantonel", "claude-bot-dom[bot]"]'), github.event.sender.login) && (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write

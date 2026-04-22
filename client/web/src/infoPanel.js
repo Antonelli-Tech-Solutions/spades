@@ -42,11 +42,74 @@ export function tabBarHtml({ activeTab, tabs = DEFAULT_TABS }) {
 }
 
 /**
- * Render the content area for the active tab.
- * @param {{ activeTab: string, friends?: Array<object> }} opts
+ * Check whether a player is already in the friends list.
+ * @param {{ playerId: string|null|undefined, existingFriendIds?: string[] }} opts
+ * @returns {boolean}
+ */
+export function isAlreadyFriend({ playerId, existingFriendIds } = {}) {
+  if (!playerId) return false
+  const ids = existingFriendIds || []
+  return ids.includes(playerId)
+}
+
+/**
+ * Build a user-facing feedback string for an add-friend attempt.
+ * @param {{ status: 'success' | number, username?: string }} opts
  * @returns {string}
  */
-export function tabContentHtml({ activeTab, friends }) {
+export function addFriendFeedbackMessage({ status, username } = {}) {
+  const name = username || 'player'
+  if (status === 'success') {
+    return `Friend request sent to ${name}!`
+  }
+  if (status === 409) {
+    return `${name} already has a pending request.`
+  }
+  return `Could not send friend request to ${name}. Please try again.`
+}
+
+/**
+ * Render the add-friend search section HTML (input + button + results + feedback).
+ * @param {{
+ *   searchResults?: Array<{ playerId: string, username: string }>,
+ *   existingFriendIds?: string[],
+ *   currentPlayerId?: string,
+ *   pendingRequestIds?: string[],
+ *   feedbackMessage?: string,
+ * }} opts
+ * @returns {string}
+ */
+export function addFriendSearchHtml({
+  searchResults,
+  existingFriendIds = [],
+  currentPlayerId,
+  pendingRequestIds = [],
+  feedbackMessage,
+} = {}) {
+  const results = searchResults || []
+  const resultsBody = results.map((p) => {
+    const pid = p.playerId || ''
+    const uname = escapeHtml(p.username || '')
+    const isFriend = isAlreadyFriend({ playerId: pid, existingFriendIds })
+    const isSelf = currentPlayerId && pid === currentPlayerId
+    const isPending = pendingRequestIds.includes(pid)
+    const disabledAttr = (isFriend || isSelf || isPending) ? ' disabled' : ''
+    return `<div class="add-friend-row" data-player-id="${escapeHtml(pid)}"><span class="add-friend-username">${uname}</span><button type="button" class="add-friend-btn" data-player-id="${escapeHtml(pid)}"${disabledAttr}>Add Friend</button></div>`
+  }).join('')
+
+  const feedbackHtml = feedbackMessage
+    ? `<div class="add-friend-feedback">${escapeHtml(feedbackMessage)}</div>`
+    : ''
+
+  return `<div class="add-friend-search"><input type="text" class="friend-search-input" id="friend-search" placeholder="Search username…" autocomplete="off" /><button type="button" class="friend-search-btn">Search</button>${feedbackHtml}<div class="add-friend-results">${resultsBody}</div></div>`
+}
+
+/**
+ * Render the content area for the active tab.
+ * @param {{ activeTab: string, friends?: Array<object>, searchResults?: Array<object>, existingFriendIds?: string[], currentPlayerId?: string, pendingRequestIds?: string[], feedbackMessage?: string }} opts
+ * @returns {string}
+ */
+export function tabContentHtml({ activeTab, friends, searchResults, existingFriendIds, currentPlayerId, pendingRequestIds, feedbackMessage }) {
   if (activeTab === 'history') {
     return `<div class="info-tab-content history-content"><p>Coming soon</p></div>`
   }
@@ -56,7 +119,8 @@ export function tabContentHtml({ activeTab, friends }) {
   const body = sorted.length === 0
     ? '<p class="friends-empty">No friends yet</p>'
     : sorted.map(friendRowHtml).join('')
-  return `<div class="info-tab-content friends-list">${body}</div>`
+  const searchSection = addFriendSearchHtml({ searchResults, existingFriendIds, currentPlayerId, pendingRequestIds, feedbackMessage })
+  return `<div class="info-tab-content friends-list">${searchSection}${body}</div>`
 }
 
 /**

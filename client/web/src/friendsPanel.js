@@ -58,7 +58,7 @@ export function friendsPanelHtml(friends) {
   `
 }
 
-function friendRowHtml(friend) {
+export function friendRowHtml(friend) {
   const status = friend.presenceStatus || 'offline'
   const safeStatus = (status === 'online' || status === 'in-game' || status === 'offline') ? status : 'offline'
   const statusClass = `friend-dot friend-dot--${safeStatus}`
@@ -131,7 +131,7 @@ export function renderFriendsPanel({ mountEl, sessionId, playerId, intervalMs = 
   return { stop }
 }
 
-function escapeHtml(str) {
+export function escapeHtml(str) {
   return str
     ? String(str)
       .replace(/&/g, '&amp;')

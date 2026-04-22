@@ -10,6 +10,8 @@
  */
 
 import { sortFriends, friendStatusText, friendRowHtml, escapeHtml } from './friendsPanel.js'
+import { getFriends } from './api.js'
+import { navigate } from './router.js'
 
 export const DEFAULT_TABS = [
   { id: 'friends', label: 'Friends' },
@@ -68,5 +70,88 @@ export function infoPanelHtml({ activeTab, friends = [], collapsed = false }) {
   const bar = tabBarHtml({ activeTab: resolvedTab, tabs: DEFAULT_TABS })
   const content = tabContentHtml({ activeTab: resolvedTab, friends })
   return `<div class="info-panel${collapseClass}"><button class="info-panel-toggle" aria-label="Toggle panel"></button>${bar}${content}</div>`
+}
+
+/**
+ * Mount the tabbed InfoPanel into a container and start polling friends.
+ * Replaces renderFriendsPanel() in the lobby — renders via infoPanelHtml
+ * and manages tab + collapse state.
+ *
+ * Returns a handle with `stop()` to cancel polling.
+ * @param {{
+ *   mountEl: HTMLElement,
+ *   sessionId: string,
+ *   playerId: string,
+ *   intervalMs?: number,
+ *   fetchFn?: typeof fetch,
+ * }} opts
+ */
+export function renderInfoPanel({ mountEl, sessionId, playerId, intervalMs = 30000, fetchFn }) {
+  let stopped = false
+  let timer = null
+  let activeTab = 'friends'
+  let collapsed = false
+  let friends = []
+
+  function stop() {
+    stopped = true
+    if (timer) clearTimeout(timer)
+  }
+
+  function render() {
+    mountEl.innerHTML = infoPanelHtml({ activeTab, friends, collapsed })
+
+    // Wire tab switching via event delegation
+    mountEl.querySelectorAll('.info-tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab
+        if (isValidTab(tab)) {
+          activeTab = tab
+          render()
+        }
+      })
+    })
+
+    // Wire collapse toggle
+    const toggleBtn = mountEl.querySelector('.info-panel-toggle')
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        collapsed = !collapsed
+        render()
+      })
+    }
+  }
+
+  async function refresh() {
+    if (stopped) return
+    try {
+      const result = await getFriends({ sessionId, playerId }, fetchFn)
+      if (stopped) return
+      friends = result.friends || []
+      render()
+    } catch (err) {
+      console.log('Failed to load friends:', { error: err.message })
+      if (stopped) return
+      if (err.status === 401) {
+        stop()
+        navigate('#/login')
+        return
+      }
+      // On error, render with whatever friends we already have
+      render()
+    }
+  }
+
+  function scheduleNext() {
+    if (stopped) return
+    timer = setTimeout(async () => {
+      await refresh()
+      scheduleNext()
+    }, intervalMs)
+  }
+
+  refresh().then(scheduleNext)
+
+  return { stop }
 }
 

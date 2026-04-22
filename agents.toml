@@ -1,5 +1,5 @@
 [conventions]
 primary_language = "javascript"
-test_command = "npm test"
+test_runner = "node:test and node:assert"
+test_file_pattern = "test/unit/ for game logic; test/integration/ for API routes and WebSocket events"
 test_file_extension = ".js"
-test_framework = "node:test"

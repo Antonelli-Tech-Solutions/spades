@@ -13,6 +13,31 @@ import { sortFriends, friendStatusText, friendRowHtml, escapeHtml } from './frie
 import { getFriends } from './api.js'
 import { navigate } from './router.js'
 
+/**
+ * Render the pending friend requests section.
+ * @param {Array<{playerId: string, username: string}>|undefined} pending
+ * @returns {string}
+ */
+export function pendingRequestsHtml(pending) {
+  if (!pending || pending.length === 0) return ''
+  const rows = pending.map((req) => {
+    const pid = escapeHtml(req.playerId || '')
+    const uname = escapeHtml(req.username || '')
+    return `<div class="pending-request-row" data-player-id="${pid}"><span class="pending-username">${uname}</span><button type="button" class="pending-accept accept-friend-btn" data-player-id="${pid}">Accept</button><button type="button" class="pending-decline decline-friend-btn" data-player-id="${pid}">Decline</button></div>`
+  }).join('')
+  return `<div class="pending-requests"><h3>Pending Requests</h3>${rows}</div>`
+}
+
+/**
+ * Render a count badge for pending friend requests.
+ * @param {number|undefined|null} count
+ * @returns {string}
+ */
+export function pendingRequestBadgeHtml(count) {
+  if (!count) return ''
+  return `<span class="pending-badge">${count}</span>`
+}
+
 export const DEFAULT_TABS = [
   { id: 'friends', label: 'Friends' },
   { id: 'history', label: 'Game History' },
@@ -36,7 +61,8 @@ export function isValidTab(tabId) {
 export function tabBarHtml({ activeTab, tabs = DEFAULT_TABS }) {
   const buttons = tabs.map((tab) => {
     const active = tab.id === activeTab ? ' active' : ''
-    return `<button data-tab="${escapeHtml(tab.id)}" class="info-tab-btn${active}">${escapeHtml(tab.label)}</button>`
+    const badge = tab.badgeHtml || ''
+    return `<button data-tab="${escapeHtml(tab.id)}" class="info-tab-btn${active}">${escapeHtml(tab.label)}${badge}</button>`
   }).join('')
   return `<div class="info-tab-bar">${buttons}</div>`
 }
@@ -109,7 +135,7 @@ export function addFriendSearchHtml({
  * @param {{ activeTab: string, friends?: Array<object>, searchResults?: Array<object>, existingFriendIds?: string[], currentPlayerId?: string, pendingRequestIds?: string[], feedbackMessage?: string }} opts
  * @returns {string}
  */
-export function tabContentHtml({ activeTab, friends, searchResults, existingFriendIds, currentPlayerId, pendingRequestIds, feedbackMessage }) {
+export function tabContentHtml({ activeTab, friends, searchResults, existingFriendIds, currentPlayerId, pendingRequestIds, feedbackMessage, pendingRequests }) {
   if (activeTab === 'history') {
     return `<div class="info-tab-content history-content"><p>Coming soon</p></div>`
   }
@@ -120,7 +146,8 @@ export function tabContentHtml({ activeTab, friends, searchResults, existingFrie
     ? '<p class="friends-empty">No friends yet</p>'
     : sorted.map(friendRowHtml).join('')
   const searchSection = addFriendSearchHtml({ searchResults, existingFriendIds, currentPlayerId, pendingRequestIds, feedbackMessage })
-  return `<div class="info-tab-content friends-list">${searchSection}${body}</div>`
+  const pendingSection = pendingRequestsHtml(pendingRequests)
+  return `<div class="info-tab-content friends-list">${searchSection}${pendingSection}${body}</div>`
 }
 
 /**
@@ -128,11 +155,18 @@ export function tabContentHtml({ activeTab, friends, searchResults, existingFrie
  * @param {{ activeTab: string, friends?: Array<object>, collapsed?: boolean }} opts
  * @returns {string}
  */
-export function infoPanelHtml({ activeTab, friends = [], collapsed = false }) {
+export function infoPanelHtml({ activeTab, friends = [], collapsed = false, pendingRequests }) {
   const resolvedTab = isValidTab(activeTab) ? activeTab : 'friends'
   const collapseClass = collapsed ? ' collapsed' : ''
-  const bar = tabBarHtml({ activeTab: resolvedTab, tabs: DEFAULT_TABS })
-  const content = tabContentHtml({ activeTab: resolvedTab, friends })
+  const pendingCount = (pendingRequests && pendingRequests.length) || 0
+  const tabsWithBadge = DEFAULT_TABS.map((tab) => {
+    if (tab.id === 'friends' && pendingCount > 0) {
+      return { ...tab, badgeHtml: pendingRequestBadgeHtml(pendingCount) }
+    }
+    return tab
+  })
+  const bar = tabBarHtml({ activeTab: resolvedTab, tabs: tabsWithBadge })
+  const content = tabContentHtml({ activeTab: resolvedTab, friends, pendingRequests })
   return `<div class="info-panel${collapseClass}"><button class="info-panel-toggle" aria-label="Toggle panel"></button>${bar}${content}</div>`
 }
 

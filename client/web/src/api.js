@@ -623,14 +623,14 @@ export async function getFriends({ sessionId, playerId }, fetchFn = globalThis.f
  * @returns {Promise<{ players: Array<object> }>}
  */
 export async function searchPlayers({ username, sessionId, playerId }, fetchFn = globalThis.fetch) {
-  const res = await fetchFn('/api/players/search', {
-    method: 'POST',
+  const params = new URLSearchParams()
+  params.set('username', username ?? '')
+  const res = await fetchFn(`/api/players/search?${params.toString()}`, {
+    method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
       'x-session-id': sessionId,
       'x-player-id': playerId,
     },
-    body: JSON.stringify({ username }),
   })
   const body = await res.json()
   if (!res.ok) {

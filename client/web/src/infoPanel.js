@@ -107,6 +107,7 @@ export function addFriendFeedbackMessage({ status, username } = {}) {
  */
 export function addFriendSearchHtml({
   searchResults,
+  searchQuery,
   existingFriendIds = [],
   currentPlayerId,
   pendingRequestIds = [],
@@ -127,7 +128,9 @@ export function addFriendSearchHtml({
     ? `<div class="add-friend-feedback">${escapeHtml(feedbackMessage)}</div>`
     : ''
 
-  return `<div class="add-friend-search"><input type="text" class="friend-search-input" id="friend-search" placeholder="Search username…" autocomplete="off" /><button type="button" class="friend-search-btn">Search</button>${feedbackHtml}<div class="add-friend-results">${resultsBody}</div></div>`
+  const valueAttr = searchQuery ? ` value="${escapeHtml(searchQuery)}"` : ''
+
+  return `<div class="add-friend-search"><h3 class="add-friend-heading">Add Friend</h3><input type="text" class="friend-search-input" id="friend-search" placeholder="Find new players to add…" autocomplete="off"${valueAttr} /><button type="button" class="friend-search-btn">Find Players</button>${feedbackHtml}<div class="add-friend-results">${resultsBody}</div></div>`
 }
 
 /**
